@@ -1,0 +1,356 @@
+{
+  "day": 9,
+  "topic": "Scope functions II: run, with, takeIf & choosing one",
+  "questions": [
+    {
+      "id": "d09q01",
+      "type": "output",
+      "topic": "run extension",
+      "difficulty": "Easy",
+      "question": "What does this print?",
+      "code": "fun main() {\n    val s = \"kotlin\"\n    val r = s.run { length + 1 }\n    println(r)\n}",
+      "options": [
+        "7",
+        "kotlin",
+        "6",
+        "kotlin1"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`s.run { ... }` makes `s` the receiver (`this`) and returns the lambda's last expression. `length + 1` is `6 + 1`, so `r` is `7`, not the string itself."
+    },
+    {
+      "id": "d09q02",
+      "type": "mcq",
+      "topic": "with",
+      "difficulty": "Easy",
+      "question": "Which statement about `with(obj) { ... }` is true?",
+      "options": [
+        "It is a plain function that takes `obj` as an argument, exposes it as `this` and returns the lambda result",
+        "It is an extension function on `obj` that exposes it as `it` and returns the lambda result",
+        "It is a plain function that takes `obj` as an argument, exposes it as `this` and returns the receiver `obj`",
+        "It is an extension function on `obj` that exposes it as `this` and returns `obj` itself"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`with` is declared as `fun <T, R> with(receiver: T, block: T.() -> R): R`. The object is passed as an argument (not a receiver of `with`), is `this` inside the block, and the block's result is returned. Returning the object itself is what `apply` does."
+    },
+    {
+      "id": "d09q03",
+      "type": "output",
+      "topic": "takeIf",
+      "difficulty": "Easy",
+      "question": "What does this print?",
+      "code": "fun main() {\n    val a = 7.takeIf { it % 2 == 0 }\n    val b = 8.takeIf { it % 2 == 0 }\n    println(\"$a $b\")\n}",
+      "options": [
+        "null 8",
+        "7 8",
+        "false true",
+        "null null"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`takeIf` returns the receiver when the predicate is true and `null` otherwise. `7` is odd, so `a` is `null`; `8` passes, so `b` is `8`. It never returns the Boolean itself."
+    },
+    {
+      "id": "d09q04",
+      "type": "truefalse",
+      "topic": "with and nullables",
+      "difficulty": "Easy",
+      "question": "Given `val user: User?`, you can write `user?.with { name }` so the block runs only when `user` is non-null.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "`with` is not an extension function, so there is nothing to call with `?.`; this doesn't compile. Use `user?.run { name }`, which is an extension and gives the same `this`-receiver, result-returning behaviour."
+    },
+    {
+      "id": "d09q05",
+      "type": "output",
+      "topic": "with",
+      "difficulty": "Easy",
+      "question": "What does this print?",
+      "code": "fun main() {\n    val sb = StringBuilder()\n    val result = with(sb) {\n        append(\"Hi\")\n        append(\"!\")\n        length\n    }\n    println(\"$result $sb\")\n}",
+      "options": [
+        "3 Hi!",
+        "Hi! Hi!",
+        "3 3",
+        "2 Hi!"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Inside `with(sb)`, `append` and `length` are called on `sb`. `with` returns the last expression, `length`, which is `3` after appending `\"Hi\"` and `\"!\"`. The builder itself still holds `Hi!`."
+    },
+    {
+      "id": "d09q06",
+      "type": "mcq",
+      "topic": "nullable receiver",
+      "difficulty": "Easy",
+      "question": "Given `val user: User?`, which call runs the block only when `user` is non-null, with the non-null `user` as `this`?",
+      "options": [
+        "`user?.run { greet(name) }`",
+        "`with(user) { greet(name) }`",
+        "`user.run { greet(name) }`",
+        "`run { greet(user.name) }`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`?.run` skips the call entirely when `user` is null, and inside the block `this` is a non-null `User`. `with(user)` and `user.run` always run the block with a nullable `this`, so `name` would need `?.`, and the plain `run` block has no receiver at all."
+    },
+    {
+      "id": "d09q07",
+      "type": "truefalse",
+      "topic": "run block",
+      "difficulty": "Easy",
+      "question": "`run { ... }` called without a receiver is a non-extension function that simply executes the block and returns its result, which makes it handy for computing a value from a few temporary local variables.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "There are two `run`s: the extension `T.run { }` and the top-level `run { }`. The top-level one has no receiver; it just runs the block and returns its last expression, keeping helper variables scoped to the block."
+    },
+    {
+      "id": "d09q08",
+      "type": "output",
+      "topic": "run block",
+      "difficulty": "Medium",
+      "question": "What does this print?",
+      "code": "fun main() {\n    val x = 10\n    val y = run {\n        val x = 3\n        x * 2\n    }\n    println(\"$x $y\")\n}",
+      "options": [
+        "10 6",
+        "3 6",
+        "10 20",
+        "6 6"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "The `x` declared inside the `run` block shadows the outer one only inside the block, so the block returns `3 * 2 = 6`. The outer `x` is untouched and still `10`."
+    },
+    {
+      "id": "d09q09",
+      "type": "mcq",
+      "topic": "decision table",
+      "difficulty": "Medium",
+      "question": "You need a scope function that exposes the object as `this`, returns the lambda result, and can be chained with `?.` on a nullable value. Which one fits?",
+      "options": [
+        "`run`",
+        "`with`",
+        "`apply`",
+        "`let`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`run` is the extension counterpart of `with`: `this` receiver, returns the lambda result, and as an extension it works with `?.`. `with` can't be used with `?.`, `apply` returns the receiver, and `let` exposes the object as `it`."
+    },
+    {
+      "id": "d09q10",
+      "type": "multi",
+      "topic": "decision table",
+      "difficulty": "Medium",
+      "question": "Which scope functions expose the context object as `this` (not `it`) inside the lambda?",
+      "options": [
+        "`run`",
+        "`with`",
+        "`apply`",
+        "`let`",
+        "`also`"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "`run`, `with` and `apply` take a lambda with receiver (`T.() -> R`), so the object is `this`. `let` and `also` take a regular lambda (`(T) -> R`), so the object is the parameter `it`."
+    },
+    {
+      "id": "d09q11",
+      "type": "output",
+      "topic": "takeUnless",
+      "difficulty": "Medium",
+      "question": "What does this print?",
+      "code": "fun main() {\n    val input = \"  \"\n    val name = input.takeUnless { it.isBlank() } ?: \"Guest\"\n    println(\"[$name]\")\n}",
+      "options": [
+        "[Guest]",
+        "[  ]",
+        "[]",
+        "[null]"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`takeUnless` returns the receiver only when the predicate is false. The input is blank, so the predicate is true and the result is `null`, which the elvis replaces with `\"Guest\"`."
+    },
+    {
+      "id": "d09q12",
+      "type": "mcq",
+      "topic": "recyclerview binding",
+      "difficulty": "Medium",
+      "question": "In `onBindViewHolder(holder: ItemViewHolder, position: Int)`, `holder.binding` is a non-null view binding and you need to set `title`, `subtitle` and `avatar` from `item`. You don't need a return value. Which option is the idiomatic choice?",
+      "options": [
+        "`with(holder.binding) { title.text = item.name; subtitle.text = item.email; avatar.load(item.photo) }`",
+        "`holder.binding.takeIf { it != null }!!.run { title.text = item.name; subtitle.text = item.email; avatar.load(item.photo) }`",
+        "`run { holder.binding.title.text = item.name; holder.binding.subtitle.text = item.email; holder.binding.avatar.load(item.photo) }`",
+        "`holder.binding.let { it }.apply { title.text = item.name }.also { it.subtitle.text = item.email }.run { avatar.load(item.photo) }`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`with` reads as \"with this binding, do the following\": it groups calls on a non-null object whose result you don't need. The `takeIf`/`!!` null check is pointless on a non-null value, the receiver-less `run` still repeats `holder.binding` everywhere, and chaining four scope functions only adds noise."
+    },
+    {
+      "id": "d09q13",
+      "type": "truefalse",
+      "topic": "return in lambda",
+      "difficulty": "Medium",
+      "question": "A bare `return` inside `user.run { ... }` (in a regular function) leaves only the lambda, and execution continues with the next statement after `run`.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "Because `run` is inline, a bare `return` inside its lambda is a non-local return: it returns from the enclosing function. To leave only the lambda, use a labelled return such as `return@run value`."
+    },
+    {
+      "id": "d09q14",
+      "type": "mcq",
+      "topic": "choosing one",
+      "difficulty": "Medium",
+      "question": "`val isValid = binding.run { email.text.isNotBlank() && password.text.length >= 8 }` makes `isValid` a `Boolean`. Which replacement keeps `isValid` a `Boolean` with the same body?",
+      "options": [
+        "`with(binding) { email.text.isNotBlank() && password.text.length >= 8 }`",
+        "`binding.apply { email.text.isNotBlank() && password.text.length >= 8 }`",
+        "`binding.takeIf { email.text.isNotBlank() && password.text.length >= 8 }`",
+        "`binding.also { email.text.isNotBlank() && password.text.length >= 8 }`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`with(binding)` has the same `this` receiver and also returns the lambda result. `apply` and `also` return the binding itself, and `takeIf` returns the binding or `null` (its lambda also gets `it`, not `this`, so the body wouldn't even resolve `email`)."
+    },
+    {
+      "id": "d09q15",
+      "type": "multi",
+      "topic": "takeIf",
+      "difficulty": "Medium",
+      "question": "Which statements about `takeIf` and `takeUnless` are true?",
+      "options": [
+        "`x.takeIf(p)` returns `x` when `p(x)` is true, otherwise `null`",
+        "The return type is nullable (`T?`) even when `x` is non-null",
+        "`x.takeUnless { cond(it) }` gives the same result as `x.takeIf { !cond(it) }`",
+        "They are lazy: the predicate runs only if the result is later used",
+        "On a `List`, `takeIf` keeps only the elements that match, like `filter`"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "Both return the receiver or `null`, so the type is always `T?`, and `takeUnless` is just the negated form. The predicate is evaluated immediately on every call, and on a `List` the predicate receives the whole list, not each element."
+    },
+    {
+      "id": "d09q16",
+      "type": "mcq",
+      "topic": "nesting",
+      "difficulty": "Medium",
+      "question": "What is the main problem with this code?",
+      "code": "user?.let { u ->\n    u.address?.run {\n        city?.also { c ->\n            with(view) {\n                cityText.text = c\n                postalText.text = zip\n            }\n        }\n    }\n}",
+      "options": [
+        "Each level rebinds `this` and `it`, so it's unclear whether `zip` is the address's or the view's",
+        "It doesn't compile, because `with` can't be nested inside another lambda with receiver",
+        "It is slow, because each of the four scope functions allocates a new lambda object on every call",
+        "`also` can't be called on a `String`, so the `city?.also` line fails to compile"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Nesting scope functions stacks implicit receivers: inside `with(view)`, an unqualified `zip` resolves to `view.zip` if it exists, otherwise to `address.zip`, and readers can't tell which. The code does compile, `also` works on any type, and these inline functions don't allocate lambdas. Flatten it with early returns and named `val`s."
+    },
+    {
+      "id": "d09q17",
+      "type": "output",
+      "topic": "labelled return",
+      "difficulty": "Hard",
+      "question": "What does this print?",
+      "code": "fun check(s: String?): String {\n    val r = s?.run {\n        if (isEmpty()) return@run \"blank\"\n        if (length > 3) return \"long\"\n        uppercase()\n    } ?: \"none\"\n    return \"r=$r\"\n}\n\nfun main() {\n    println(listOf(\"\", \"ok\", \"kotlin\", null).joinToString(\" \") { check(it) })\n}",
+      "options": [
+        "r=blank r=OK long r=none",
+        "r=blank r=OK r=long r=none",
+        "blank r=OK long r=none",
+        "r=blank r=OK r=KOTLIN r=none"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`return@run \"blank\"` only leaves the lambda, so `r` becomes `blank`. The bare `return \"long\"` is a non-local return from `check` itself, so `r=` is never prepended. For `null`, `?.run` is skipped and the elvis gives `none`."
+    },
+    {
+      "id": "d09q18",
+      "type": "mcq",
+      "topic": "with vs apply",
+      "difficulty": "Hard",
+      "question": "What happens with this code in a Fragment factory?",
+      "code": "fun newInstance(id: String): DetailFragment {\n    val args = with(Bundle()) {\n        putString(\"id\", id)\n        putInt(\"page\", 1)\n    }\n    return DetailFragment().also { it.arguments = args }\n}",
+      "options": [
+        "Compile error: `with` returns the lambda result, `Unit` here, not a `Bundle`",
+        "It works: `with` returns the `Bundle` after running the block",
+        "It compiles, but `arguments` ends up as an empty `Bundle`",
+        "It compiles, but throws a `NullPointerException` when the fragment reads its arguments"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`with` returns the last expression, and `putInt` returns `Unit`, so `args` is `Unit` and assigning it to `arguments` is a type mismatch. Use `Bundle().apply { ... }` to get the configured `Bundle` back."
+    },
+    {
+      "id": "d09q19",
+      "type": "output",
+      "topic": "mixing this",
+      "difficulty": "Hard",
+      "question": "What does this print?",
+      "code": "class Node(val name: String, val child: Node?)\n\nfun main() {\n    val root = Node(\"root\", Node(\"kid\", null))\n    val r = with(root) {\n        child?.run { name + \"<\" + this@with.name } ?: name\n    }\n    println(r)\n}",
+      "options": [
+        "kid<root",
+        "root<root",
+        "root<kid",
+        "kid<kid"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Inside `child?.run`, the nearest receiver is the child, so `name` is `kid`. `this@with.name` explicitly reaches the outer receiver, `root`. Needing labels like this is a sign the nesting is hurting readability."
+    },
+    {
+      "id": "d09q20",
+      "type": "output",
+      "topic": "takeIf on nullable",
+      "difficulty": "Hard",
+      "question": "What does this print?",
+      "code": "fun main() {\n    val log = mutableListOf<String>()\n    val s: String? = null\n    val a = s?.takeIf { log += \"a\"; true }\n    val b = s.takeIf { log += \"b\"; it == null }\n    println(\"$a $b $log\")\n}",
+      "options": [
+        "null null [b]",
+        "null null [a, b]",
+        "null null []",
+        "null true [b]"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`s?.takeIf` is skipped because `s` is null, so its predicate never runs. `s.takeIf` is called on `String?` directly, so its predicate always runs (logging `b`); it is true, and `takeIf` returns the receiver, which is `null`."
+    }
+  ]
+}

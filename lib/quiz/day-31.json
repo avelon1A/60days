@@ -1,0 +1,360 @@
+{
+  "day": 31,
+  "topic": "StateFlow, SharedFlow, stateIn & shareIn",
+  "questions": [
+    {
+      "id": "d31q01",
+      "type": "mcq",
+      "topic": "hot vs cold",
+      "difficulty": "Easy",
+      "question": "What makes `StateFlow` and `SharedFlow` \"hot\", unlike a flow built with `flow { }`?",
+      "options": [
+        "They exist independently of collectors, and all collectors share the same emissions",
+        "They run their producer block again from the start for every new collector",
+        "They always emit on `Dispatchers.Default`",
+        "They complete as soon as the last collector cancels, and restart when a new one arrives"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A cold `flow { }` runs its block separately for each collector. A hot flow lives on its own, whether or not anyone collects, and every collector sees the same emissions. Restarting per collector is the cold behaviour, not the hot one."
+    },
+    {
+      "id": "d31q02",
+      "type": "output",
+      "topic": "conflation & dedupe",
+      "difficulty": "Medium",
+      "question": "What does this print?",
+      "code": "import kotlinx.coroutines.*\nimport kotlinx.coroutines.flow.*\n\nfun main() = runBlocking {\n    val state = MutableStateFlow(0)\n    val job = launch {\n        state.collect { print(\"$it \") }\n    }\n    yield()\n    state.value = 1\n    state.value = 1\n    yield()\n    state.value = 2\n    state.value = 3\n    yield()\n    job.cancel()\n}",
+      "options": [
+        "0 1 3",
+        "0 1 1 2 3",
+        "0 1 2 3",
+        "1 3"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "New collectors get the current value `0` first. Assigning `1` twice emits once, because StateFlow skips values equal to the current one. `2` is overwritten by `3` before the collector runs again, so conflation means the collector only sees `3`."
+    },
+    {
+      "id": "d31q03",
+      "type": "truefalse",
+      "topic": "equality dedupe",
+      "difficulty": "Easy",
+      "question": "Assigning `state.value = x` where `x == state.value` makes a `MutableStateFlow` emit `x` to its collectors again.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "StateFlow compares the new value with `==` and ignores it if they're equal. That's why a `data class` UI state with the same contents isn't re-delivered, but a new instance with different field values is."
+    },
+    {
+      "id": "d31q04",
+      "type": "mcq",
+      "topic": "backing property",
+      "difficulty": "Medium",
+      "question": "In a ViewModel, why expose state with `asStateFlow()` rather than just declaring the public property's type as `StateFlow`?",
+      "code": "class ProfileViewModel : ViewModel() {\n    private val _uiState = MutableStateFlow(ProfileUiState())\n    val uiState: StateFlow<ProfileUiState> = _uiState.asStateFlow()\n}",
+      "options": [
+        "It returns a read-only wrapper, so callers can't cast it back to `MutableStateFlow`",
+        "Without `asStateFlow()` the UI wouldn't receive any updates",
+        "`asStateFlow()` makes a snapshot copy of the current value, so callers can't see later changes",
+        "`asStateFlow()` makes collection lifecycle-aware"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "An upcast still hands out the same mutable object, so `uiState as MutableStateFlow` would let a caller change it. `asStateFlow()` returns a read-only wrapper that still reflects every update, so it isn't a frozen copy."
+    },
+    {
+      "id": "d31q05",
+      "type": "output",
+      "topic": "replay",
+      "difficulty": "Easy",
+      "question": "What does this print?",
+      "code": "import kotlinx.coroutines.*\nimport kotlinx.coroutines.flow.*\n\nfun main() = runBlocking {\n    val events = MutableSharedFlow<Int>(replay = 2)\n    events.emit(1)\n    events.emit(2)\n    events.emit(3)\n    val got = events.take(2).toList()\n    println(got)\n}",
+      "options": [
+        "[2, 3]",
+        "[1, 2]",
+        "[1, 2, 3]",
+        "[3]"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "With no subscribers, `emit` doesn't suspend. It keeps only the last `replay = 2` values in the replay cache. A late subscriber gets `2` and `3` replayed, and `take(2)` stops after those two."
+    },
+    {
+      "id": "d31q06",
+      "type": "multi",
+      "topic": "stateflow properties",
+      "difficulty": "Easy",
+      "question": "Which statements about `StateFlow` are true? Select all that apply.",
+      "options": [
+        "It always has a current value, readable via `value`",
+        "A new collector immediately receives the current value",
+        "It's conflated: a slow collector may skip intermediate values",
+        "It can be created without an initial value",
+        "It emits every assignment to `value`, even repeated identical ones"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "`MutableStateFlow` needs an initial value, always holds a current value, and replays it to new collectors. It's conflated and skips values equal to the current one, so it doesn't emit every assignment."
+    },
+    {
+      "id": "d31q07",
+      "type": "mcq",
+      "topic": "WhileSubscribed(5000)",
+      "difficulty": "Medium",
+      "question": "Why is `SharingStarted.WhileSubscribed(5000)` the common choice for `stateIn` in a ViewModel?",
+      "code": "val uiState = repository.observeItems()\n    .map { UiState(it) }\n    .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), UiState())",
+      "options": [
+        "It survives the brief gap during rotation but stops the upstream if the app stays in the background",
+        "It retries the upstream every 5 seconds if it fails, so transient network errors recover on their own",
+        "It debounces emissions so the UI gets at most one value every 5 seconds",
+        "It cancels the upstream 5 seconds after the ViewModel is created"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "On rotation, the old UI stops collecting and the new one starts again within a second or two, so the 5 s grace period avoids restarting the upstream. If nobody collects for longer, for example when the app is in the background, the upstream is cancelled to save resources. It's a stop timeout, not a retry or debounce."
+    },
+    {
+      "id": "d31q08",
+      "type": "output",
+      "topic": "never completes",
+      "difficulty": "Easy",
+      "question": "What does this print?",
+      "code": "import kotlinx.coroutines.*\nimport kotlinx.coroutines.flow.*\n\nfun main() = runBlocking {\n    val state = MutableStateFlow(\"idle\")\n    val job = launch {\n        state.collect { println(\"ui: $it\") }\n        println(\"collect finished\")\n    }\n    yield()\n    state.value = \"loading\"\n    yield()\n    job.cancel()\n    println(\"done\")\n}",
+      "options": [
+        "ui: idle\nui: loading\ndone",
+        "ui: idle\nui: loading\ncollect finished\ndone",
+        "ui: loading\ndone",
+        "ui: idle\ndone"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A StateFlow never completes, so `collect` only returns if the coroutine is cancelled, and code after it in the same coroutine never runs. The collector gets the initial `idle` and then `loading`. `job.cancel()` ends it with a CancellationException, so `collect finished` is never printed."
+    },
+    {
+      "id": "d31q09",
+      "type": "mcq",
+      "topic": "shareIn",
+      "difficulty": "Medium",
+      "question": "Three screens each collect `locationFlow()`, a `callbackFlow` that registers a GPS listener. You see three listeners registered. What's the idiomatic fix?",
+      "code": "fun locationFlow(): Flow<Location> = callbackFlow {\n    val cb = LocationCallback { trySend(it) }\n    client.requestLocationUpdates(request, cb, looper)\n    awaitClose { client.removeLocationUpdates(cb) }\n}",
+      "options": [
+        "Share one upstream with `shareIn(appScope, WhileSubscribed(), replay = 1)` for all screens",
+        "Add `.distinctUntilChanged()` to the flow",
+        "Add `.flowOn(Dispatchers.IO)` to the flow",
+        "Collect it with `buffer()`, so all three screens read from one shared buffer instead of three"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A cold flow runs its body once per collector, which means one listener each. `shareIn` collects the upstream once and multicasts it to every subscriber. `WhileSubscribed` removes the listener when nobody is collecting. Changing operators like `distinctUntilChanged` or `flowOn` still leaves one upstream per collector. Each screen then collects the shared `locationFlow().shareIn(...)` flow."
+    },
+    {
+      "id": "d31q10",
+      "type": "truefalse",
+      "topic": "sharedflow no value",
+      "difficulty": "Easy",
+      "question": "A `MutableSharedFlow<Int>()` made with default arguments has no initial value and no `value` property, so a new subscriber receives nothing until the next emission.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "SharedFlow has no `value` property. With the default `replay = 0`, a new subscriber only gets values emitted after it subscribes. Only `StateFlow`, or a SharedFlow with replay, hands a value to late subscribers."
+    },
+    {
+      "id": "d31q11",
+      "type": "output",
+      "topic": "Lazily vs Eagerly",
+      "difficulty": "Medium",
+      "question": "What does this print?",
+      "code": "import kotlinx.coroutines.*\nimport kotlinx.coroutines.flow.*\n\nfun main() = runBlocking {\n    val scope = CoroutineScope(coroutineContext + Job())\n    val numbers = flowOf(1, 2, 3)\n    val state = numbers.stateIn(scope, SharingStarted.Lazily, 0)\n    println(state.value)\n    delay(50)\n    println(state.value)\n    val s2 = numbers.stateIn(scope, SharingStarted.Eagerly, 0)\n    println(s2.value)\n    delay(50)\n    println(s2.value)\n    scope.cancel()\n}",
+      "options": [
+        "0\n0\n0\n3",
+        "0\n3\n0\n3",
+        "3\n3\n3\n3",
+        "0\n3\n3\n3"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`Lazily` starts the upstream only when the first subscriber arrives. Reading `.value` isn't subscribing, so `state` stays at its initial `0`. `Eagerly` starts collecting right away in `scope`, so after the delay `s2.value` has reached the last value, `3`."
+    },
+    {
+      "id": "d31q12",
+      "type": "mcq",
+      "topic": "update vs copy",
+      "difficulty": "Hard",
+      "question": "Two coroutines on `Dispatchers.Default` each run this 1,000 times on the same `MutableStateFlow(Counter(0))`. What is `_state.value.count` afterwards?",
+      "code": "_state.value = _state.value.copy(count = _state.value.count + 1)",
+      "options": [
+        "It can be less than 2000, because read-copy-write isn't atomic",
+        "Always 2000, because `MutableStateFlow` is thread-safe",
+        "Always 2000, but collectors may see fewer emissions because of conflation",
+        "It throws `ConcurrentModificationException`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Setting `value` is thread-safe, but reading it, copying, and writing it back are separate steps, so two threads can read the same count and one increment gets lost. `update { }` retries with compare-and-set until no other write happened in between. So the fix is `_state.update { it.copy(count = it.count + 1) }`."
+    },
+    {
+      "id": "d31q13",
+      "type": "multi",
+      "topic": "stateflow vs livedata",
+      "difficulty": "Medium",
+      "question": "Which are real differences between `StateFlow` and `LiveData`? Select all that apply.",
+      "options": [
+        "`StateFlow` requires an initial value. `LiveData` can start with no value",
+        "`LiveData` stops delivering to an observer when its lifecycle isn't started. Collecting a `StateFlow` doesn't do that unless you use a lifecycle-aware API",
+        "`StateFlow` has the full set of Flow operators (`map`, `combine`, `flatMapLatest`, ...) and works in non-Android modules",
+        "`LiveData` is conflated, but `StateFlow` delivers every value it was given",
+        "`StateFlow` can only be updated from the main thread"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "StateFlow needs an initial value, isn't lifecycle-aware on its own (use `repeatOnLifecycle` or `collectAsStateWithLifecycle`), and is pure Kotlin with all Flow operators. Both are conflated. `StateFlow.value` can be set from any thread, while it's LiveData's `setValue` that's main-thread only."
+    },
+    {
+      "id": "d31q14",
+      "type": "output",
+      "topic": "tryEmit",
+      "difficulty": "Hard",
+      "question": "What does this print?",
+      "code": "import kotlinx.coroutines.*\nimport kotlinx.coroutines.flow.*\n\nfun main() = runBlocking {\n    val events = MutableSharedFlow<String>()\n    println(events.tryEmit(\"a\"))\n    val job = launch { events.collect { println(\"got $it\") } }\n    yield()\n    println(events.tryEmit(\"b\"))\n    events.emit(\"c\")\n    yield()\n    job.cancel()\n}",
+      "options": [
+        "true\nfalse\ngot c",
+        "false\nfalse\ngot c",
+        "true\ntrue\ngot b\ngot c",
+        "false\ntrue\ngot a\ngot b\ngot c"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "With no subscribers, emissions to a `replay = 0` SharedFlow are simply dropped, so `tryEmit(\"a\")` succeeds and returns `true`. Once a subscriber exists and there's no buffer, `tryEmit` can't deliver without suspending, so it returns `false` and `b` is lost. `emit(\"c\")` suspends until the subscriber takes it."
+    },
+    {
+      "id": "d31q15",
+      "type": "mcq",
+      "topic": "after stop timeout",
+      "difficulty": "Medium",
+      "question": "A ViewModel exposes `stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), Loading)`. The last value was `Success(items)`. The app stays in the background for 10 seconds, so the upstream is cancelled. What does `uiState.value` hold now?",
+      "options": [
+        "Still `Success(items)`; stopping the upstream doesn't reset it",
+        "`Loading`, because the initial value is restored when the upstream stops",
+        "`null`, because the StateFlow is cleared",
+        "Reading it throws, because the StateFlow is completed"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`WhileSubscribed(stopTimeoutMillis = 5000)` only cancels the upstream. `replayExpirationMillis` defaults to `Long.MAX_VALUE`, so the last value stays cached. When the UI comes back it sees `Success(items)` right away while the upstream restarts. A StateFlow never completes or becomes null."
+    },
+    {
+      "id": "d31q16",
+      "type": "output",
+      "topic": "shareIn single upstream",
+      "difficulty": "Medium",
+      "question": "What does this print?",
+      "code": "import kotlinx.coroutines.*\nimport kotlinx.coroutines.flow.*\n\nfun main() = runBlocking {\n    var starts = 0\n    val upstream = flow {\n        starts++\n        emit(1); delay(100); emit(2)\n    }\n    val shared = upstream.shareIn(this, SharingStarted.Eagerly, replay = 1)\n    val a = launch { shared.take(2).collect { print(\"A$it \") } }\n    val b = launch { shared.take(2).collect { print(\"B$it \") } }\n    joinAll(a, b)\n    println(\"starts=$starts\")\n    coroutineContext.cancelChildren()\n}",
+      "options": [
+        "A1 B1 A2 B2 starts=1",
+        "A1 A2 B1 B2 starts=2",
+        "A1 B1 A2 B2 starts=2",
+        "A2 B2 starts=1"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`shareIn` collects `upstream` once and multicasts it, so `starts=1`. `Eagerly` emits `1` before the collectors subscribe, but `replay = 1` gives each of them that value, then both receive `2` from the same run."
+    },
+    {
+      "id": "d31q17",
+      "type": "truefalse",
+      "topic": "lifecycle awareness",
+      "difficulty": "Easy",
+      "question": "Like LiveData, a `StateFlow` collected with a plain `lifecycleScope.launch { flow.collect { } }` automatically stops delivering updates while the Activity is in the background.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "StateFlow knows nothing about lifecycles. A plain `launch` in `lifecycleScope` keeps collecting until the Activity is destroyed, even while it's stopped. You need a lifecycle-aware collector such as `repeatOnLifecycle` to get LiveData-like behaviour."
+    },
+    {
+      "id": "d31q18",
+      "type": "multi",
+      "topic": "stateIn & shareIn",
+      "difficulty": "Medium",
+      "question": "Which statements about `stateIn` and `shareIn` are correct? Select all that apply.",
+      "options": [
+        "The non-suspending `stateIn(scope, started, initialValue)` needs an initial value. `shareIn` doesn't",
+        "With `SharingStarted.Eagerly`, the upstream starts immediately, even with no subscribers",
+        "With `SharingStarted.Lazily`, the upstream starts on the first subscriber and is never stopped while the scope is alive",
+        "`shareIn` collects the upstream separately for each subscriber",
+        "The upstream keeps running after the `scope` passed to `stateIn` is cancelled"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "`stateIn` returns a StateFlow, which must always have a value, hence `initialValue`. `shareIn` returns a SharedFlow and can rely on `replay` instead. `Eagerly` and `Lazily` differ only in when sharing starts, and neither stops early. Sharing means one upstream collection for all subscribers, and it lives in `scope`, so cancelling the scope stops it."
+    },
+    {
+      "id": "d31q19",
+      "type": "output",
+      "topic": "onBufferOverflow",
+      "difficulty": "Hard",
+      "question": "What does this print?",
+      "code": "import kotlinx.coroutines.*\nimport kotlinx.coroutines.flow.*\nimport kotlinx.coroutines.channels.BufferOverflow\n\nfun main() = runBlocking {\n    val flow = MutableSharedFlow<Int>(\n        extraBufferCapacity = 1,\n        onBufferOverflow = BufferOverflow.DROP_OLDEST\n    )\n    val job = launch { flow.collect { print(\"$it \") } }\n    yield()\n    flow.tryEmit(1); flow.tryEmit(2); flow.tryEmit(3)\n    yield()\n    job.cancel()\n}",
+      "options": [
+        "3",
+        "1 2 3",
+        "1",
+        "1 3"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "The collector is suspended, so `1` goes into the single buffer slot and the collector is scheduled but hasn't run yet. With `DROP_OLDEST`, `tryEmit(2)` and then `tryEmit(3)` each push out the oldest value. When the collector finally runs after `yield()`, only `3` is left. `1 2 3` would need a buffer of at least 3, and `1` is what you'd get with `DROP_LATEST`."
+    },
+    {
+      "id": "d31q20",
+      "type": "mcq",
+      "topic": "stateflow as sharedflow",
+      "difficulty": "Hard",
+      "question": "Which `MutableSharedFlow` setup behaves most like `MutableStateFlow(initial)`?",
+      "options": [
+        "`MutableSharedFlow(replay = 1, onBufferOverflow = DROP_OLDEST)`, seeded with `tryEmit`, plus `distinctUntilChanged()`",
+        "`MutableSharedFlow(replay = 0, extraBufferCapacity = 1)` and `emit(initial)`",
+        "`MutableSharedFlow(replay = 1)` with the default `SUSPEND` overflow, so the latest value is always replayed to collectors",
+        "`MutableSharedFlow(replay = Int.MAX_VALUE)` and `emit(initial)`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "StateFlow is a SharedFlow that replays the single latest value, drops older values instead of suspending (conflation), starts with a value, and skips duplicates. With the default `SUSPEND` overflow, a slow collector makes `emit` wait, which StateFlow never does. An unlimited replay would hand new collectors the whole history."
+    }
+  ]
+}

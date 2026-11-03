@@ -1,0 +1,352 @@
+{
+  "day": 44,
+  "topic": "Clean architecture: layers, repositories & use cases",
+  "questions": [
+    {
+      "id": "d44q01",
+      "type": "mcq",
+      "topic": "layers",
+      "difficulty": "Easy",
+      "question": "In Android's recommended app architecture, which layer is explicitly optional?",
+      "options": [
+        "UI layer",
+        "Data layer",
+        "Domain layer",
+        "Both the UI and data layers in single-screen apps"
+      ],
+      "answer": [
+        2
+      ],
+      "explanation": "The guide defines a UI layer and a data layer for every app, plus an optional domain layer for complex or reused business logic. The data layer is never optional: even a tiny app needs somewhere to own and expose its data."
+    },
+    {
+      "id": "d44q02",
+      "type": "truefalse",
+      "topic": "dependency rule",
+      "difficulty": "Easy",
+      "question": "Under Clean Architecture's dependency rule, the domain layer should not import data-layer classes such as Retrofit DTOs or Room entities.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Dependencies point inward: outer layers (UI, data) know about the domain, and the domain knows nothing about them. The domain works with its own models and interfaces, so it doesn't change when the API or database does."
+    },
+    {
+      "id": "d44q03",
+      "type": "output",
+      "topic": "operator invoke",
+      "difficulty": "Easy",
+      "question": "What does this print?",
+      "code": "class Repo { fun names() = listOf(\"ana\", \"bo\", \"cy\") }\n\nclass GetDisplayNamesUseCase(private val repo: Repo) {\n    operator fun invoke(limit: Int): List<String> =\n        repo.names().take(limit).map { it.replaceFirstChar { c -> c.uppercaseChar() } }\n}\n\nfun main() {\n    val getDisplayNames = GetDisplayNamesUseCase(Repo())\n    println(getDisplayNames(2))\n}",
+      "options": [
+        "[Ana, Bo]",
+        "[ana, bo]",
+        "[Ana, Bo, Cy]",
+        "GetDisplayNamesUseCase@1b6d3586"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Declaring `operator fun invoke` lets you call the use case instance like a function, so `getDisplayNames(2)` runs `invoke(2)`. It takes 2 names and capitalises each one. It doesn't print the object itself."
+    },
+    {
+      "id": "d44q04",
+      "type": "mcq",
+      "topic": "data sources",
+      "difficulty": "Easy",
+      "question": "According to Android's guidance, how many sources of data should a single data source class like `NewsRemoteDataSource` work with?",
+      "options": [
+        "Exactly one, such as a network API, a Room database, a file or DataStore",
+        "All sources for one entity, so it can merge network and database results",
+        "One per screen that displays the data",
+        "Any number, as long as it exposes a Flow"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Each data source wraps one source (a Retrofit service, a DAO, a DataStore). Combining several sources and deciding which one wins is the repository's job."
+    },
+    {
+      "id": "d44q05",
+      "type": "mcq",
+      "topic": "single source of truth",
+      "difficulty": "Medium",
+      "question": "A repository's `refresh()` fetches articles from the API and inserts them into Room. `observeArticles()` returns `dao.observeAll()`, and the UI collects it. The user opens the screen in airplane mode with articles cached from yesterday. What should happen?",
+      "options": [
+        "The cached rows stay on screen, and the failed refresh is reported separately (e.g. a snackbar)",
+        "The Flow from Room throws the refresh's `IOException`, so the collector stops and the list is cleared",
+        "The screen stays blank until the network returns, because the API is the source of truth",
+        "Room emits an empty list because it only emits after a successful sync"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "In offline-first design the database is the single source of truth. The UI only observes Room, and the network only writes into it. A failed refresh doesn't touch the cached rows, so the repository reports that error separately and the list stays on screen."
+    },
+    {
+      "id": "d44q06",
+      "type": "multi",
+      "topic": "repository role",
+      "difficulty": "Medium",
+      "question": "Which of these are responsibilities of a repository in the data layer? Select all that apply.",
+      "options": [
+        "Exposing data to the rest of the app as `Flow` streams or `suspend` functions",
+        "Deciding between cached and fresh network data and resolving conflicts between sources",
+        "Hiding whether data came from Room or Retrofit, so callers don't depend on the source",
+        "Holding a reference to the current `Activity` to show error toasts",
+        "Returning Retrofit `Response<T>` objects so ViewModels can inspect HTTP codes"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "The repository is the single entry point to its data. It combines data sources, owns the caching and conflict policy, and exposes a clean API. Holding an Activity would leak it and pull UI work into the data layer. Exposing `Response<T>` would leak HTTP details into the UI."
+    },
+    {
+      "id": "d44q07",
+      "type": "truefalse",
+      "topic": "main-safety",
+      "difficulty": "Medium",
+      "question": "A ViewModel calling a `suspend` repository function should wrap the call in `withContext(Dispatchers.IO)`, because the repository might do blocking work.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "The data layer should be main-safe. The class that does the blocking work (a data source or repository) switches dispatchers itself, typically using an injected dispatcher. Room `suspend` DAOs and Retrofit `suspend` calls are already main-safe, so callers in the ViewModel shouldn't need to know about threading."
+    },
+    {
+      "id": "d44q08",
+      "type": "mcq",
+      "topic": "which layer: ui",
+      "difficulty": "Easy",
+      "question": "Where does code that shows a `CircularProgressIndicator` instead of the list when `uiState.isLoading` is true belong?",
+      "options": [
+        "UI layer: the composable that renders the screen state",
+        "Domain layer: a `ShouldShowLoadingUseCase`",
+        "Data layer: the repository, since it knows when loading finishes",
+        "Data layer: a Room `@Query` that returns a loading flag"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Turning UI state into widgets is the UI layer's job. The repository may report that a load is in progress, but choosing what to draw is a UI decision. A use case for a single boolean check would be pointless indirection."
+    },
+    {
+      "id": "d44q09",
+      "type": "output",
+      "topic": "sealed errors",
+      "difficulty": "Medium",
+      "question": "The data layer maps HTTP codes to a domain error type. What does this print?",
+      "code": "sealed interface DomainError {\n    data object NotFound : DomainError\n    data object Server : DomainError\n    data class Unknown(val code: Int) : DomainError\n}\n\nfun toDomainError(code: Int): DomainError = when (code) {\n    404 -> DomainError.NotFound\n    in 500..599 -> DomainError.Server\n    else -> DomainError.Unknown(code)\n}\n\nfun main() {\n    listOf(404, 503, 418).map(::toDomainError).forEach { println(it) }\n}",
+      "options": [
+        "NotFound\nServer\nUnknown(code=418)",
+        "DomainError.NotFound\nDomainError.Server\nDomainError.Unknown(code=418)",
+        "NotFound\nServer\nUnknown(418)",
+        "NotFound\nUnknown(code=503)\nUnknown(code=418)"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A `data object`'s `toString()` is just its simple name, and a `data class` prints `Name(prop=value)`. 503 falls in `500..599`, so it maps to `Server`. Mapping like this keeps raw HTTP codes out of the UI, which only sees the `DomainError` cases."
+    },
+    {
+      "id": "d44q10",
+      "type": "mcq",
+      "topic": "pass-through use case",
+      "difficulty": "Medium",
+      "question": "A codebase has dozens of use cases like this one. Which assessment matches Android's architecture guidance?",
+      "code": "class GetUserUseCase @Inject constructor(\n    private val repo: UserRepository\n) {\n    suspend operator fun invoke(id: String) = repo.getUser(id)\n}",
+      "options": [
+        "Pass-through boilerplate: the domain layer is optional, so the ViewModel could call the repository directly",
+        "They're required, because a ViewModel must never reference a repository",
+        "They're what makes the call main-safe, since the repository can't switch to `Dispatchers.IO` on its own",
+        "Hilt needs them, because it can't inject repositories into ViewModels"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A use case earns its place by holding complex or reused logic; this one adds a class, a test and an extra hop without adding any behaviour. Some teams keep such wrappers for consistency, but that's a team convention, not a requirement: the guide lets the UI layer use repositories directly. Hilt injects repositories into ViewModels without trouble, and main-safety belongs to the data layer."
+    },
+    {
+      "id": "d44q11",
+      "type": "multi",
+      "topic": "model mapping",
+      "difficulty": "Medium",
+      "question": "Why map a network `ArticleDto` and a Room `ArticleEntity` to a separate domain `Article`? Select all that apply.",
+      "options": [
+        "A backend field rename only changes the DTO and its mapper, not the ViewModels and UI",
+        "The domain model can drop fields the app doesn't need and leave out serialization and Room annotations",
+        "The database schema can change independently of the API's response format",
+        "Retrofit can't deserialize JSON into a class that the UI also uses",
+        "Mapping makes the app faster by reducing allocations"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "Separate models keep each layer independent of the API's and the database's format. The cost is extra classes and mapper code, plus allocations: mapping adds allocations, it doesn't remove them. Retrofit will happily deserialize into any suitable class, so it doesn't require mapping."
+    },
+    {
+      "id": "d44q12",
+      "type": "truefalse",
+      "topic": "testability",
+      "difficulty": "Easy",
+      "question": "If a ViewModel depends on a `NewsRepository` interface, a unit test can pass a `FakeNewsRepository` backed by a `MutableStateFlow`, with no network or database.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Depending on an abstraction lets tests swap in a fake that the test controls. Google recommends fakes over mocks for repositories, because a fake has real, predictable behaviour and tests stay fast."
+    },
+    {
+      "id": "d44q13",
+      "type": "mcq",
+      "topic": "dependency inversion",
+      "difficulty": "Hard",
+      "question": "With a pure-Kotlin `:domain` module and a `:data` module, where do `interface ArticleRepository` and `ArticleRepositoryImpl` go, and which way does the module dependency point?",
+      "options": [
+        "Interface in `:domain`, implementation in `:data`, and `:data` depends on `:domain`",
+        "Both in `:data`, and `:domain` depends on `:data`",
+        "Interface in `:data`, implementation in `:domain`, and `:domain` depends on `:data`",
+        "Interface in `:domain`, implementation in `:data`, and `:domain` depends on `:data` so it can create the implementation"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "This is dependency inversion: the domain declares the interface it needs, and the data layer implements it, so the source-code dependency points inward. DI wiring (e.g. a Hilt `@Binds` module in `:data` or `:app`) connects the two at runtime. The domain never creates the implementation itself, which is why the last option is wrong."
+    },
+    {
+      "id": "d44q14",
+      "type": "mcq",
+      "topic": "which layer: domain",
+      "difficulty": "Medium",
+      "question": "Calculating a cart total with coupon and tiered-discount rules is needed by both the Cart screen and the Checkout screen. Where should that logic live?",
+      "options": [
+        "A shared domain-layer use case, e.g. `CalculateCartTotalUseCase`",
+        "Copied into each screen's ViewModel so each screen owns its own rules",
+        "Inside the composable that shows the total",
+        "In the Retrofit interface, as a query parameter default"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Business rules reused by several ViewModels are exactly what the domain layer is for. Copying them into each ViewModel means the two screens can drift apart and show different totals. Composables should only render the result."
+    },
+    {
+      "id": "d44q15",
+      "type": "truefalse",
+      "topic": "stateless use cases",
+      "difficulty": "Easy",
+      "question": "Android's guidance says a use case is a good place to keep mutable state, such as a `var` caching the last result, so repeated calls are cheaper.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "Use cases should be lightweight and hold no mutable data. A cache belongs in the data layer (an in-memory cache in the repository, or Room), and screen state belongs in the UI layer. A stateful use case shared between screens leads to bugs that are hard to trace."
+    },
+    {
+      "id": "d44q16",
+      "type": "mcq",
+      "topic": "result & cancellation",
+      "difficulty": "Hard",
+      "question": "What's the subtle problem with this repository function?",
+      "code": "class UserRepository(private val api: UserApi) {\n    suspend fun getUser(id: String): Result<User> =\n        runCatching { api.getUser(id).toDomain() }\n}",
+      "options": [
+        "`runCatching` also catches `CancellationException`, turning a cancelled call into `Result.failure`",
+        "`Result` can't be returned from a `suspend` function",
+        "`runCatching` isn't suspend-aware, so the network call runs blocking on the main thread and freezes the UI",
+        "A `Result` can't be passed between Gradle modules"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Returning a `Result` or sealed error is a good way to keep exceptions from leaking into the UI. But a blanket `runCatching` swallows `CancellationException`, which breaks structured concurrency: the ViewModel might handle a cancelled job as an error or keep working. Rethrow `CancellationException`, or catch only the expected types such as `IOException` and `HttpException`. `Result` has been allowed as a return type since Kotlin 1.5."
+    },
+    {
+      "id": "d44q17",
+      "type": "multi",
+      "topic": "when use cases help",
+      "difficulty": "Hard",
+      "question": "Which are good reasons to add a use case instead of calling repositories directly from the ViewModel? Select all that apply.",
+      "options": [
+        "The logic combines several repositories, e.g. joining articles with their authors",
+        "Several ViewModels need the same business logic",
+        "The ViewModel has grown complex business rules that you want to pull out and test separately",
+        "Repositories aren't main-safe, so a use case is needed to switch to `Dispatchers.IO`",
+        "Use cases survive configuration changes, so they can hold the screen's state"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "Use cases pay off when they hold complex logic, logic reused across screens, or logic that combines several repositories. Main-safety is already the data layer's job. Use cases are stateless and don't survive anything: the ViewModel keeps the screen state across configuration changes."
+    },
+    {
+      "id": "d44q18",
+      "type": "mcq",
+      "topic": "feature vs layer modules",
+      "difficulty": "Medium",
+      "question": "A growing app has only three modules: `:ui`, `:domain` and `:data`, each holding code for every feature. What's the main drawback as the team and the feature count grow?",
+      "options": [
+        "A change to one feature rebuilds code for all features, and no team can own a feature end to end",
+        "Hilt can't inject classes across module boundaries, so each layer module needs its own separate component",
+        "Layer modules stop the dependency rule from working",
+        "R8 can't shrink code in layer modules"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Splitting by layer only keeps the code apart by technical role. At scale, feature modules (each with its own UI/domain/data internals, and shared core modules) give better build isolation and clearer ownership. Hilt works across modules, and layer modules enforce the dependency rule well, so the other options are false."
+    },
+    {
+      "id": "d44q19",
+      "type": "output",
+      "topic": "repository caching",
+      "difficulty": "Medium",
+      "question": "A repository keeps an in-memory cache in front of a fake API. What does this print?",
+      "code": "class FakeApi {\n    var calls = 0\n    fun fetch(id: Int): String { calls++; return \"user$id\" }\n}\n\nclass UserRepository(private val api: FakeApi) {\n    private val cache = mutableMapOf<Int, String>()\n    fun get(id: Int, refresh: Boolean = false): String =\n        if (refresh) api.fetch(id).also { cache[id] = it }\n        else cache.getOrPut(id) { api.fetch(id) }\n}\n\nfun main() {\n    val api = FakeApi()\n    val repo = UserRepository(api)\n    repo.get(1); repo.get(1); repo.get(2); repo.get(1, refresh = true); repo.get(2)\n    println(\"calls=${api.calls}\")\n}",
+      "options": [
+        "calls=3",
+        "calls=2",
+        "calls=5",
+        "calls=4"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "The first `get(1)` and the first `get(2)` miss the cache and fetch. The refresh fetches again because it skips the cache. The second `get(1)` and the last `get(2)` are cache hits, so the total is 3. This caching policy belongs in the repository, so callers don't need to know about it."
+    },
+    {
+      "id": "d44q20",
+      "type": "mcq",
+      "topic": "skipping mapping",
+      "difficulty": "Hard",
+      "question": "To avoid mapper code, a team puts `@Entity` and `@SerialName` annotations on one `Article` class and uses it everywhere, from Retrofit through to the composables. Which consequence is most accurate?",
+      "options": [
+        "Domain and UI now depend on Room and serialization, so a backend or schema change spreads into every layer",
+        "Room refuses to store a class that also has serialization annotations, since both generate conflicting code",
+        "Nothing changes, since annotations have no runtime effect and the layers stay decoupled",
+        "Compose can't render state whose type is annotated with `@Entity`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "One shared model ties the API format, the database schema and the UI together, so changing any one of them forces changes in the others, and can even need a Room migration. In a small app that's sometimes an acceptable trade-off. Neither Room nor Compose forbids it technically, but the coupling is real."
+    }
+  ]
+}

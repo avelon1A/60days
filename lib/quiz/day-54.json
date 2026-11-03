@@ -1,0 +1,353 @@
+{
+  "day": 54,
+  "topic": "Reliable background work: retries, backoff & idempotency",
+  "questions": [
+    {
+      "id": "d54q01",
+      "type": "mcq",
+      "topic": "failure classification",
+      "difficulty": "Easy",
+      "question": "A background sync gets one of these responses. Which one should the client retry automatically with backoff?",
+      "options": [
+        "400 Bad Request with a validation error body",
+        "503 Service Unavailable",
+        "404 Not Found for a resource the user deleted",
+        "422 Unprocessable Entity"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "A 503 is transient: the server is overloaded or restarting, and the same request may succeed later. 400, 404 and 422 are permanent for this payload, so retrying sends the same bad request again and wastes battery and server capacity."
+    },
+    {
+      "id": "d54q02",
+      "type": "truefalse",
+      "topic": "http idempotency",
+      "difficulty": "Easy",
+      "question": "By HTTP semantics, `GET`, `PUT` and `DELETE` are idempotent but `POST` is not, so a blind retry of a `POST` can create a duplicate.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Repeating a `PUT` or `DELETE` leaves the server in the same state as doing it once. A `POST` like \"create order\" is not idempotent by definition, so it needs an idempotency key before it is safe to retry."
+    },
+    {
+      "id": "d54q03",
+      "type": "mcq",
+      "topic": "payment timeout",
+      "difficulty": "Hard",
+      "question": "The client sends `POST /payments` and the read times out. The client can't tell whether the server charged the card. What should it do?",
+      "code": "POST /payments\nIdempotency-Key: 7f3c...e91\n{ \"orderId\": \"o-42\", \"amount\": 1999 }\n\n-> SocketTimeoutException (no response)",
+      "options": [
+        "Retry the same request with the same `Idempotency-Key` that was persisted with the pending payment",
+        "Retry with a fresh `Idempotency-Key` so the server treats it as a clean attempt",
+        "Never retry a payment: show \"Payment failed\" and ask the user to pay again",
+        "Call `GET /payments?orderId=o-42` first, and if no payment is found, `POST` again with a newly generated key"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "With the same key the server either replays the stored result of the first attempt or processes it once, so a retry can't double-charge. A new key, or check-then-create (the first request may still be in flight), can charge twice, and telling the user it failed may be false when the charge actually went through."
+    },
+    {
+      "id": "d54q04",
+      "type": "multi",
+      "topic": "transient errors",
+      "difficulty": "Medium",
+      "question": "For an idempotent request, which failures are usually worth retrying with backoff? Select all that apply.",
+      "options": [
+        "`SocketTimeoutException` on read",
+        "`UnknownHostException` because the device just lost connectivity",
+        "429 Too Many Requests with a `Retry-After` header",
+        "403 Forbidden because the user lacks permission",
+        "400 Bad Request because a required field is missing"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "Timeouts, connectivity loss and rate limiting are temporary, so the same request can succeed later (for 429, after `Retry-After`). 403 and 400 come from who the user is or what was sent. Retrying won't change them. They need user action or a code fix."
+    },
+    {
+      "id": "d54q05",
+      "type": "mcq",
+      "topic": "jitter",
+      "difficulty": "Easy",
+      "question": "Why add random jitter to exponential backoff delays?",
+      "options": [
+        "So clients that failed together don't retry in lockstep and hit the recovering server at once",
+        "To make each retry more likely to land on a different server IP behind the load balancer",
+        "Because Android's scheduler rejects delays that are exact powers of two",
+        "To make the total retry time shorter than plain exponential backoff, since the average delay drops"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Without jitter, thousands of clients that failed during the same outage retry in lockstep (1s, 2s, 4s...), causing repeated load spikes, the thundering herd. Jitter spreads them out. It doesn't make retries finish sooner and has nothing to do with routing."
+    },
+    {
+      "id": "d54q06",
+      "type": "mcq",
+      "topic": "cancellation",
+      "difficulty": "Medium",
+      "question": "A `CoroutineWorker` is uploading a file and the user taps Cancel, which calls `WorkManager.cancelUniqueWork(\"upload-123\")`. What happens?",
+      "options": [
+        "The worker's coroutine is cancelled, which cancels the suspending network call, and the worker should clean up",
+        "The work is marked cancelled in WorkManager's database so it won't start again, but an upload that is already running keeps going until it completes",
+        "WorkManager treats it like `Result.retry()` and re-runs the upload after the backoff delay",
+        "Nothing happens until the app process is killed, because a running worker can't be stopped"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Cancelling stops running work: a `CoroutineWorker`'s coroutine is cancelled and cooperative suspend calls (like a Retrofit/OkHttp call) throw `CancellationException`. Cancelled work is not retried. Use `finally` to delete temp files and tell the server to drop the partial session."
+    },
+    {
+      "id": "d54q07",
+      "type": "truefalse",
+      "topic": "idempotency key",
+      "difficulty": "Medium",
+      "question": "The client should generate a new idempotency key for every retry attempt so the server can tell the attempts apart.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "The key identifies the logical operation, not the attempt. Generate it once when the user acts, persist it with the pending request, and reuse it on every retry, even after process death. A fresh key per attempt defeats deduplication."
+    },
+    {
+      "id": "d54q08",
+      "type": "mcq",
+      "topic": "retry-after",
+      "difficulty": "Easy",
+      "question": "A sync request gets `429 Too Many Requests` with `Retry-After: 120`. What should the client do?",
+      "options": [
+        "Wait at least 120 seconds before retrying, e.g. reschedule the work with that delay",
+        "Retry immediately, then back off from 1 second as usual, since `Retry-After` is only a hint",
+        "Treat it as a permanent failure and drop the request",
+        "Refresh the access token, because 429 means the session expired"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "429 is transient, and `Retry-After` is the server saying when it can accept the request again. Retrying sooner just gets throttled again (and can extend the penalty). Dropping the request loses data, and 429 has nothing to do with auth."
+    },
+    {
+      "id": "d54q09",
+      "type": "multi",
+      "topic": "workmanager",
+      "difficulty": "Medium",
+      "question": "Which statements about WorkManager are correct? Select all that apply.",
+      "options": [
+        "`enqueueUniqueWork` with `ExistingWorkPolicy.KEEP` ignores the new request if unfinished work with that name already exists",
+        "`setBackoffCriteria(BackoffPolicy.EXPONENTIAL, ...)` sets the delay used when the worker returns `Result.retry()`",
+        "Enqueued work is persisted and still runs after the app process is killed or the device reboots",
+        "Work with a `NetworkType.CONNECTED` constraint starts at the requested time even if the device is offline",
+        "`PeriodicWorkRequest` can repeat every minute if you need near-real-time sync"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "Unique work prevents duplicate jobs, backoff criteria control `Result.retry()` timing, and WorkManager stores work in its own database so it survives process death and reboot. Constraints delay work until they're met, and periodic work has a 15-minute minimum interval."
+    },
+    {
+      "id": "d54q10",
+      "type": "mcq",
+      "topic": "401 re-auth",
+      "difficulty": "Medium",
+      "question": "Queued background requests start failing with 401 because the access token expired. What is the right handling?",
+      "options": [
+        "Refresh the token once, shared by all failing requests, then retry them. If the refresh is rejected, pause the queue and ask the user to sign in.",
+        "Retry each request with exponential backoff and jitter, since an expired token often starts working again after the server's clock-skew window passes",
+        "Mark every queued request as permanently failed and delete it",
+        "Have each failing request refresh the token on its own, in parallel"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A 401 won't fix itself with backoff. It needs new credentials, and after that the request is retryable. Parallel refreshes race and can invalidate each other's refresh tokens. Deleting the queue loses work that will succeed after re-auth."
+    },
+    {
+      "id": "d54q11",
+      "type": "mcq",
+      "topic": "backoff cap",
+      "difficulty": "Easy",
+      "question": "A retry policy starts at 1 s and doubles each attempt. Why also set a maximum delay and a maximum number of attempts?",
+      "options": [
+        "Uncapped doubling soon means hours-long waits, and a call that never succeeds would retry forever",
+        "WorkManager throws an `IllegalArgumentException` when a backoff delay exceeds 60 seconds",
+        "Caps make every retry use the same delay, which keeps the schedule predictable and easier to test",
+        "So the server can tell retries apart from first attempts"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "1 s × 2^14 is about 4.5 hours, so without a cap the delay becomes useless. A max-attempts limit (or retry budget) stops an operation from cycling forever and sends it to dead-letter handling. A cap only limits the largest delay, so the earlier ones still grow exponentially."
+    },
+    {
+      "id": "d54q12",
+      "type": "mcq",
+      "topic": "outbox pattern",
+      "difficulty": "Medium",
+      "question": "The user posts a comment while on a flaky connection. Which design is the client-side outbox pattern?",
+      "options": [
+        "In one Room transaction, save the comment as pending plus an outbox row, show it, and let a unique WorkManager job send it",
+        "Call the API first, and insert the comment into Room as confirmed only once the server returns 201 with the canonical ID, so the local copy never diverges",
+        "Keep pending comments in a `MutableList` in the ViewModel and retry them in `init`",
+        "Save the comment in `SharedPreferences` after the network call fails"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Recording intent durably before any network I/O means a crash, process kill or offline period can't lose it, and the UI can show it at once. Network-first loses the comment if the app dies mid-request, and an in-memory list dies with the process."
+    },
+    {
+      "id": "d54q13",
+      "type": "truefalse",
+      "topic": "effectively once",
+      "difficulty": "Medium",
+      "question": "Exactly-once delivery over an unreliable network isn't achievable, but at-least-once delivery (retry until acknowledged) plus idempotent processing on the server gives an effectively-once result.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "The client can't tell a lost request from a lost response, so it must retry, which means the server may see duplicates. Deduplicating by an idempotency key or client-generated ID makes those duplicates harmless, so the effect happens once."
+    },
+    {
+      "id": "d54q14",
+      "type": "mcq",
+      "topic": "resumable upload",
+      "difficulty": "Hard",
+      "question": "A 200 MB video upload uses a resumable session with 8 MB chunks. The app is killed at about 60%. When the worker runs again, what should it do?",
+      "options": [
+        "Ask the server for the session's committed offset and resume from that byte",
+        "Continue from the offset of the last chunk the client saved locally as sent",
+        "Restart from byte 0 with the same idempotency key, since the server will dedupe",
+        "Create a new upload session to be safe, then delete the old one"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "The server is the source of truth for what it durably received. The client's last sent chunk may not have been committed, or may have been committed after the client last saved its offset. Restarting from 0 or opening a new session throws away 120 MB of progress on a metered or flaky network."
+    },
+    {
+      "id": "d54q15",
+      "type": "multi",
+      "topic": "photo upload design",
+      "difficulty": "Medium",
+      "question": "You're designing a reliable \"upload photo to post\" feature. Which choices belong in the design? Select all that apply.",
+      "options": [
+        "Copy the picked image into app-private storage before enqueueing, since the content URI's permission may not outlast the process",
+        "Run long, user-initiated uploads as foreground work (`setForeground`) with a progress notification",
+        "Upload the bytes first, then make a separate call to commit the post metadata that references the upload ID",
+        "Run the upload loop in the Activity's `lifecycleScope` so it stops cleanly when the user leaves",
+        "Read the whole file into a `ByteArray` so the retry can resend it without touching disk"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "Owning a stable copy, making long uploads visible foreground work, and the upload-then-commit split all keep the upload going across process death and avoid half-created posts. `lifecycleScope` kills the upload when the user navigates away, and loading large files into memory risks OOM. Stream from the file instead."
+    },
+    {
+      "id": "d54q16",
+      "type": "mcq",
+      "topic": "operation ordering",
+      "difficulty": "Medium",
+      "question": "Offline, the user creates an album and then adds a photo to it. The photo upload needs the album's server ID. How should the queued work be structured?",
+      "options": [
+        "Chain them with `beginWith(createAlbum).then(uploadPhoto)` and pass the album's server ID to the upload",
+        "Enqueue both independently. WorkManager runs requests in the order they were enqueued.",
+        "Run both in parallel and have the photo upload return `Result.retry()` on 404 until the album exists on the server and the ID can be looked up",
+        "Upload the photo first and create the album afterwards, then move the photo"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A chain encodes the dependency: the child waits for the parent, receives its output, and is marked failed if the parent fails permanently. Independent requests have no ordering guarantee. Retrying on 404 wastes requests and can't tell \"not created yet\" from \"really gone\". Map the parent's output (the album's server ID) into the upload's input."
+    },
+    {
+      "id": "d54q17",
+      "type": "truefalse",
+      "topic": "dead letter",
+      "difficulty": "Easy",
+      "question": "When a queued operation fails permanently (e.g. a 422 validation error), it should be moved out of the retry queue and the failure shown to the user instead of retried silently.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Retrying a permanent failure never succeeds, burns battery and can block later items in an ordered queue. Moving it to a dead-letter state lets the UI mark it \"Failed, tap to edit or discard\" so the user can fix it."
+    },
+    {
+      "id": "d54q18",
+      "type": "multi",
+      "topic": "retry storms",
+      "difficulty": "Hard",
+      "question": "Your backend is recovering from an outage and 2 million installed clients have queued work. Which client behaviours help it recover instead of knocking it over again? Select all that apply.",
+      "options": [
+        "Exponential backoff with jitter",
+        "A retry budget: a cap on attempts, and on the share of traffic that can be retries",
+        "A client-side circuit breaker that stops calls for a cooldown after repeated failures, then sends one probe request",
+        "Retrying each failed call three times in a tight loop before backing off",
+        "Scheduling every client's catch-up sync for the same fixed time, such as 03:00"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "Jitter spreads load, budgets limit how much retries can add to the original traffic, and a breaker stops calls to a server that's clearly down. Tight-loop retries and a fleet-wide fixed sync time cause synchronized spikes, the retry storm that keeps the outage going."
+    },
+    {
+      "id": "d54q19",
+      "type": "mcq",
+      "topic": "expedited work",
+      "difficulty": "Hard",
+      "question": "Which statement about `setExpedited` work in WorkManager is correct?",
+      "options": [
+        "It's for short, user-important tasks and is quota-limited, so set an `OutOfQuotaPolicy` fallback",
+        "It is exempt from time limits and Doze, which makes it the right choice for an hour-long backup that the user started from settings",
+        "It can be applied to a `PeriodicWorkRequest` to make a 15-minute sync high priority",
+        "It runs the worker synchronously on the main thread to skip scheduler latency"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Expedited work starts quickly but is quota-limited and meant to finish in minutes, so it needs an out-of-quota fallback. It doesn't support periodic requests, and long user-initiated transfers belong in foreground work with a notification."
+    },
+    {
+      "id": "d54q20",
+      "type": "multi",
+      "topic": "observability",
+      "difficulty": "Easy",
+      "question": "Which are good observability practices for a background retry system? Select all that apply.",
+      "options": [
+        "Log each attempt with the attempt number, error class (timeout, 5xx, 429...) and the operation's ID",
+        "Track metrics such as retry rate, time-to-success, and how many operations end up dead-lettered",
+        "Include the idempotency key or a request ID in logs so client and server records can be matched",
+        "Log full request headers, including the `Authorization` token, to make debugging easier"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "Per-attempt context, aggregate metrics and a shared correlation ID show whether retries are helping and where operations get stuck. Logging bearer tokens leaks credentials into log pipelines and crash tools."
+    }
+  ]
+}

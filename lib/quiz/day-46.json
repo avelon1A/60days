@@ -1,0 +1,359 @@
+{
+  "day": 46,
+  "topic": "Paging 3 & DataStore",
+  "questions": [
+    {
+      "id": "d46q01",
+      "type": "mcq",
+      "topic": "nextkey",
+      "difficulty": "Easy",
+      "question": "A `PagingSource.load()` returns `LoadResult.Page(data = items, prevKey = 2, nextKey = null)`. What does `nextKey = null` tell Paging?",
+      "options": [
+        "No more pages after this one, so Paging stops appending",
+        "Paging should reload the list starting again from the first key",
+        "The load failed and Paging should retry it",
+        "Paging should ask `getRefreshKey()` for the next page's key"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A null `nextKey` (or `prevKey`) marks the end of pagination in that direction. Failures are reported with `LoadResult.Error`, not with a null key, and `getRefreshKey()` is only used when reloading after invalidation."
+    },
+    {
+      "id": "d46q02",
+      "type": "truefalse",
+      "topic": "prefetchdistance",
+      "difficulty": "Easy",
+      "question": "`PagingConfig.prefetchDistance` is how close to the edge of the loaded items the user must scroll before Paging loads the next page, and it defaults to `pageSize`.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Paging starts loading when the user comes within `prefetchDistance` items of the loaded edge, so the next page is usually ready before the user reaches it. If you don't set it, it defaults to `pageSize`."
+    },
+    {
+      "id": "d46q03",
+      "type": "output",
+      "topic": "page keys",
+      "difficulty": "Medium",
+      "question": "This plain-Kotlin loop mimics how Paging follows `nextKey` until it is null. What does it print?",
+      "code": "data class Page(val data: List<Int>, val nextKey: Int?)\n\nfun load(key: Int, size: Int): Page {\n    val start = key * size\n    val end = minOf(start + size, 7)\n    return Page((start until end).toList(), if (end >= 7) null else key + 1)\n}\n\nfun main() {\n    var key: Int? = 0\n    val loaded = mutableListOf<Int>()\n    while (key != null) {\n        val page = load(key, 3)\n        loaded += page.data\n        key = page.nextKey\n    }\n    println(\"${loaded.size} items, last=${loaded.last()}\")\n}",
+      "options": [
+        "7 items, last=6",
+        "6 items, last=5",
+        "9 items, last=8",
+        "7 items, last=7"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Key 0 loads 0..2, key 1 loads 3..5, and key 2 loads only `[6]` because `end` is capped at 7. That page returns `nextKey = null`, so the loop stops after 7 items. The last value is 6, not 7, because `until` excludes the end."
+    },
+    {
+      "id": "d46q04",
+      "type": "mcq",
+      "topic": "itemkey",
+      "difficulty": "Easy",
+      "question": "What does `key = items.itemKey { it.id }` do in this list?",
+      "code": "@Composable\nfun FeedList(viewModel: FeedViewModel) {\n    val items = viewModel.feed.collectAsLazyPagingItems()\n    LazyColumn {\n        items(count = items.itemCount, key = items.itemKey { it.id }) { index ->\n            items[index]?.let { PostRow(it) }\n        }\n    }\n}",
+      "options": [
+        "It gives each row a stable key, so row state and scroll position follow the right post",
+        "It is what makes Paging load the next page when the user scrolls near the end of the list",
+        "It removes duplicate posts that have the same `id`",
+        "It makes `items[index]` never return null, even with placeholders enabled"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`itemKey` turns each loaded item into a stable Compose key. Loading is triggered by reading `items[index]`, not by the key. It doesn't remove duplicates (duplicate keys actually crash a LazyColumn), and placeholders can still be null."
+    },
+    {
+      "id": "d46q05",
+      "type": "multi",
+      "topic": "loadstate",
+      "difficulty": "Easy",
+      "question": "`LazyPagingItems.loadState` reports a separate `LoadState` for each kind of load. Which of these are those load types?",
+      "options": [
+        "`refresh`",
+        "`append`",
+        "`prepend`",
+        "`reload`",
+        "`invalidate`"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "`LoadStates` has `refresh` (the first load or a reload after invalidation), `append` (loading at the end) and `prepend` (loading at the start). Each one is `Loading`, `NotLoading` or `Error`. `reload` and `invalidate` are not load types."
+    },
+    {
+      "id": "d46q06",
+      "type": "mcq",
+      "topic": "pagingconfig",
+      "difficulty": "Easy",
+      "question": "You create `Pager(PagingConfig(pageSize = 20)) { ArticlePagingSource(api) }`. How many items does the first load ask for by default?",
+      "options": [
+        "60",
+        "20",
+        "40",
+        "All items, until `nextKey` is null"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`initialLoadSize` defaults to 3 × `pageSize`, so the first load (`params.loadSize`) asks for 60 items and the screen fills without extra requests. Later appends and prepends ask for `pageSize` (20)."
+    },
+    {
+      "id": "d46q07",
+      "type": "multi",
+      "topic": "datastore fit",
+      "difficulty": "Easy",
+      "question": "Which of these are good fits for DataStore?",
+      "options": [
+        "A dark-mode on/off setting",
+        "A flag saying the user has finished onboarding",
+        "A small typed settings object stored with Proto DataStore",
+        "Thousands of cached feed items that you page through and query",
+        "A chat history where single messages get updated"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "DataStore is for small, simple data such as settings and flags. It rewrites the whole file on every update and has no queries or partial updates. Large or relational data like feeds and chat messages belongs in Room."
+    },
+    {
+      "id": "d46q08",
+      "type": "truefalse",
+      "topic": "single instance",
+      "difficulty": "Medium",
+      "question": "Creating two DataStore instances for the same file in the same process is fine as long as both are only used for reading.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "DataStore requires one instance per file per process. If several are active for the same file, it throws `IllegalStateException` on read or update. That's why it's declared once, for example as a top-level `by preferencesDataStore(...)` delegate or a singleton."
+    },
+    {
+      "id": "d46q09",
+      "type": "mcq",
+      "topic": "cachedin",
+      "difficulty": "Medium",
+      "question": "`FeedViewModel` exposes `val posts = pager.flow` without `cachedIn`. The user scrolls to page 5 and rotates the screen, and the new composition calls `collectAsLazyPagingItems()` again. What happens?",
+      "options": [
+        "A new paging run starts, so pages are fetched again and the list starts from the beginning",
+        "The ViewModel keeps the loaded pages anyway, so the list comes back at page 5 straight away",
+        "The app crashes because a ViewModel can't expose a `Flow<PagingData>`",
+        "Nothing loads until the user pulls to refresh"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Without `cachedIn`, `pager.flow` is a cold flow and each new collection starts loading from scratch. `.cachedIn(viewModelScope)` keeps the loaded `PagingData` in the ViewModel, so a collector after a configuration change gets the cached pages without new network calls."
+    },
+    {
+      "id": "d46q10",
+      "type": "output",
+      "topic": "getrefreshkey",
+      "difficulty": "Medium",
+      "question": "This is the usual `getRefreshKey` logic for the page closest to the anchor position, written as a plain function. What does it print?",
+      "code": "data class Page(val prevKey: Int?, val nextKey: Int?)\n\nfun refreshKey(page: Page?): Int? =\n    page?.prevKey?.plus(1) ?: page?.nextKey?.minus(1)\n\nfun main() {\n    println(refreshKey(Page(prevKey = 4, nextKey = 6)))\n    println(refreshKey(Page(prevKey = null, nextKey = 2)))\n    println(refreshKey(Page(prevKey = 9, nextKey = null)))\n    println(refreshKey(null))\n}",
+      "options": [
+        "5\n1\n10\nnull",
+        "5\n1\n10\n0",
+        "5\nnull\n10\nnull",
+        "4\n2\n9\nnull"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "The function uses `prevKey + 1`, and only falls back to `nextKey - 1` when `prevKey` is null. That gives 5, then 1 (from `nextKey = 2`), then 10. A null page makes both safe calls null, so the elvis returns `null`, and Paging then reloads with its initial key."
+    },
+    {
+      "id": "d46q11",
+      "type": "mcq",
+      "topic": "proto datastore",
+      "difficulty": "Easy",
+      "question": "When should you pick Proto DataStore over Preferences DataStore?",
+      "options": [
+        "When you want a typed schema object (e.g. `UserSettings`) with defaults instead of string keys",
+        "When you need to store thousands of rows and run queries over them",
+        "When you need synchronous reads on the main thread",
+        "When you want to store values without defining any keys or schema up front, as with a plain map"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Proto DataStore stores a typed object defined by a schema, so you get compile-time types and default values instead of string keys, read and written through a `Serializer`. Preferences DataStore uses typed keys with no schema. Neither is a database, and neither supports synchronous main-thread reads."
+    },
+    {
+      "id": "d46q12",
+      "type": "mcq",
+      "topic": "ioexception",
+      "difficulty": "Medium",
+      "question": "Reading the DataStore file fails with an `IOException`. What does a collector of `themeFlow` receive?",
+      "code": "val themeFlow: Flow<String> = context.dataStore.data\n    .catch { e ->\n        if (e is IOException) emit(emptyPreferences()) else throw e\n    }\n    .map { prefs -> prefs[THEME_KEY] ?: \"system\" }",
+      "options": [
+        "`\"system\"`",
+        "The app crashes with the `IOException`",
+        "`null`",
+        "Nothing: the flow completes without emitting"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`catch` handles the `IOException` and emits `emptyPreferences()`. The `map` then finds no `THEME_KEY` and returns the default `\"system\"`. Other exceptions are rethrown, so real bugs still show up."
+    },
+    {
+      "id": "d46q13",
+      "type": "mcq",
+      "topic": "remotemediator",
+      "difficulty": "Hard",
+      "question": "You page a feed with `Pager(config, remoteMediator = FeedMediator(api, db)) { db.postDao().pagingSource() }`. Which statement is correct?",
+      "options": [
+        "The mediator writes network results into Room, and the UI pages from Room's `PagingSource`, which reloads on writes",
+        "The mediator returns network items straight to the UI, and Room is only read as a fallback when the device is offline",
+        "Paging merges the mediator's items with Room's items into one list and removes duplicates by key",
+        "After each insert you must call `invalidate()` on the PagingSource yourself, or new rows never show up"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "With `RemoteMediator`, Room is the single source of truth. `load()` only stores network results and returns `MediatorResult.Success(endOfPaginationReached)` or `Error`, never items. Room's generated `PagingSource` watches its tables and invalidates itself on writes, so you don't invalidate it manually."
+    },
+    {
+      "id": "d46q14",
+      "type": "truefalse",
+      "topic": "placeholders",
+      "difficulty": "Medium",
+      "question": "With `enablePlaceholders = true` and a `PagingSource` that reports `itemsBefore`/`itemsAfter`, `items[index]` on `LazyPagingItems` can return `null` for positions that haven't loaded yet.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "With placeholders, `itemCount` is the full known size and unloaded positions are null. Reading one also triggers its load. That's why the item lambda handles null, for example by drawing a skeleton row."
+    },
+    {
+      "id": "d46q15",
+      "type": "multi",
+      "topic": "vs sharedpreferences",
+      "difficulty": "Medium",
+      "question": "Which of these are real advantages of DataStore over SharedPreferences?",
+      "options": [
+        "Reads are a `Flow` and I/O runs off the main thread, so there are no main-thread disk reads or `apply()`-related ANRs",
+        "Updates through `edit`/`updateData` are transactional: they're applied atomically, one at a time",
+        "I/O errors reach the caller as exceptions instead of being silently ignored",
+        "Data is encrypted on disk by default",
+        "It offers synchronous getters like `getString()` for quick reads in `onCreate`",
+        "It supports SQL-style queries over the stored keys"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "DataStore fixes SharedPreferences' main-thread I/O, non-transactional writes and silent failures. It doesn't encrypt anything by default, it deliberately has no synchronous API, and it has no queries (use Room for that)."
+    },
+    {
+      "id": "d46q16",
+      "type": "mcq",
+      "topic": "retry",
+      "difficulty": "Medium",
+      "question": "The user scrolls to the bottom, the `PagingSource` returns `LoadResult.Error` for the next page, and the user taps Retry. What does `items.retry()` do?",
+      "code": "when (items.loadState.append) {\n    is LoadState.Loading -> item { CircularProgressIndicator() }\n    is LoadState.Error -> item {\n        Button(onClick = { items.retry() }) { Text(\"Retry\") }\n    }\n    is LoadState.NotLoading -> Unit\n}",
+      "options": [
+        "It retries only the failed append and keeps the items already loaded",
+        "It invalidates the `PagingSource` and reloads the whole list from scratch",
+        "It reloads the first page and adds it again at the end",
+        "Nothing: you must call `refresh()` after an error"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`retry()` repeats only the failed loads (here the append), so the list keeps what it has. `refresh()` is different: it invalidates the source and reloads from the key `getRefreshKey()` returns, for example on pull-to-refresh."
+    },
+    {
+      "id": "d46q17",
+      "type": "multi",
+      "topic": "pagingdata transforms",
+      "difficulty": "Medium",
+      "question": "Inside `pager.flow.map { pagingData -> ... }`, which of these operations can you call on a `PagingData<Article>`?",
+      "options": [
+        "`pagingData.map { it.toUiModel() }`",
+        "`pagingData.insertSeparators { before, after -> ... }`",
+        "`pagingData.sortedBy { it.date }`",
+        "`pagingData.take(50)`",
+        "`pagingData.distinct()`"
+      ],
+      "answer": [
+        0,
+        1
+      ],
+      "explanation": "`PagingData` supports per-item transforms such as `map`, `filter`, `flatMap` and `insertSeparators` (for example date headers), which run as pages arrive. It isn't a `List`, and only some pages are loaded at a time, so whole-list operations like sorting, `take` or `distinct` aren't available. Do those in the data source or the query."
+    },
+    {
+      "id": "d46q18",
+      "type": "mcq",
+      "topic": "collect twice",
+      "difficulty": "Hard",
+      "question": "This screen works the first time. After a rotation, the recreated screen calls `viewModel.feed.collectAsLazyPagingItems()` again. What goes wrong?",
+      "code": "class FeedViewModel(repo: FeedRepository) : ViewModel() {\n    val feed: StateFlow<PagingData<Post>> = repo.pager().flow\n        .stateIn(viewModelScope, SharingStarted.Lazily, PagingData.empty())\n}",
+      "options": [
+        "It throws `IllegalStateException`: the same `PagingData` is collected twice without `cachedIn`",
+        "Nothing: `stateIn` already caches the loaded pages, so the list comes back straight away",
+        "The list quietly starts again from page 1, because `stateIn` restarts the pager with a fresh network load",
+        "The list stays empty forever because `PagingData.empty()` is the initial value"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`stateIn` caches the `PagingData` object, not its loaded pages, and that object's event stream can only be collected once. When the second collector arrives, Paging throws \"Attempt to collect twice from pageEventFlow... Did you forget to call cachedIn?\". The fix is `.cachedIn(viewModelScope)` on the pager flow."
+    },
+    {
+      "id": "d46q19",
+      "type": "mcq",
+      "topic": "sharedpreferencesmigration",
+      "difficulty": "Hard",
+      "question": "You declare `preferencesDataStore(name = \"settings\", produceMigrations = { ctx -> listOf(SharedPreferencesMigration(ctx, \"user_prefs\")) })`. What happens?",
+      "options": [
+        "The keys move into DataStore and are deleted from `user_prefs` before the first read, so it runs once",
+        "On every app start, the SharedPreferences values are copied again and overwrite what's in DataStore",
+        "SharedPreferences and DataStore stay in sync in both directions afterwards, so either one can be read",
+        "Nothing happens until you call `migrate()` yourself on the main thread"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Migrations run before DataStore serves any data. `SharedPreferencesMigration` copies the keys and then deletes them from SharedPreferences (and the file, if it ends up empty), so it has nothing left to migrate next time. There is no syncing: after the migration, only DataStore should be read and written."
+    },
+    {
+      "id": "d46q20",
+      "type": "mcq",
+      "topic": "edit transaction",
+      "difficulty": "Hard",
+      "question": "`increment()` is called from two coroutines at the same moment, with `COUNT` at 5. What can the stored value end up as, and why?",
+      "code": "suspend fun increment() {\n    val current = dataStore.data.first()[COUNT] ?: 0\n    dataStore.edit { prefs ->\n        prefs[COUNT] = current + 1\n    }\n}",
+      "options": [
+        "6, because both calls can read 5 before either writes",
+        "Always 7, because each `edit` call is a serialized transaction",
+        "Always 7, because `data.first()` waits for pending edits to finish",
+        "It throws, because DataStore doesn't allow concurrent `edit` calls"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`edit` is atomic only for what happens inside its lambda. The value read with `data.first()` beforehand can already be stale, so this is a lost update. Write `edit { it[COUNT] = (it[COUNT] ?: 0) + 1 }` so the read and write happen in one serialized transaction."
+    }
+  ]
+}

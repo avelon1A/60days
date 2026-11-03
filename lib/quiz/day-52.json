@@ -1,0 +1,355 @@
+{
+  "day": 52,
+  "topic": "Design a feed: pagination, image loading & prefetching",
+  "questions": [
+    {
+      "id": "d52q01",
+      "type": "mcq",
+      "topic": "offset pagination",
+      "difficulty": "Easy",
+      "question": "The feed loads page 1 with `?offset=0&limit=20`. While the user reads it, 3 new posts are published at the top. The app then requests `?offset=20&limit=20`. What does the user see, and what fixes it?",
+      "options": [
+        "Page 2 starts with 3 repeats from page 1; switch to cursor pagination",
+        "The 3 new posts appear at the start of page 2; this is correct behaviour",
+        "Page 2 skips 3 posts; fix it by requesting `limit=23` instead",
+        "Nothing changes, because offsets are computed on a snapshot taken at page 1"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Offsets count from the current top of the list, so inserting 3 items shifts everything down and the 3 items at positions 17-19 become positions 20-22 again. A cursor says \"items after this one\", which stays stable under inserts; servers don't keep per-client snapshots for offsets."
+    },
+    {
+      "id": "d52q02",
+      "type": "truefalse",
+      "topic": "deletes & skips",
+      "difficulty": "Easy",
+      "question": "With offset pagination, if 2 posts on page 1 are deleted before the user requests page 2, the user never sees the 2 posts that should have started page 2.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Deleting items above the offset shifts everything up by 2, so the first 2 items of the old page 2 now sit at positions 18-19 and are silently skipped. Inserts cause duplicates and deletes cause skips, which is why feeds use cursors."
+    },
+    {
+      "id": "d52q03",
+      "type": "mcq",
+      "topic": "feed api shape",
+      "difficulty": "Easy",
+      "question": "Which response shape is the best fit for an infinite feed endpoint?",
+      "options": [
+        "`{ \"items\": [...], \"next_cursor\": \"eyJ0Ijo...\" }`, null on the last page",
+        "`{ \"items\": [...], \"page\": 2, \"total_pages\": 57 }`, so the client can show a page indicator",
+        "A bare JSON array, with the client computing the next offset from the array length",
+        "`{ \"items\": [...], \"has_more\": true }`, with the client sending the last item's index next time"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Items plus an opaque next cursor is stable under inserts and lets the server change the paging logic without a client release. `total_pages` forces an expensive count over a list that changes constantly, and index or length based schemes are really offset pagination."
+    },
+    {
+      "id": "d52q04",
+      "type": "multi",
+      "topic": "client image pipeline",
+      "difficulty": "Medium",
+      "question": "Which client-side image-loading practices keep a long, image-heavy feed smooth and memory-safe? Select all that apply.",
+      "options": [
+        "Decode each bitmap at the size of the target view (downsampling) rather than at full resolution",
+        "Cancel the in-flight request when a cell is recycled or leaves composition",
+        "Use a bounded in-memory LRU cache backed by a disk cache",
+        "Decode on the main thread so the image is ready before the frame is drawn",
+        "Keep every loaded `Bitmap` in a map for the whole session so scrolling back is instant"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "Downsampling caps memory per image, cancelling stops a recycled cell from showing a stale image and wasting bandwidth, and a bounded LRU plus disk cache gives fast re-display without unbounded growth. Coil and Glide do all three for you. Main-thread decoding causes jank, and an unbounded map of bitmaps leads straight to an OOM."
+    },
+    {
+      "id": "d52q05",
+      "type": "mcq",
+      "topic": "new items at top",
+      "difficulty": "Easy",
+      "question": "The user is 40 posts deep in the feed when the server reports 5 new posts. What is the best UX?",
+      "options": [
+        "Show a \"5 new posts\" pill and leave the reading position alone",
+        "Insert them at the top and immediately scroll the list to the top so the user sees them",
+        "Reload the whole feed so the list matches the server exactly",
+        "Ignore them until the next cold start"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Tapping the pill scrolls to the top. The pill lets the user find out about new content without losing their place. Jumping to the top or reloading yanks the content away mid-read, which is the classic annoying feed bug, and waiting for a cold start hides fresh content for far too long."
+    },
+    {
+      "id": "d52q06",
+      "type": "truefalse",
+      "topic": "opaque cursor",
+      "difficulty": "Medium",
+      "question": "A feed cursor should be treated as an opaque token: the client stores it and sends it back, but never parses or builds one itself.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "If clients decode the cursor (say, as a timestamp), the server can never change the encoding, for example to add a tie-breaker id or a ranking snapshot, without breaking old app versions. Keeping it opaque (often base64) keeps that control on the server."
+    },
+    {
+      "id": "d52q07",
+      "type": "mcq",
+      "topic": "prefetch distance",
+      "difficulty": "Medium",
+      "question": "Users who scroll fast hit a loading spinner at the bottom of every page. The app requests the next page once the last item becomes visible. What is the right fix?",
+      "options": [
+        "Prefetch the next page when the user is a screen or two from the end",
+        "Raise the page size to 500 so the spinner appears less often",
+        "Fetch every page at startup and keep the whole feed in memory",
+        "Wait until the last item is fully visible, then debounce the request by 300 ms"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Prefetching ahead (Paging's `prefetchDistance`) hides network latency behind scrolling while keeping requests proportional to what the user actually reads. Huge pages or loading everything waste data and memory, and waiting longer only makes the spinner worse."
+    },
+    {
+      "id": "d52q08",
+      "type": "mcq",
+      "topic": "server-driven item types",
+      "difficulty": "Easy",
+      "question": "The feed returns heterogeneous items tagged with a `type` field (`post`, `ad`, `carousel`). The server starts sending `\"type\": \"poll\"`, which older app versions don't know. How should those versions behave?",
+      "options": [
+        "Skip the unknown item (or show a generic fallback) and render the rest of the page normally",
+        "Fail parsing the whole page and show an error, since the response no longer matches the schema",
+        "Force-update the app whenever a new type appears",
+        "Render the raw JSON of the item as text so nothing is lost"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Server-driven feeds only evolve safely if clients tolerate unknown types, so parse leniently and drop or fall back. The server can also filter types by client capability. Failing the whole page (a common sealed-class deserialization trap) breaks the feed for every older user."
+    },
+    {
+      "id": "d52q09",
+      "type": "multi",
+      "topic": "video autoplay",
+      "difficulty": "Medium",
+      "question": "You're adding autoplaying videos to the feed. Which choices are sound? Select all that apply.",
+      "options": [
+        "Autoplay only the single most visible video and pause the others",
+        "Start muted, and disable autoplay or drop to a lower bitrate on metered networks or when Data Saver is on",
+        "Reuse a small pool of players instead of creating one per cell, and release them when off screen",
+        "Fully download the next 10 videos in the background so they start instantly",
+        "Autoplay every video that is at least partly on screen"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "One active player, muted by default, that respects data constraints and is pooled keeps battery, data and memory under control. Preloading the first few seconds of the next video is fine, but fully downloading 10 wastes the user's data, and playing several at once is costly and confusing."
+    },
+    {
+      "id": "d52q10",
+      "type": "mcq",
+      "topic": "offline-first feed",
+      "difficulty": "Medium",
+      "question": "Product wants the feed to appear instantly on cold start, even with no network. Which architecture fits best?",
+      "options": [
+        "A `RemoteMediator` that writes pages into Room, with the UI paging from Room only",
+        "A network `PagingSource` with `cachedIn(viewModelScope)`, so pages are kept across launches",
+        "Save the last JSON response to SharedPreferences and parse it on the main thread at startup",
+        "Keep the `PagingData` in a singleton so it outlives the Activity"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Room as the single source of truth survives process death, so the first page renders from disk immediately while `RemoteMediator` refreshes it. `cachedIn` and singletons only live as long as the process, and big JSON blobs in SharedPreferences are slow and don't page."
+    },
+    {
+      "id": "d52q11",
+      "type": "truefalse",
+      "topic": "server-side ranking",
+      "difficulty": "Easy",
+      "question": "For a personalized ranked feed, ranking is usually best done on the server, with the client doing only light adjustments such as hiding already-seen or blocked items.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "The server has the engagement signals and models, can change ranking without an app release, and keeps every platform consistent. Ranking on the client would mean shipping large candidate sets and logic to the device, which costs data and battery and can't be updated quickly."
+    },
+    {
+      "id": "d52q12",
+      "type": "mcq",
+      "topic": "stable keys",
+      "difficulty": "Medium",
+      "question": "Each feed item in a `LazyColumn` remembers an \"expanded\" state. After new posts are inserted at the top, the expanded state shows up on the wrong posts. What is the fix?",
+      "code": "LazyColumn {\n    items(posts) { post ->\n        var expanded by remember { mutableStateOf(false) }\n        PostCard(post, expanded) { expanded = !expanded }\n    }\n}",
+      "options": [
+        "Pass `key = { it.id }` to `items`",
+        "Replace `remember` with `rememberSaveable`",
+        "Call `notifyDataSetChanged()` after inserting",
+        "Wrap `PostCard` in `key(posts.size)`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Without keys, lazy item state is tied to position, so an insert at index 0 shifts every remembered state onto a different post. Stable ids fix this, just like `areItemsTheSame` comparing ids in DiffUtil. `rememberSaveable` is still positional without a key, and `notifyDataSetChanged` is a RecyclerView API that throws away diffing."
+    },
+    {
+      "id": "d52q13",
+      "type": "multi",
+      "topic": "impressions batching",
+      "difficulty": "Medium",
+      "question": "You need accurate impression analytics for feed items without draining battery. Which practices are correct? Select all that apply.",
+      "options": [
+        "Count an impression only when the item is meaningfully visible, such as at least 50% on screen for a minimum time",
+        "Buffer events locally and upload them in batches, triggered by count, time or the app going to the background",
+        "Give each event a unique id so the server can dedupe uploads that get retried",
+        "Send one HTTP request per impression the moment it happens, for accuracy",
+        "Log the impression when the item is bound or composed, since that means it was shown"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "A visibility threshold measures real views, batching saves radio wake-ups, and event ids make retries idempotent. Binding happens for prefetched off-screen items too, so it overcounts, and a request per event keeps the radio awake and burns battery."
+    },
+    {
+      "id": "d52q14",
+      "type": "mcq",
+      "topic": "placeholders",
+      "difficulty": "Easy",
+      "question": "As images load, they pop in and push the text below them down, so the feed jumps. What is the best fix?",
+      "options": [
+        "Get each image's aspect ratio and a blurhash from the API",
+        "Hide each post until its image has fully loaded",
+        "Give every image a fixed 200dp height and crop whatever doesn't fit",
+        "Load images synchronously while binding the cell"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Knowing the aspect ratio up front lets layout reserve the final size, so there's no jump, and a blurhash gives a pleasant preview for a few bytes. Hiding posts delays content, fixed heights badly crop portrait and panorama images, and synchronous loads block the UI thread."
+    },
+    {
+      "id": "d52q15",
+      "type": "mcq",
+      "topic": "optimistic likes",
+      "difficulty": "Hard",
+      "question": "On a flaky network the user taps like, unlike, then like again quickly, and the HTTP client retries timed-out requests. Which design ends in the correct state?",
+      "options": [
+        "Update locally and send idempotent `PUT`/`DELETE` like calls; latest intent wins",
+        "Flip the heart immediately and send `POST /posts/{id}/toggle-like` for each tap",
+        "Show a spinner on the heart and only change it after the server confirms",
+        "Flip the heart immediately and never roll back, since likes are low-stakes"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Set-state requests are idempotent, so a retried `PUT` can't flip the like a second time, and sending only the latest intent avoids races; roll back with a message only if it finally fails. A retried toggle can apply twice and leave the wrong state, a spinner makes a trivial action feel slow, and never rolling back lets the UI drift from the server."
+    },
+    {
+      "id": "d52q16",
+      "type": "truefalse",
+      "topic": "refresh semantics",
+      "difficulty": "Medium",
+      "question": "On pull-to-refresh, an offline-first feed should delete the cached items from Room before the network request finishes, so stale posts disappear right away.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "Clearing early leaves an empty screen, or nothing at all if the request fails. Keep showing the cached feed and, once the new first page arrives, clear and insert in one database transaction (what a `RemoteMediator` REFRESH typically does) so the list swaps atomically."
+    },
+    {
+      "id": "d52q17",
+      "type": "multi",
+      "topic": "page size",
+      "difficulty": "Hard",
+      "question": "Which statements about choosing a feed page size are correct? Select all that apply.",
+      "options": [
+        "Larger pages mean fewer round trips but a heavier response, more memory, and wasted bytes if the user leaves after a few items",
+        "The initial load can be larger than later pages (Paging's `initialLoadSize` defaults to a multiple of `pageSize`) to fill the screen plus a little scroll",
+        "The server should cap the `limit` a client may request",
+        "Page size must equal the number of items visible on one screen, or Paging drops items",
+        "Cursor pagination only works if every page has exactly the same number of items"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "Page size trades round trips against payload, memory and waste, the first load is often bigger to cover the first screen, and a server-side cap protects the backend. Pages don't need to match the screen, and cursors don't care about page length: a page can be short when items are filtered out."
+    },
+    {
+      "id": "d52q18",
+      "type": "mcq",
+      "topic": "memory pressure",
+      "difficulty": "Hard",
+      "question": "Feed thumbnails are 360dp wide, but the API returns 4000x3000 JPEG originals of about 1.5 MB each. The app hits OOM after some scrolling. What is the core problem?",
+      "options": [
+        "Full-size decodes use ~48 MB each; serve and decode at view size",
+        "The 1.5 MB files fill the disk cache, which causes the OOM",
+        "Too many parallel network connections exhaust the heap",
+        "JPEG decoding leaks native memory, so the fix is switching to PNG"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Decoded bitmap memory is width x height x 4 bytes, so 4000 x 3000 x 4 is about 48 MB, far larger than the compressed file. Serving and decoding at roughly view-width x density cuts that by over 90%. Disk cache size doesn't affect the heap, and PNG would make the files bigger, not the bitmaps smaller."
+    },
+    {
+      "id": "d52q19",
+      "type": "multi",
+      "topic": "cdn image urls",
+      "difficulty": "Medium",
+      "question": "Which server and network choices cut the image bytes a feed downloads? Select all that apply.",
+      "options": [
+        "Ask the CDN for the size you need via URL params (such as width and DPR), based on the view size and screen density",
+        "Serve modern formats like WebP or AVIF when the client supports them",
+        "Use versioned, content-hashed image URLs with long cache lifetimes so CDN and disk caches keep hitting",
+        "Embed images as base64 strings inside the feed JSON to save round trips",
+        "Use the same full-resolution URL for thumbnails and the full-screen viewer so it's only cached once"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "Right-sized renditions, efficient formats and immutable cacheable URLs each cut bytes significantly. Base64 inflates images by about a third and stops them being cached separately from the JSON, and sending full-resolution images for thumbnails downloads far more than the cell can show."
+    },
+    {
+      "id": "d52q20",
+      "type": "mcq",
+      "topic": "cursor tie-breaker",
+      "difficulty": "Hard",
+      "question": "The cursor is the last item's `created_at`, stored with one-second precision, and the next page is fetched with the query below. During busy periods users report missing posts. What is the fix?",
+      "code": "SELECT * FROM posts\nWHERE created_at < :cursor\nORDER BY created_at DESC\nLIMIT 20",
+      "options": [
+        "Use a compound `(created_at, id)` cursor as a tie-breaker",
+        "Change `<` to `<=` so posts in the same second are included",
+        "Increase `LIMIT` so a page boundary rarely lands inside a busy second",
+        "Switch to offset pagination, which has no problem with ties"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Posts that share the boundary timestamp but didn't fit on the page are excluded by `<`, so they're skipped. `<=` swaps skips for duplicates, and a bigger limit only makes it rarer. Ordering by both and fetching rows strictly after the pair fixes it: a unique tie-breaker gives a total order, so each row lands on exactly one page, and offsets bring back the insert and delete problems."
+    }
+  ]
+}

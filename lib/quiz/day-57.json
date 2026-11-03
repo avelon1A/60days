@@ -1,0 +1,373 @@
+{
+  "day": 57,
+  "topic": "Final boss: Kotlin & coroutine gotchas",
+  "questions": [
+    {
+      "id": "d57q01",
+      "type": "output",
+      "topic": "takeIf + elvis",
+      "difficulty": "Easy",
+      "question": "What does this print?",
+      "code": "fun main() {\n    val s: String? = \"  kt  \"\n    val r = s?.trim()?.takeIf { it.length > 2 }?.uppercase() ?: s?.length\n    println(r)\n}",
+      "options": [
+        "6",
+        "KT",
+        "null",
+        "2"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`trim()` gives `\"kt\"` (length 2), so `takeIf` returns null and the rest of the safe-call chain is skipped. The elvis then evaluates `s?.length`, which is the untrimmed length 6, not 2."
+    },
+    {
+      "id": "d57q02",
+      "type": "truefalse",
+      "topic": "sequence vs flow suspension",
+      "difficulty": "Easy",
+      "question": "Inside a `sequence { }` builder you can call `delay()` between `yield`s to space the values out, just like you can between `emit`s inside `flow { }`.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "`SequenceScope` is marked `@RestrictsSuspension`, so the block may only call its own suspend functions (`yield`, `yieldAll`), and `delay` is a compile error. A sequence is pulled synchronously through a plain `Iterator`, so it can't really wait. Use `flow { }` when producing values needs to suspend."
+    },
+    {
+      "id": "d57q03",
+      "type": "mcq",
+      "topic": "async in map",
+      "difficulty": "Easy",
+      "question": "Inside `runBlocking`, what is the type of `results`?",
+      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking {\n    val results = listOf(1, 2, 3)\n        .map { async { it * 2 } }\n        .awaitAll()\n    println(results)\n}",
+      "options": [
+        "`List<Int>`",
+        "`List<Deferred<Int>>`",
+        "`Deferred<List<Int>>`",
+        "It doesn't compile, because `map` is not a suspend function"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`async` is not a suspend function, so it can be called inside `map`'s lambda, and `map` returns `List<Deferred<Int>>`. `awaitAll()` on that list suspends and returns `List<Int>`, here `[2, 4, 6]`."
+    },
+    {
+      "id": "d57q04",
+      "type": "output",
+      "topic": "cold flow re-collection",
+      "difficulty": "Easy",
+      "question": "What does this print?",
+      "code": "import kotlinx.coroutines.*\nimport kotlinx.coroutines.flow.*\n\nfun main() = runBlocking {\n    val f = flow { println(\"start\"); emit(1); emit(2) }\n    println(\"built\")\n    println(f.map { it * 10 }.toList())\n    println(f.first())\n}",
+      "options": [
+        "built\nstart\n[10, 20]\nstart\n1",
+        "start\nbuilt\n[10, 20]\n1",
+        "built\nstart\n[10, 20]\n1",
+        "built\nstart\n[10, 20]\nstart\n10"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Building the flow runs nothing, so `built` comes first. Each terminal operator runs the block again, so `start` prints twice. `first()` uses the original flow without the `map`, so it gives 1, not 10."
+    },
+    {
+      "id": "d57q05",
+      "type": "output",
+      "topic": "lazy + init order",
+      "difficulty": "Medium",
+      "question": "What does this print?",
+      "code": "class Repo {\n    val name = \"repo\".also { println(\"name\") }\n    val db by lazy { println(\"db\"); \"db\" }\n    init { println(\"init\") }\n}\n\nfun main() {\n    val r = Repo()\n    println(\"created\")\n    println(r.db + r.db)\n}",
+      "options": [
+        "name\ninit\ncreated\ndb\ndbdb",
+        "name\ndb\ninit\ncreated\ndbdb",
+        "name\ninit\ncreated\ndb\ndb\ndbdb",
+        "init\nname\ncreated\ndb\ndbdb"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Property initializers and `init` blocks run in source order, so `name` prints before `init`. A `lazy` delegate's initializer doesn't run during construction. It runs once on the first read, and the second read uses the cached value."
+    },
+    {
+      "id": "d57q06",
+      "type": "mcq",
+      "topic": "nullable receiver + safe call",
+      "difficulty": "Medium",
+      "question": "What happens when you compile this?",
+      "code": "fun String?.isTiny(): Boolean = this == null || length < 3\n\nfun main() {\n    val s: String? = null\n    if (s?.isTiny()) println(\"tiny\")\n}",
+      "options": [
+        "Compile error: the condition is `Boolean?`, not `Boolean`",
+        "It prints `tiny`",
+        "It prints nothing, because `s?.` skips the call",
+        "Compile error: `length` needs a smart cast inside the extension"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "The extension already accepts a nullable receiver, but `?.` still makes the whole expression `Boolean?`, and `if` needs a `Boolean`. Calling `s.isTiny()` without `?.` would compile and print `tiny`. Inside the extension, `length` is fine because `this == null ||` smart-casts `this`.",
+      "compiles": false
+    },
+    {
+      "id": "d57q07",
+      "type": "multi",
+      "topic": "scope functions & null",
+      "difficulty": "Medium",
+      "question": "Which of these expressions evaluate to `null`? Select all that apply.",
+      "options": [
+        "`\"\".takeIf { it.isNotEmpty() }?.length`",
+        "`\"abc\".let { null }`",
+        "`\"abc\".also { null }`",
+        "`listOf<Int>().firstOrNull()?.plus(1)`",
+        "`\"5\".toIntOrNull()?.takeUnless { it > 3 }`"
+      ],
+      "answer": [
+        0,
+        1,
+        3,
+        4
+      ],
+      "explanation": "`let` returns its lambda result, so `let { null }` is null. `also` ignores the lambda result and returns the receiver, so it gives `\"abc\"`. `takeIf`/`takeUnless` return null when the check fails (`5 > 3` is true, so `takeUnless` drops it), and `firstOrNull()` on an empty list short-circuits the `?.plus`."
+    },
+    {
+      "id": "d57q08",
+      "type": "output",
+      "topic": "async + supervisorScope",
+      "difficulty": "Medium",
+      "question": "What does this print?",
+      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking {\n    supervisorScope {\n        val a = async { delay(10); throw IllegalStateException(\"boom\") }\n        val b = async { delay(50); \"ok\" }\n        println(b.await())\n        try { a.await() } catch (e: IllegalStateException) { println(\"caught ${e.message}\") }\n    }\n    println(\"end\")\n}",
+      "options": [
+        "ok\ncaught boom\nend",
+        "caught boom\nend",
+        "ok\ncaught boom",
+        "caught boom\nok\nend"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "In `supervisorScope`, a failing child doesn't cancel its siblings, so `b` still finishes with `ok`. A failed `async` keeps its exception in the `Deferred` until `await()` rethrows it. It's caught there, so the scope completes normally and `end` prints."
+    },
+    {
+      "id": "d57q09",
+      "type": "mcq",
+      "topic": "lazy + sequence",
+      "difficulty": "Medium",
+      "question": "What number does the last line print?",
+      "code": "var calls = 0\nval evens by lazy {\n    println(\"build\")\n    (1..10).asSequence().map { calls++; it * 2 }\n}\n\nfun main() {\n    println(evens.first { it > 4 })\n    println(evens.first { it > 4 })\n    println(calls)\n}",
+      "options": [
+        "6",
+        "3",
+        "10",
+        "20"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`lazy` caches the `Sequence` object, not its results. Every terminal call runs the pipeline again. Each `first { it > 4 }` stops at the third element (2, 4, 6), so `map` runs 3 times per call, 6 in total. `build` prints only once."
+    },
+    {
+      "id": "d57q10",
+      "type": "truefalse",
+      "topic": "inline + suspend",
+      "difficulty": "Medium",
+      "question": "This compiles, even though the lambda passed to `forEach` is a regular (non-suspend) function type.",
+      "code": "import kotlinx.coroutines.*\n\nsuspend fun pauseEach(ids: List<Int>) {\n    ids.forEach { delay(10L * it) }\n}\n\nfun main() = runBlocking { pauseEach(listOf(1, 2)) }",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`forEach` is `inline`, so its lambda body is copied into `pauseEach`, which is a suspend function, and calling `delay` there is allowed. With a non-inline higher-order function, such as a stored callback, the same call would fail to compile.",
+      "compiles": true
+    },
+    {
+      "id": "d57q11",
+      "type": "mcq",
+      "topic": "stateflow type inference",
+      "difficulty": "Medium",
+      "question": "Why doesn't this compile?",
+      "code": "import kotlinx.coroutines.*\nimport kotlinx.coroutines.flow.*\n\nsealed interface UiState {\n    data object Loading : UiState\n    data class Ok(val n: Int) : UiState\n}\n\nfun main() {\n    val state = MutableStateFlow(UiState.Loading)\n    state.value = UiState.Ok(1)\n    println(state.value)\n}",
+      "options": [
+        "`state` is inferred as `MutableStateFlow<UiState.Loading>`, so `Ok` can't be assigned",
+        "A `data object` can't be the initial value of a `MutableStateFlow`",
+        "`state.value` can only be set from inside a coroutine, because the setter suspends",
+        "`MutableStateFlow` needs a `data class` type for equality checks, not a sealed interface"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Type inference picks the most specific type of the argument, so `T` becomes `UiState.Loading`. Since `MutableStateFlow` is invariant, you need `MutableStateFlow<UiState>(UiState.Loading)`. Setting `value` isn't a suspend call, so it works outside coroutines.",
+      "compiles": false
+    },
+    {
+      "id": "d57q12",
+      "type": "output",
+      "topic": "static dispatch + generics",
+      "difficulty": "Hard",
+      "question": "What does this print?",
+      "code": "open class Animal\nclass Dog : Animal()\n\nfun Animal.sound() = \"...\"\nfun Dog.sound() = \"woof\"\nfun <T : Animal> T.speak() = sound()\n\nfun main() {\n    println(Dog().speak())\n    println(listOf(Dog()).map { it.sound() })\n}",
+      "options": [
+        "...\n[woof]",
+        "woof\n[woof]",
+        "...\n[...]",
+        "woof\n[...]"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Extensions are chosen at compile time. Inside `speak`, the compiler only knows `T : Animal`, so `sound()` is `Animal.sound()` for every caller. Generics are not reified dispatch. In the `map`, `it` is statically a `Dog`, so `Dog.sound()` is chosen."
+    },
+    {
+      "id": "d57q13",
+      "type": "multi",
+      "topic": "inline + coroutine builder",
+      "difficulty": "Medium",
+      "question": "This doesn't compile. Which single changes make it compile? Select all that apply.",
+      "code": "inline fun CoroutineScope.safeLaunch(block: suspend () -> Unit) =\n    launch { block() }",
+      "options": [
+        "Mark the parameter `crossinline block`",
+        "Mark the parameter `noinline block`",
+        "Remove `inline` from the function",
+        "Change the type to `suspend CoroutineScope.() -> Unit`",
+        "Write `launch(block = block)` instead of `launch { block() }`"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "`safeLaunch` isn't a suspend function, so it can't take an inlined `suspend` lambda, and `block` is also called inside `launch`'s lambda, which isn't inlined, so a non-local `return` from it would be impossible. `crossinline`, `noinline` or dropping `inline` fixes both. Changing the receiver fixes neither, and passing `block` as a value still requires `noinline`."
+    },
+    {
+      "id": "d57q14",
+      "type": "mcq",
+      "topic": "stateflow operator fusion",
+      "difficulty": "Medium",
+      "question": "What happens when you compile this?",
+      "code": "import kotlinx.coroutines.*\nimport kotlinx.coroutines.flow.*\n\nfun main() = runBlocking {\n    val s = MutableStateFlow(0)\n    val job = launch { s.distinctUntilChanged().collect { println(it) } }\n    delay(10)\n    job.cancel()\n}",
+      "options": [
+        "Compile error: `distinctUntilChanged` on a `StateFlow` is deprecated at ERROR level",
+        "It compiles and prints `0`",
+        "It compiles and prints nothing, because `distinctUntilChanged` drops the first value",
+        "It compiles but throws `IllegalStateException` when the flow is first collected"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A `StateFlow` already skips values equal to the current one, so adding `distinctUntilChanged()` does nothing. kotlinx.coroutines marks that overload as deprecated at ERROR level to catch the mistake. Remove the call and the code prints `0`.",
+      "compiles": false
+    },
+    {
+      "id": "d57q15",
+      "type": "output",
+      "topic": "copy + stateflow dedupe",
+      "difficulty": "Hard",
+      "question": "What does this print?",
+      "code": "import kotlinx.coroutines.*\nimport kotlinx.coroutines.flow.*\n\ndata class Cart(val items: MutableList<String>)\n\nfun main() = runBlocking {\n    val state = MutableStateFlow(Cart(mutableListOf(\"a\")))\n    val job = launch { state.collect { println(it.items) } }\n    yield()\n    val next = state.value.copy()\n    next.items.add(\"b\")\n    state.value = next\n    yield()\n    job.cancel()\n}",
+      "options": [
+        "[a]",
+        "[a]\n[a, b]",
+        "[a, b]",
+        "[a]\n[a]"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`copy()` is shallow, so `next` shares the same `MutableList` as the current value. Adding `\"b\"` changes both. Now `next == state.value`, so the `StateFlow` treats the assignment as no change and emits nothing. Use immutable lists and `copy(items = items + \"b\")`."
+    },
+    {
+      "id": "d57q16",
+      "type": "mcq",
+      "topic": "non-local return in launch",
+      "difficulty": "Hard",
+      "question": "What happens when you compile this?",
+      "code": "import kotlinx.coroutines.*\n\nfun CoroutineScope.load(ids: List<Int>) {\n    launch {\n        ids.forEach { if (it < 0) return }\n        println(\"loaded\")\n    }\n}\n\nfun main() = runBlocking { load(listOf(1, -1)) }",
+      "options": [
+        "Compile error: `return` is not allowed here",
+        "It prints nothing, because `return` exits the launched coroutine",
+        "It prints `loaded`, because `return` only skips the current `forEach` item",
+        "It returns from `load` before the coroutine starts"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A bare `return` targets the nearest enclosing `fun`, here `load`. `forEach` is inline, but `launch`'s lambda isn't, and you can't return from `load` inside a coroutine that runs later. Write `return@launch` to end the coroutine or `return@forEach` to skip an item.",
+      "compiles": false
+    },
+    {
+      "id": "d57q17",
+      "type": "output",
+      "topic": "withTimeoutOrNull + finally",
+      "difficulty": "Hard",
+      "question": "What does this print?",
+      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking {\n    val r = withTimeoutOrNull(100) {\n        try {\n            delay(500)\n            \"done\"\n        } finally {\n            println(\"cleanup\")\n            delay(10)\n            println(\"closed\")\n        }\n    }\n    println(r ?: \"timeout\")\n}",
+      "options": [
+        "cleanup\ntimeout",
+        "cleanup\nclosed\ntimeout",
+        "timeout",
+        "cleanup\nclosed\ndone"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "When the timeout hits, `delay(500)` throws a cancellation exception, so `finally` runs, but the coroutine is already cancelled. The `delay(10)` in `finally` throws right away, so `closed` never prints. Wrap the cleanup in `withContext(NonCancellable)`. `withTimeoutOrNull` then returns null."
+    },
+    {
+      "id": "d57q18",
+      "type": "multi",
+      "topic": "failure propagation",
+      "difficulty": "Hard",
+      "question": "In each setup, child `a` throws and child `b` is still in a long `delay`. In which setups is `b` cancelled? Select all that apply.",
+      "options": [
+        "`coroutineScope { launch { a() }; launch { b() } }`",
+        "`supervisorScope { launch { a() }; launch { b() } }`",
+        "`supervisorScope { async { a() }; async { b() } }`",
+        "With `scope = CoroutineScope(SupervisorJob())`: `scope.launch { launch { a() }; launch { b() } }`",
+        "With `scope = CoroutineScope(SupervisorJob())`: `scope.launch { a() }; scope.launch { b() }`"
+      ],
+      "answer": [
+        0,
+        3
+      ],
+      "explanation": "A regular Job cancels all its children when one child fails. A supervisor only protects its direct children. In the nested `scope.launch { ... }` case, `a` and `b` are children of that outer `launch`, which has an ordinary Job, so `b` is cancelled. In the other supervisor setups, `a` and `b` are direct children, so `b` keeps running."
+    },
+    {
+      "id": "d57q19",
+      "type": "output",
+      "topic": "catch + onCompletion",
+      "difficulty": "Hard",
+      "question": "What does this print?",
+      "code": "import kotlinx.coroutines.*\nimport kotlinx.coroutines.flow.*\n\nfun main() = runBlocking {\n    flowOf(1, 2, 3)\n        .map { if (it == 2) error(\"boom\") else it }\n        .onCompletion { println(\"completed: ${it?.message}\") }\n        .catch { emit(-1) }\n        .collect { println(it) }\n}",
+      "options": [
+        "1\ncompleted: boom\n-1",
+        "1\n-1\ncompleted: null",
+        "1\n-1\n3\ncompleted: boom",
+        "1\ncompleted: null\n-1"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`map` throws on 2, which stops the flow, so 3 is never emitted. `onCompletion` sits above `catch`, so it sees the exception as its cause and prints `boom`. It doesn't handle the exception, which keeps going down to `catch`, and `catch` emits `-1`."
+    },
+    {
+      "id": "d57q20",
+      "type": "mcq",
+      "topic": "lazy async + scope",
+      "difficulty": "Hard",
+      "question": "`loadProfile(cached)` is called with a non-null `cached`. What happens?",
+      "code": "suspend fun loadProfile(cached: Profile?): Profile = coroutineScope {\n    val fresh = async(start = CoroutineStart.LAZY) { api.fetchProfile() }\n    if (cached != null) return@coroutineScope cached\n    fresh.await()\n}",
+      "options": [
+        "It suspends forever: `coroutineScope` waits for the never-started `fresh` child",
+        "It returns `cached` right away, and `fresh` is cancelled automatically when the scope ends",
+        "It returns `cached`, and `fetchProfile()` keeps running in the background",
+        "It throws `IllegalStateException` because a lazy `Deferred` was never awaited"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A `LAZY` async is still a child of the scope. `coroutineScope` can only complete when all its children have finished, and nothing ever starts `fresh`. The call hangs, for example leaving a ViewModel's loading spinner up. Call `fresh.cancel()` before returning, or only create the `async` when it's needed."
+    }
+  ]
+}

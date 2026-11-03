@@ -1,0 +1,360 @@
+{
+  "day": 16,
+  "topic": "Data, enum & sealed classes / interfaces",
+  "questions": [
+    {
+      "id": "d16q01",
+      "type": "output",
+      "topic": "data toString",
+      "difficulty": "Easy",
+      "question": "What does this print?",
+      "code": "data class User(val name: String, val age: Int)\n\nfun main() {\n    println(User(\"Ann\", 30))\n}",
+      "options": [
+        "User(name=Ann, age=30)",
+        "User(Ann, 30)",
+        "{name=Ann, age=30}",
+        "User(name=\"Ann\", age=30)"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "The generated `toString()` has the form `ClassName(prop=value, ...)` listing the primary constructor properties in order. Strings are not quoted, so `name=\"Ann\"` is wrong."
+    },
+    {
+      "id": "d16q02",
+      "type": "mcq",
+      "topic": "data class rules",
+      "difficulty": "Easy",
+      "question": "What happens when you compile this?",
+      "code": "data class Config(val url: String, timeout: Int)\n\nfun main() {\n    println(Config(\"https://api.dev\", 30))\n}",
+      "options": [
+        "Compile error: data class constructor parameters must all be `val` or `var`",
+        "It prints `Config(url=https://api.dev)`",
+        "It prints `Config(url=https://api.dev, timeout=30)`",
+        "It compiles, but `timeout` is silently left out of `toString()`, `equals()` and `copy()`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A data class needs at least one primary constructor parameter, and all of them must be declared as `val` or `var`. A plain parameter like `timeout` is rejected rather than silently left out of the generated members.",
+      "compiles": false
+    },
+    {
+      "id": "d16q03",
+      "type": "output",
+      "topic": "shallow copy",
+      "difficulty": "Medium",
+      "question": "What does this print?",
+      "code": "data class Cart(val items: MutableList<String>)\n\nfun main() {\n    val a = Cart(mutableListOf(\"apple\"))\n    val b = a.copy()\n    b.items.add(\"pear\")\n    println(a.items)\n    println(a == b)\n}",
+      "options": [
+        "[apple, pear]\ntrue",
+        "[apple]\nfalse",
+        "[apple]\ntrue",
+        "[apple, pear]\nfalse"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`copy()` is shallow: `b.items` is the same `MutableList` object as `a.items`, so adding to one shows up in both. Since the shared list is equal to itself, `a == b` stays `true`."
+    },
+    {
+      "id": "d16q04",
+      "type": "truefalse",
+      "topic": "valueOf",
+      "difficulty": "Easy",
+      "question": "For `enum class Status { ACTIVE, BLOCKED }`, calling `Status.valueOf(\"DELETED\")` returns `null`.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "`valueOf` throws `IllegalArgumentException` when no constant has that exact name. Parsing a server string safely needs a try/catch or something like `entries.firstOrNull { it.name == s }`."
+    },
+    {
+      "id": "d16q05",
+      "type": "output",
+      "topic": "name & ordinal",
+      "difficulty": "Easy",
+      "question": "What does this print?",
+      "code": "enum class Color { RED, GREEN, BLUE }\n\nfun main() {\n    val c = Color.GREEN\n    println(\"${c.name} ${c.ordinal}\")\n}",
+      "options": [
+        "GREEN 1",
+        "GREEN 2",
+        "Green 1",
+        "Color.GREEN 1"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`name` is the constant's identifier exactly as declared, and `ordinal` is its zero-based position. `GREEN` is the second constant, so its ordinal is 1, not 2."
+    },
+    {
+      "id": "d16q06",
+      "type": "mcq",
+      "topic": "positional destructuring",
+      "difficulty": "Medium",
+      "question": "A shared module changes `data class Item(val id: Int, val count: Int)` to `data class Item(val count: Int, val id: Int)`. An adapter still has `val (id, count) = item`. What happens?",
+      "code": "// before: data class Item(val id: Int, val count: Int)\ndata class Item(val count: Int, val id: Int)\n\nfun bind(item: Item) {\n    val (id, count) = item\n    titleView.text = \"#$id\"\n}",
+      "options": [
+        "It compiles, but `id` now holds the count, since destructuring is positional",
+        "Compile error, because the destructured names no longer match the property names",
+        "It still works, because Kotlin matches destructured variables to data class properties by name",
+        "It throws `IllegalStateException` at runtime"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Destructuring declarations are positional: `component1()` returns the first constructor property, whatever the local variable is called. Both are `Int`, so nothing fails and the bug is silent, which is why reordering data class properties is a breaking change."
+    },
+    {
+      "id": "d16q07",
+      "type": "output",
+      "topic": "body properties",
+      "difficulty": "Hard",
+      "question": "What does this print?",
+      "code": "data class Person(val name: String) {\n    var age: Int = 0\n}\n\nfun main() {\n    val p1 = Person(\"Bo\")\n    p1.age = 10\n    val p2 = p1.copy()\n    println(\"${p2.age} $p2 ${p1 == p2}\")\n}",
+      "options": [
+        "0 Person(name=Bo) true",
+        "10 Person(name=Bo, age=10) true",
+        "10 Person(name=Bo) true",
+        "0 Person(name=Bo) false"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Generated members (`copy`, `toString`, `equals`, `componentN`) only use primary constructor properties. `copy()` calls the constructor, so `age` gets its initializer value 0, and since `age` is ignored by `equals`, the two are still equal."
+    },
+    {
+      "id": "d16q08",
+      "type": "multi",
+      "topic": "data modifiers",
+      "difficulty": "Medium",
+      "question": "Which modifiers can NOT be combined with `data class`? Select all that apply.",
+      "options": [
+        "abstract",
+        "open",
+        "inner",
+        "private",
+        "internal"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "Data classes cannot be `abstract`, `open`, `sealed` or `inner`. Visibility modifiers like `private` and `internal` are fine, e.g. `internal data class UserDto(...)`."
+    },
+    {
+      "id": "d16q09",
+      "type": "mcq",
+      "topic": "data object",
+      "difficulty": "Easy",
+      "question": "In a sealed `UiState`, why declare `Loading` as `data object Loading : UiState` instead of a plain `object`?",
+      "code": "sealed interface UiState {\n    data object Loading : UiState\n    data class Success(val items: List<Article>) : UiState\n    data class Error(val message: String) : UiState\n}",
+      "options": [
+        "Its `toString()` prints `Loading` instead of `UiState$Loading@1b6d3586`",
+        "A plain `object` cannot implement a sealed interface, only extend a sealed class",
+        "A `data object` can hold constructor parameters like a data class",
+        "A `data object` creates a fresh instance each time it is referenced"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A `data object` is still a singleton, but it gets a readable `toString()` (just the name) plus a consistent `equals`/`hashCode`, which makes logs and test failures clearer. A plain `object` implements sealed interfaces just fine."
+    },
+    {
+      "id": "d16q10",
+      "type": "mcq",
+      "topic": "entries vs values",
+      "difficulty": "Medium",
+      "question": "Why is `Status.entries` preferred over `Status.values()` in modern Kotlin?",
+      "options": [
+        "`entries` is a read-only `List` built once; `values()` copies a new array on each call",
+        "`entries` returns the constants sorted by name, while `values()` uses declaration order",
+        "`entries` includes constants added at runtime via reflection, while `values()` does not",
+        "`values()` is not available on enums declared inside a class"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`values()` must copy the array each call because arrays are mutable. `entries` returns an immutable `EnumEntries<T>` list created once, and both keep declaration order."
+    },
+    {
+      "id": "d16q11",
+      "type": "output",
+      "topic": "abstract enum methods",
+      "difficulty": "Hard",
+      "question": "What does this print?",
+      "code": "enum class Op {\n    PLUS { override fun apply(a: Int, b: Int) = a + b },\n    TIMES { override fun apply(a: Int, b: Int) = a * b };\n\n    abstract fun apply(a: Int, b: Int): Int\n}\n\nfun main() {\n    println(Op.entries.map { it.apply(3, 4) })\n    println(Op.TIMES::class == Op::class)\n}",
+      "options": [
+        "[7, 12]\nfalse",
+        "[7, 12]\ntrue",
+        "[PLUS, TIMES]\ntrue",
+        "[12, 7]\nfalse"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Each constant overrides the abstract method, and `entries` keeps declaration order, giving `[7, 12]`. A constant with its own body is compiled as an anonymous subclass of `Op`, so its runtime class is not `Op` itself."
+    },
+    {
+      "id": "d16q12",
+      "type": "truefalse",
+      "topic": "sealed location",
+      "difficulty": "Easy",
+      "question": "Direct subclasses of a sealed class must be declared in the same module and the same package as the sealed class.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Since Kotlin 1.5 they no longer have to be in the same file, but they must stay in the same module and package. That is what lets the compiler know the full list of subclasses and check `when` for exhaustiveness."
+    },
+    {
+      "id": "d16q13",
+      "type": "output",
+      "topic": "data object toString",
+      "difficulty": "Easy",
+      "question": "What does this print?",
+      "code": "sealed interface UiState {\n    data object Loading : UiState\n    data class Success(val items: List<String>) : UiState\n}\n\nfun main() {\n    println(UiState.Loading)\n    println(UiState.Success(listOf(\"a\")))\n}",
+      "options": [
+        "Loading\nSuccess(items=[a])",
+        "UiState.Loading\nUiState.Success(items=[a])",
+        "Loading()\nSuccess(items=[a])",
+        "Loading\nSuccess([a])"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A `data object`'s `toString()` is just its simple name, with no parentheses. The data class uses the usual `Name(prop=value)` format, and neither includes the enclosing interface's name."
+    },
+    {
+      "id": "d16q14",
+      "type": "mcq",
+      "topic": "exhaustive when",
+      "difficulty": "Medium",
+      "question": "Your `ViewModel` maps `NetworkResult` with the `when` below. A teammate adds `data object Unauthorized : NetworkResult`. What happens?",
+      "code": "sealed interface NetworkResult {\n    data class Success(val body: String) : NetworkResult\n    data class Failure(val code: Int) : NetworkResult\n}\n\nval message = when (result) {\n    is NetworkResult.Success -> result.body\n    is NetworkResult.Failure -> \"Error ${result.code}\"\n}",
+      "options": [
+        "The `when` stops compiling until `Unauthorized` (or an `else`) is handled",
+        "It compiles, and `message` becomes `null` for `Unauthorized`",
+        "It compiles, but throws `NoWhenBranchMatchedException` at runtime for `Unauthorized`",
+        "It compiles with only a warning"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A `when` over a sealed type without `else` must be exhaustive, so adding a subtype turns every such `when` into a compile error. That is the main reason to avoid an `else` branch here: the compiler points you to every place that needs updating."
+    },
+    {
+      "id": "d16q15",
+      "type": "output",
+      "topic": "enumValueOf",
+      "difficulty": "Medium",
+      "question": "What does this print?",
+      "code": "inline fun <reified T : Enum<T>> parse(s: String): T? =\n    try {\n        enumValueOf<T>(s)\n    } catch (e: IllegalArgumentException) {\n        null\n    }\n\nenum class Level { LOW, HIGH }\n\nfun main() {\n    println(parse<Level>(\"HIGH\"))\n    println(parse<Level>(\"high\"))\n}",
+      "options": [
+        "HIGH\nnull",
+        "HIGH\nHIGH",
+        "Level.HIGH\nnull",
+        "HIGH\nLOW"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`enumValueOf<T>()` works like `valueOf` for a reified type and matches names case-sensitively. `\"high\"` doesn't match, so it throws `IllegalArgumentException`, which is caught and becomes `null`."
+    },
+    {
+      "id": "d16q16",
+      "type": "mcq",
+      "topic": "sealed vs enum",
+      "difficulty": "Medium",
+      "question": "You model a screen as Loading, Success (with a list of articles) or Error (with a message and a retry flag). Why is a sealed hierarchy a better fit than an enum?",
+      "options": [
+        "Sealed subtypes can each carry their own data, while enum constants are fixed singletons with one shape",
+        "Enums cannot be used in an exhaustive `when` expression, so every `when` over them needs an `else` branch",
+        "Sealed classes are faster than enums because their subtypes are never allocated on the heap",
+        "Enums cannot be stored in a `ViewModel`'s `StateFlow`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Enums suit a fixed set of constants like `SortOrder.ASC`/`DESC`. When states carry different data per instance, such as `Success(items)` or `Error(message)`, a sealed type models that, and `when` over an enum is exhaustive too."
+    },
+    {
+      "id": "d16q17",
+      "type": "truefalse",
+      "topic": "sealed interface",
+      "difficulty": "Medium",
+      "question": "A single class can implement two different sealed interfaces, so it belongs to both sealed hierarchies at once.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A class can extend only one class, sealed or not, but it can implement any number of interfaces, including sealed ones. This is a key reason to choose a sealed interface, e.g. `data object Timeout : NetworkError, Retryable`."
+    },
+    {
+      "id": "d16q18",
+      "type": "mcq",
+      "topic": "enum with interface",
+      "difficulty": "Medium",
+      "question": "Which statement about Kotlin enum classes is true?",
+      "code": "interface Labelled { val label: String }\n\nenum class Tab(override val label: String) : Labelled {\n    HOME(\"Home\"), SEARCH(\"Search\"), PROFILE(\"Profile\")\n}",
+      "options": [
+        "An enum can implement interfaces and have properties, but cannot extend a class",
+        "An enum can extend an `open` class as long as the enum has no constructor properties",
+        "Another class can extend `Tab` if `Tab` is marked `open`",
+        "Enum constants can be added at runtime by calling the constructor"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Every enum already extends `Enum<T>`, so it can't extend anything else, but it can implement interfaces. Enum classes are implicitly final and their constructors can't be called from outside, so the set of constants is fixed at compile time."
+    },
+    {
+      "id": "d16q19",
+      "type": "multi",
+      "topic": "sealed rules",
+      "difficulty": "Hard",
+      "question": "Which statements about sealed classes and interfaces are true? Select all that apply.",
+      "options": [
+        "A sealed class is abstract and cannot be instantiated directly",
+        "Constructors of a sealed class are `protected` by default",
+        "An enum class can implement a sealed interface",
+        "Subclasses of an `open` direct subclass must also be in the same module",
+        "A `when` statement over a sealed type always requires an `else` branch"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "Sealed classes are abstract with `protected` (or `private`) constructors, and enums may implement sealed interfaces. The module/package restriction applies only to direct subtypes, so an `open` subclass can be extended anywhere, and `when` needs no `else` when it covers every subtype."
+    },
+    {
+      "id": "d16q20",
+      "type": "output",
+      "topic": "enum ordering",
+      "difficulty": "Hard",
+      "question": "What does this print?",
+      "code": "enum class Priority(val weight: Int) {\n    HIGH(10), LOW(1), MEDIUM(5)\n}\n\nfun main() {\n    val ps = listOf(Priority.MEDIUM, Priority.LOW, Priority.HIGH)\n    println(ps.sorted())\n    println(Priority.LOW < Priority.HIGH)\n    println(ps.maxBy { it.ordinal }.weight)\n}",
+      "options": [
+        "[HIGH, LOW, MEDIUM]\nfalse\n5",
+        "[LOW, MEDIUM, HIGH]\ntrue\n10",
+        "[HIGH, LOW, MEDIUM]\ntrue\n5",
+        "[MEDIUM, LOW, HIGH]\nfalse\n10"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Enums are `Comparable` by `ordinal`, i.e. declaration order, not by a property like `weight` or by the names. `HIGH` is declared first, so it sorts first and `LOW < HIGH` is `false`, and the highest ordinal belongs to `MEDIUM`, whose weight is 5."
+    }
+  ]
+}

@@ -1,0 +1,353 @@
+{
+  "day": 37,
+  "topic": "Compose state: remember, rememberSaveable, hoisting & derivedStateOf",
+  "questions": [
+    {
+      "id": "d37q01",
+      "type": "mcq",
+      "topic": "remember",
+      "difficulty": "Easy",
+      "question": "The user taps the button three times. What does the `Text` show?",
+      "code": "@Composable\nfun Counter() {\n    var count by mutableStateOf(0)\n    Column {\n        Text(\"Count: $count\")\n        Button(onClick = { count++ }) { Text(\"+1\") }\n    }\n}",
+      "options": [
+        "Count: 0",
+        "Count: 3",
+        "Count: 1",
+        "It does not compile"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Each click writes the state and triggers a recomposition, but without `remember` that recomposition runs `mutableStateOf(0)` again and creates a brand-new state set to 0. It compiles (Lint flags it). Wrapping it in `remember { mutableStateOf(0) }` keeps the same state object across recompositions."
+    },
+    {
+      "id": "d37q02",
+      "type": "mcq",
+      "topic": "by vs .value",
+      "difficulty": "Easy",
+      "question": "Given `val count = remember { mutableStateOf(0) }` (no `by`), which line increments the counter?",
+      "options": [
+        "`count.value++`",
+        "`count++`",
+        "`count = count + 1`",
+        "`count.set(count.get() + 1)`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Without delegation, `count` is a `MutableState<Int>`, so you read and write `count.value`. `count++` only works with `var count by remember { mutableStateOf(0) }`, where the `getValue`/`setValue` delegate does the `.value` access for you."
+    },
+    {
+      "id": "d37q03",
+      "type": "truefalse",
+      "topic": "remember without state",
+      "difficulty": "Easy",
+      "question": "With `var count = remember { 0 }` and a button doing `count++`, tapping the button updates a `Text(\"$count\")` because the value is remembered.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "`remember` only caches a value across recompositions. It doesn't make it observable. `count++` just changes a local variable, and since no snapshot `State` was written, Compose never schedules a recomposition. You need `mutableStateOf` for that."
+    },
+    {
+      "id": "d37q04",
+      "type": "mcq",
+      "topic": "remember vs rotation",
+      "difficulty": "Easy",
+      "question": "A search box uses `var query by remember { mutableStateOf(\"\") }`. The user types \"kotlin\" and rotates the phone (default config-change handling). What happens to the text?",
+      "options": [
+        "It is reset to an empty string",
+        "It stays \"kotlin\" because `remember` stores it in the Activity",
+        "It stays \"kotlin\" because `TextField` saves its own text like an `EditText` with an id",
+        "The app crashes because the state can't be restored"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Rotation recreates the Activity and the whole composition, and `remember` only survives recomposition. A value-based `TextField` shows whatever `value` you pass it and saves nothing itself. Use `rememberSaveable` (or a ViewModel) to keep it."
+    },
+    {
+      "id": "d37q05",
+      "type": "mcq",
+      "topic": "state hoisting",
+      "difficulty": "Easy",
+      "question": "Which signature is the stateless, hoisted version of a name input field?",
+      "options": [
+        "`fun NameField(name: String, onNameChange: (String) -> Unit)`",
+        "`fun NameField(viewModel: ProfileViewModel, modifier: Modifier)`",
+        "`fun NameField(initialName: String)`",
+        "`fun NameField(): String`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Hoisting replaces internal state with a `value` parameter plus an event lambda, so the caller owns the single source of truth and the field is reusable and easy to preview and test. `initialName` still keeps its own internal state, and passing a ViewModel ties the composable to one screen."
+    },
+    {
+      "id": "d37q06",
+      "type": "truefalse",
+      "topic": "single source of truth",
+      "difficulty": "Easy",
+      "question": "With `TextField(value = \"Hello\", onValueChange = { println(it) })`, typing into the field changes the text shown on screen.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "The field always displays the `value` it's given. `onValueChange` only reports what the user typed, and since nobody updates the value, it keeps showing \"Hello\". The caller's state is the single source of truth."
+    },
+    {
+      "id": "d37q07",
+      "type": "output",
+      "topic": "remember model",
+      "difficulty": "Medium",
+      "question": "This plain-Kotlin model treats each `counter()` call as a recomposition and `remember` as a slot cache. What does it print?",
+      "code": "val cache = mutableMapOf<String, Any>()\n\n@Suppress(\"UNCHECKED_CAST\")\nfun <T : Any> remember(key: String, calc: () -> T): T =\n    cache.getOrPut(key) { calc() } as T\n\nclass Box(var n: Int)\n\nfun counter(): Int {\n    val a = Box(0)\n    val b = remember(\"b\") { Box(0) }\n    a.n++\n    b.n++\n    return a.n * 10 + b.n\n}\n\nfun main() {\n    println((1..3).map { counter() }.joinToString(\" \"))\n}",
+      "options": [
+        "11 12 13",
+        "11 11 11",
+        "11 21 31",
+        "13 13 13"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`a` is recreated on every call, so it is always 1 (the tens digit), while `b` is created once and then reused, so it counts 1, 2, 3. It's the same as an un-remembered vs a remembered object in a composable."
+    },
+    {
+      "id": "d37q08",
+      "type": "mcq",
+      "topic": "collectAsStateWithLifecycle",
+      "difficulty": "Easy",
+      "question": "Why is `viewModel.uiState.collectAsStateWithLifecycle()` recommended over `collectAsState()` on Android?",
+      "options": [
+        "It stops collecting when the lifecycle drops below STARTED and restarts when it returns",
+        "Only it survives configuration changes; `collectAsState()` restarts from the initial value",
+        "`collectAsState()` never triggers recomposition for a `StateFlow`",
+        "It converts the `StateFlow` to `LiveData`, which is lifecycle-aware"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`collectAsState()` keeps collecting as long as the composable is in the composition, including while the app sits in the background. The lifecycle-aware version uses `repeatOnLifecycle` under the hood, so upstream work stops when the UI isn't visible. Both recompose on new values, and neither involves LiveData."
+    },
+    {
+      "id": "d37q09",
+      "type": "multi",
+      "topic": "process death",
+      "difficulty": "Medium",
+      "question": "The app is in the background and the system kills its process. When the user returns to the screen, which values are restored?",
+      "options": [
+        "A value held in `rememberSaveable`",
+        "A value stored in the ViewModel's `SavedStateHandle`",
+        "A plain `var` property of the ViewModel",
+        "A value held in `remember`",
+        "A value in a Kotlin `object` singleton"
+      ],
+      "answer": [
+        0,
+        1
+      ],
+      "explanation": "`rememberSaveable` and `SavedStateHandle` both write into the saved-instance-state Bundle, which the system keeps across process death. Plain ViewModel fields survive rotation but not process death, and `remember` and singletons live in memory only, so they're lost with the process."
+    },
+    {
+      "id": "d37q10",
+      "type": "mcq",
+      "topic": "remember key",
+      "difficulty": "Medium",
+      "question": "The parent recomposes `DateLabel` with `pattern` changed from \"dd/MM\" to \"MM/dd\". What is shown?",
+      "code": "@Composable\nfun DateLabel(date: LocalDate, pattern: String) {\n    val formatter = remember {\n        DateTimeFormatter.ofPattern(pattern)\n    }\n    Text(date.format(formatter))\n}",
+      "options": [
+        "The date still formatted as \"dd/MM\"",
+        "The date formatted as \"MM/dd\"",
+        "The formatter is rebuilt on every recomposition anyway",
+        "A crash, because the remembered lambda captured a stale parameter"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`remember` with no keys runs its lambda once and returns the cached formatter forever, so the new pattern is ignored. `remember(pattern) { ... }` throws the cached value away and recomputes it whenever `pattern` changes."
+    },
+    {
+      "id": "d37q11",
+      "type": "truefalse",
+      "topic": "mutableIntStateOf",
+      "difficulty": "Medium",
+      "question": "`mutableIntStateOf(0)` exists to store a primitive `Int` without boxing, while `mutableStateOf(0)` boxes the value into an `Integer` object.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`mutableStateOf<T>` is generic, so an `Int` is boxed on the JVM. `mutableIntStateOf` (and the Long/Float/Double variants) exposes `intValue` and avoids allocating boxed values on every write. It still works with `by` delegation."
+    },
+    {
+      "id": "d37q12",
+      "type": "mcq",
+      "topic": "plain state holder",
+      "difficulty": "Medium",
+      "question": "A screen has a `DrawerState`, a `SnackbarHostState`, a `LazyListState` and a rule for when to show the bottom bar. All of this is UI logic with no business data. Where should it live?",
+      "options": [
+        "In a plain state holder class, created by a `rememberXxxState()` function",
+        "In the ViewModel, so it survives configuration changes and process death",
+        "In a Kotlin `object` singleton shared by all screens",
+        "In separate `rememberSaveable` calls scattered across child composables"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Compose state objects like `DrawerState` are tied to the composition (they need a CoroutineScope and composition-scoped resources), so they don't belong in a ViewModel, which outlives it. A plain class grouping them, remembered in composition, keeps UI logic in one place. The ViewModel is for screen-level business state."
+    },
+    {
+      "id": "d37q13",
+      "type": "output",
+      "topic": "derived updates",
+      "difficulty": "Medium",
+      "question": "`derivedStateOf` only notifies readers when its result changes. This models `firstVisibleItemIndex > 0` over seven scroll frames. What does it print?",
+      "code": "fun main() {\n    var last: Boolean? = null\n    var notifications = 0\n    for (index in listOf(0, 0, 1, 2, 3, 2, 0)) {\n        val showButton = index > 0\n        if (showButton != last) {\n            notifications++\n            last = showButton\n        }\n    }\n    println(notifications)\n}",
+      "options": [
+        "3",
+        "7",
+        "5",
+        "2"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "The boolean goes false, then true at index 1, then false again at the final 0, so it changes 3 times (counting the initial value), even though the index changed 5 times. That's why `derivedStateOf` around a scroll-to-top check saves recompositions."
+    },
+    {
+      "id": "d37q14",
+      "type": "multi",
+      "topic": "derivedStateOf use",
+      "difficulty": "Medium",
+      "question": "Which of these are good uses of `derivedStateOf`?",
+      "options": [
+        "`remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }` to show a scroll-to-top button",
+        "`remember { derivedStateOf { scrollState.value > 0 } }` to show a top bar shadow once the content is scrolled",
+        "`derivedStateOf { price * quantity }` called directly in the composable without `remember`",
+        "Loading data from a repository whenever a selected id changes",
+        "Turning a ViewModel's `StateFlow` into Compose `State`"
+      ],
+      "answer": [
+        0,
+        1
+      ],
+      "explanation": "Both scroll cases turn an input that changes every frame or pixel into a boolean that rarely changes, so readers recompose only when it flips. Without `remember`, the derived state is recreated on every recomposition. Loading data is a side effect, and collecting a Flow is `collectAsStateWithLifecycle`'s job."
+    },
+    {
+      "id": "d37q15",
+      "type": "mcq",
+      "topic": "derivedStateOf misuse",
+      "difficulty": "Medium",
+      "question": "`firstName` and `lastName` are `MutableState<String>` values that the user edits. What's the problem with this line?",
+      "code": "val fullName by remember {\n    derivedStateOf { \"${firstName.value} ${lastName.value}\" }\n}",
+      "options": [
+        "It works, but adds overhead for nothing: the result changes whenever an input does",
+        "It never updates, because `remember` has no keys and caches the first full name",
+        "It does not compile, because `derivedStateOf` can only return a `Boolean`",
+        "It recomposes twice per keystroke, once for each input"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "The inputs are State objects read inside the block, so the derived state does update. But `derivedStateOf` only helps when its output changes less often than its inputs. Here every keystroke produces a new full name, so you pay the tracking cost with no recompositions saved."
+    },
+    {
+      "id": "d37q16",
+      "type": "mcq",
+      "topic": "snapshotFlow",
+      "difficulty": "Medium",
+      "question": "What does `snapshotFlow { listState.firstVisibleItemIndex }` give you?",
+      "options": [
+        "A cold Flow that emits when a State read in the block changes to a new result",
+        "A Flow that emits once per recomposition of the enclosing composable",
+        "A `State<Int>` that can be read in composition",
+        "A hot `StateFlow` that keeps emitting after the composable leaves the composition"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`snapshotFlow` tracks the State objects read in the block and re-runs it when they change, emitting only distinct results. It's how you bridge Compose state into Flow operators (e.g. collecting it in a `LaunchedEffect` to log analytics). Going the other way, Flow to State, is `collectAsState`."
+    },
+    {
+      "id": "d37q17",
+      "type": "multi",
+      "topic": "Saver",
+      "difficulty": "Hard",
+      "question": "This throws an `IllegalArgumentException` because `rememberSaveable` can't save a `User`. Which changes fix it?",
+      "code": "data class User(val name: String, val age: Int)\n\n@Composable\nfun Profile() {\n    var user by rememberSaveable {\n        mutableStateOf(User(\"Ann\", 30))\n    }\n    // ...\n}",
+      "options": [
+        "Make `User` implement `Parcelable` with `@Parcelize`",
+        "Pass a custom `Saver`, e.g. built with `mapSaver` or `listSaver`, to `rememberSaveable`",
+        "Annotate `User` with `@Immutable`",
+        "Remove the `data` modifier so `User` is a regular class",
+        "Switch to `remember(user)` with the user as a key"
+      ],
+      "answer": [
+        0,
+        1
+      ],
+      "explanation": "`rememberSaveable` stores values in a Bundle, so they must be Bundle types (primitives, String, Parcelable, Serializable...) or come with a Saver that converts them into such types. `@Immutable` is a stability hint for the compiler and has nothing to do with saving, and `remember` doesn't save anything."
+    },
+    {
+      "id": "d37q18",
+      "type": "mcq",
+      "topic": "stale derivedStateOf",
+      "difficulty": "Hard",
+      "question": "The parent recomposes `HighScores` with `threshold` changed from 50 to 80. What happens?",
+      "code": "@Composable\nfun HighScores(scores: List<Int>, threshold: Int) {\n    val count by remember {\n        derivedStateOf { scores.count { it > threshold } }\n    }\n    Text(\"$count above $threshold\")\n}",
+      "options": [
+        "The text shows 80, but `count` is still the value computed for 50",
+        "`count` is recomputed because `derivedStateOf` tracks the captured parameters",
+        "`count` is recomputed because the whole function body re-runs",
+        "The `Text` is skipped and keeps showing 50"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "The remembered `derivedStateOf` keeps its first lambda, which captured the original `scores` and `threshold`. Those are plain parameters, not State, so nothing invalidates it. Use `remember(scores, threshold)`, or drop `derivedStateOf` and compute the count directly."
+    },
+    {
+      "id": "d37q19",
+      "type": "truefalse",
+      "topic": "rememberSaveable lifetime",
+      "difficulty": "Hard",
+      "question": "A value in `rememberSaveable` is still there after the Activity calls `finish()` (e.g. after a Done button) and the user later launches it again.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "Saved instance state is only restored when the system recreates the Activity (configuration change or process death). When the Activity is finished on purpose, the system throws its saved state away, so a fresh launch starts from the initial value. Persist across sessions with DataStore or Room."
+    },
+    {
+      "id": "d37q20",
+      "type": "multi",
+      "topic": "state lists",
+      "difficulty": "Hard",
+      "question": "A `LazyColumn` shows `items`. Which ways of adding \"b\" make the list recompose and show it?",
+      "options": [
+        "`val items = remember { mutableStateListOf<String>() }` then `items.add(\"b\")`",
+        "`var items by remember { mutableStateOf(listOf<String>()) }` then `items = items + \"b\"`",
+        "`val items = remember { mutableStateOf(mutableListOf<String>()) }` then `items.value.add(\"b\")`",
+        "`val items = remember { mutableStateOf(mutableListOf<String>()) }` then `items.value.add(\"b\"); items.value = items.value`",
+        "`val items = remember { mutableListOf<String>() }` then `items.add(\"b\")`"
+      ],
+      "answer": [
+        0,
+        1
+      ],
+      "explanation": "`mutableStateListOf` is observable per mutation, and assigning a new immutable list writes the State. Mutating the list inside a `MutableState` isn't a State write, and reassigning the same instance is ignored by the default structural-equality policy, so neither one recomposes. A plain `MutableList` isn't observed at all."
+    }
+  ]
+}

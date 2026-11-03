@@ -1,0 +1,362 @@
+{
+  "day": 10,
+  "topic": "Lambdas, function types & higher-order functions",
+  "questions": [
+    {
+      "id": "d10q01",
+      "type": "output",
+      "topic": "it",
+      "difficulty": "Easy",
+      "question": "What does this print?",
+      "code": "fun main() {\n    val nums = listOf(1, 2, 3)\n    println(nums.map { it * 10 })\n}",
+      "options": [
+        "[10, 20, 30]",
+        "10 20 30",
+        "[1, 2, 3]",
+        "60"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A lambda with a single parameter can refer to it as `it`. `map` returns a new `List`, and `List.toString()` prints with brackets and commas, so the output is not space-separated or summed."
+    },
+    {
+      "id": "d10q02",
+      "type": "mcq",
+      "topic": "function types",
+      "difficulty": "Easy",
+      "question": "What is the inferred type of `f`?",
+      "code": "val f = { x: Int -> x.toString() }",
+      "options": [
+        "(Int) -> String",
+        "(String) -> Int",
+        "Int.() -> String",
+        "() -> String"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "The lambda takes one `Int` parameter and its last expression is a `String`, so its type is `(Int) -> String`. Parameter types go on the left of the arrow and the return type on the right. A plain lambda does not get a receiver type unless the expected type asks for one."
+    },
+    {
+      "id": "d10q03",
+      "type": "output",
+      "topic": "last expression",
+      "difficulty": "Easy",
+      "question": "What does this print?",
+      "code": "fun main() {\n    val f = { x: Int ->\n        println(\"computing\")\n        x * 2\n        x + 1\n    }\n    println(f(5))\n}",
+      "options": [
+        "computing\n6",
+        "computing\n10",
+        "6",
+        "computing\n10\n6"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A lambda returns the value of its last expression, here `x + 1` = 6. The `x * 2` line is computed and then thrown away; nothing prints it."
+    },
+    {
+      "id": "d10q04",
+      "type": "truefalse",
+      "topic": "trailing lambda",
+      "difficulty": "Easy",
+      "question": "If a function's last parameter has a function type, you can pass the lambda outside the parentheses, and if the lambda is the only argument you can drop the parentheses entirely.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "This is trailing lambda syntax: `list.fold(0) { acc, x -> acc + x }` and `list.forEach { println(it) }`. It only works for the last parameter, which is why APIs put the function parameter last."
+    },
+    {
+      "id": "d10q05",
+      "type": "output",
+      "topic": "constructor reference",
+      "difficulty": "Easy",
+      "question": "What does this print?",
+      "code": "data class User(val name: String)\n\nfun main() {\n    val users = listOf(\"ann\", \"bob\").map(::User)\n    println(users)\n}",
+      "options": [
+        "[User(name=ann), User(name=bob)]",
+        "[ann, bob]",
+        "[User(ann), User(bob)]",
+        "[User, User]"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`::User` refers to the constructor as a `(String) -> User` function, so `map` builds one `User` per string. A data class `toString()` includes the property names, so it prints `name=ann` and not `User(ann)`."
+    },
+    {
+      "id": "d10q06",
+      "type": "mcq",
+      "topic": "click listener",
+      "difficulty": "Easy",
+      "question": "Why can you write `button.setOnClickListener { view -> openDetails() }` even though the method takes a `View.OnClickListener`?",
+      "options": [
+        "`View.OnClickListener` is a single-method Java interface, so Kotlin applies SAM conversion",
+        "Kotlin generates an overload of `setOnClickListener` that takes `(View) -> Unit` for every Android method",
+        "`View.OnClickListener` is a Kotlin typealias for `(View) -> Unit`",
+        "The lambda is stored as `Any` and cast to `OnClickListener` at runtime"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Java interfaces with exactly one abstract method are SAM types, and Kotlin automatically turns a lambda into an implementation of one when it is passed as an argument. `OnClickListener` is a real Java interface, not a typealias, and no overloads are generated."
+    },
+    {
+      "id": "d10q07",
+      "type": "output",
+      "topic": "returning functions",
+      "difficulty": "Easy",
+      "question": "What does this print?",
+      "code": "fun multiplier(factor: Int): (Int) -> Int = { it * factor }\n\nfun main() {\n    val triple = multiplier(3)\n    println(triple(4) + multiplier(2)(5))\n}",
+      "options": [
+        "22",
+        "12",
+        "1210",
+        "20"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`multiplier` returns a lambda that remembers `factor`. `triple(4)` is 12 and `multiplier(2)(5)` calls the returned function straight away to get 10, so the sum is 22. Both are `Int`s, so `+` adds them rather than joining them as strings."
+    },
+    {
+      "id": "d10q08",
+      "type": "multi",
+      "topic": "unused params _",
+      "difficulty": "Medium",
+      "question": "Which of these can be assigned to a `val` of type `(Int, String) -> Unit`?",
+      "code": "fun log(n: Int, s: String) {}",
+      "options": [
+        "{ _, s -> println(s) }",
+        "{ n, _ -> println(n) }",
+        "::log",
+        "{ println(it) }",
+        "{ _ -> println(\"x\") }"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "`_` stands in for a parameter you don't use, but the lambda must still declare both parameters. `::log` has the matching type `(Int, String) -> Unit`. `it` only exists for lambdas with exactly one parameter, and `{ _ -> ... }` declares one parameter, so both fail to compile."
+    },
+    {
+      "id": "d10q09",
+      "type": "output",
+      "topic": "closures",
+      "difficulty": "Medium",
+      "question": "What does this print?",
+      "code": "fun makeCounter(): () -> Int {\n    var count = 0\n    return { ++count }\n}\n\nfun main() {\n    val a = makeCounter()\n    val b = makeCounter()\n    a(); a()\n    println(\"${a()} ${b()}\")\n}",
+      "options": [
+        "3 1",
+        "1 1",
+        "3 3",
+        "2 1"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Each `makeCounter()` call creates a new `count`, and its lambda captures and changes that variable (Kotlin, unlike Java, lets a lambda modify a captured `var`). `a` has been called three times, so it returns 3. `b` has its own counter, so it returns 1."
+    },
+    {
+      "id": "d10q10",
+      "type": "mcq",
+      "topic": "nullable function type",
+      "difficulty": "Medium",
+      "question": "An adapter stores an optional callback. Which line inside `click` compiles and calls the callback only when it is set?",
+      "code": "class TagAdapter {\n    var onItemClick: ((String) -> Unit)? = null\n\n    fun click(item: String) {\n        // call the callback here\n    }\n}",
+      "options": [
+        "onItemClick?.invoke(item)",
+        "onItemClick?(item)",
+        "onItemClick(item)",
+        "onItemClick.invoke(item)"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A nullable function type has to be called with a safe call on `invoke`: `onItemClick?.invoke(item)`. Kotlin has no `?(...)` operator, and calling it directly (with or without `.invoke`) is rejected because the type is nullable."
+    },
+    {
+      "id": "d10q11",
+      "type": "output",
+      "topic": "return@label",
+      "difficulty": "Medium",
+      "question": "What does this print?",
+      "code": "fun main() {\n    listOf(1, 2, 3, 4).forEach {\n        if (it % 2 == 0) return@forEach\n        print(it)\n    }\n    println(\" done\")\n}",
+      "options": [
+        "13 done",
+        "1",
+        "1 done",
+        "1234 done"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`return@forEach` returns from the lambda only, so it skips the current element, like `continue`. It does not stop the loop or leave `main`, so the odd numbers print and then ` done`."
+    },
+    {
+      "id": "d10q12",
+      "type": "truefalse",
+      "topic": "fun interface",
+      "difficulty": "Medium",
+      "question": "You can pass a lambda to a parameter of type `Validator`, where `interface Validator { fun validate(s: String): Boolean }` is a plain Kotlin interface, without changing the declaration.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "SAM conversion for Kotlin interfaces only works when the interface is declared as `fun interface Validator`. With a plain `interface` you have to write `object : Validator { ... }`, or take a function type such as `(String) -> Boolean` instead. Java SAM interfaces don't need the keyword."
+    },
+    {
+      "id": "d10q13",
+      "type": "output",
+      "topic": "function references",
+      "difficulty": "Medium",
+      "question": "What does this print?",
+      "code": "fun isLong(s: String) = s.length > 3\n\nfun main() {\n    val words = listOf(\"a\", \"kotlin\", \"is\", \"fun\")\n    println(words.filter(::isLong).map(String::length))\n}",
+      "options": [
+        "[6]",
+        "[kotlin]",
+        "[6, 3]",
+        "[1, 6, 2, 3]"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`::isLong` passes the top-level function as a predicate, and only \"kotlin\" (6 characters) is longer than 3. `String::length` then maps it to its length. \"fun\" has exactly 3 characters, so it doesn't pass `> 3`."
+    },
+    {
+      "id": "d10q14",
+      "type": "mcq",
+      "topic": "bound references",
+      "difficulty": "Medium",
+      "question": "What are the types of `a` and `b`?",
+      "code": "class Greeter(val name: String) {\n    fun greet(msg: String) = \"$msg, $name\"\n}\n\nval g = Greeter(\"Ann\")\nval a = g::greet\nval b = Greeter::greet",
+      "options": [
+        "`a`: `(String) -> String`, `b`: `(Greeter, String) -> String`",
+        "Both are `(String) -> String`",
+        "`a`: `(Greeter, String) -> String`, `b`: `(String) -> String`",
+        "`a`: `() -> String`, `b`: `(String) -> String`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`g::greet` is a bound reference: the receiver `g` is already fixed, so only `msg` is left. `Greeter::greet` is unbound, so the receiver becomes the first parameter and you call it as `b(someGreeter, \"Hi\")`."
+    },
+    {
+      "id": "d10q15",
+      "type": "output",
+      "topic": "lambda with receiver",
+      "difficulty": "Medium",
+      "question": "What does this print?",
+      "code": "fun build(block: StringBuilder.() -> Unit): String {\n    val sb = StringBuilder()\n    sb.block()\n    return sb.toString()\n}\n\nfun main() {\n    val s = build {\n        append(\"Hi\")\n        append(length)\n    }\n    println(s)\n}",
+      "options": [
+        "Hi2",
+        "Hi0",
+        "Hi",
+        "HiHi"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Inside a `StringBuilder.() -> Unit` lambda, `this` is the builder, so `append` and `length` work without a qualifier. This is how `apply` and Kotlin DSLs work. `length` is read after \"Hi\" has been appended, so it is 2, not 0."
+    },
+    {
+      "id": "d10q16",
+      "type": "mcq",
+      "topic": "adapter callback",
+      "difficulty": "Medium",
+      "question": "The adapter takes `private val onItemClick: (Item) -> Unit`. Which line in `onBindViewHolder` calls the callback when the user taps the row?",
+      "code": "override fun onBindViewHolder(holder: VH, position: Int) {\n    val item = items[position]\n    holder.bind(item)\n    // wire up the click here\n}",
+      "options": [
+        "holder.itemView.setOnClickListener { onItemClick(item) }",
+        "holder.itemView.setOnClickListener(onItemClick)",
+        "holder.itemView.setOnClickListener { view -> onItemClick }",
+        "onItemClick(item)"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "The listener lambda receives a `View`, so you call `onItemClick(item)` inside it. Passing `onItemClick` directly fails because the listener expects `(View) -> Unit`, not `(Item) -> Unit`. `{ view -> onItemClick }` compiles but only refers to the function without calling it, and calling `onItemClick(item)` outside the listener runs it during binding, not on a tap."
+    },
+    {
+      "id": "d10q17",
+      "type": "mcq",
+      "topic": "receiver vs parameter",
+      "difficulty": "Hard",
+      "question": "Which call does NOT compile?",
+      "code": "val len: String.() -> Int = { length }",
+      "options": [
+        "len()",
+        "\"hi\".len()",
+        "len(\"hi\")",
+        "len.invoke(\"hi\")"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`String.() -> Int` is the same function type as `(String) -> Int` with the receiver as the first argument, so `\"hi\".len()`, `len(\"hi\")` and `len.invoke(\"hi\")` all work. `len()` gives no receiver, so it fails with no value passed for the parameter."
+    },
+    {
+      "id": "d10q18",
+      "type": "output",
+      "topic": "loop capture",
+      "difficulty": "Hard",
+      "question": "What does this print?",
+      "code": "fun main() {\n    val actions = mutableListOf<() -> Unit>()\n    var i = 0\n    while (i < 3) {\n        actions.add { print(i) }\n        i++\n    }\n    for (j in 0 until 3) {\n        actions.add { print(j) }\n    }\n    actions.forEach { it() }\n}",
+      "options": [
+        "333012",
+        "012012",
+        "333333",
+        "012333"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Lambdas capture the variable, not its value at that moment. All three `while` lambdas share one `var i`, which is 3 by the time they run. A `for` loop creates a new `val j` on each iteration, so those lambdas print 0, 1 and 2."
+    },
+    {
+      "id": "d10q19",
+      "type": "truefalse",
+      "topic": "bound receiver capture",
+      "difficulty": "Hard",
+      "question": "This program prints `BOB!`.",
+      "code": "fun String.shout() = uppercase() + \"!\"\n\nfun main() {\n    var name = \"Ann\"\n    val f = name::shout\n    name = \"Bob\"\n    println(f())\n}",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "A bound reference evaluates its receiver once, when the reference is created, so `f` holds the string \"Ann\" and prints `ANN!`. Reassigning `name` later doesn't affect it. A lambda `{ name.shout() }` would read the variable when called and print `BOB!`."
+    },
+    {
+      "id": "d10q20",
+      "type": "multi",
+      "topic": "sam constructor",
+      "difficulty": "Hard",
+      "question": "Given `fun interface OnRefresh { fun refresh(force: Boolean) }`, which of these compile and create an `OnRefresh`?",
+      "options": [
+        "OnRefresh { force -> println(force) }",
+        "OnRefresh { println(it) }",
+        "object : OnRefresh { override fun refresh(force: Boolean) {} }",
+        "OnRefresh { force, extra -> println(force) }",
+        "OnRefresh(true)"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "A `fun interface` gets a SAM constructor that takes a lambda matching its single method `(Boolean) -> Unit`, so a named parameter and `it` both work, and so does an anonymous `object`. A two-parameter lambda doesn't match the method's signature, and `OnRefresh(true)` passes a value where a function is expected."
+    }
+  ]
+}

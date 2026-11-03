@@ -1,0 +1,361 @@
+{
+  "day": 24,
+  "topic": "Dispatchers, withContext & main-safety",
+  "questions": [
+    {
+      "id": "d24q01",
+      "type": "output",
+      "topic": "withContext result",
+      "difficulty": "Easy",
+      "question": "What does this print?",
+      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking {\n    println(\"A\")\n    val x = withContext(Dispatchers.Default) {\n        println(\"B\")\n        42\n    }\n    println(\"C $x\")\n}",
+      "options": [
+        "A\nB\nC 42",
+        "A\nC 42\nB",
+        "A\nC null\nB",
+        "B\nA\nC 42"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`withContext` suspends the caller until its block finishes and returns the block's last expression. So `B` prints on a `Default` thread, then the caller resumes with `x = 42`. It does not fire and forget the way `launch` does."
+    },
+    {
+      "id": "d24q02",
+      "type": "mcq",
+      "topic": "Dispatchers.Default",
+      "difficulty": "Easy",
+      "question": "A ViewModel needs to sort and diff a 50,000-item list before showing it. Which dispatcher should that work run on?",
+      "code": "viewModelScope.launch {\n    val sorted = withContext(/* ? */) {\n        items.sortedBy { it.name }\n    }\n    _state.value = sorted\n}",
+      "options": [
+        "`Dispatchers.Default`",
+        "`Dispatchers.IO`",
+        "`Dispatchers.Main`",
+        "`Dispatchers.Unconfined`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Sorting and diffing are CPU-bound, and `Default` is the pool sized to the number of CPU cores, made for that kind of work. `IO` is for blocking calls that mostly wait. `Main` would freeze the UI."
+    },
+    {
+      "id": "d24q03",
+      "type": "truefalse",
+      "topic": "sequential withContext",
+      "difficulty": "Easy",
+      "question": "In this snippet, `loadUser()` and `loadPosts()` run concurrently because each one is in its own `withContext` block.",
+      "code": "suspend fun loadScreen() {\n    val user = withContext(Dispatchers.IO) { loadUser() }\n    val posts = withContext(Dispatchers.IO) { loadPosts() }\n    show(user, posts)\n}",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "`withContext` suspends the caller until its block completes, so the second call starts only after the first returns. To run them in parallel you need `async { }` for each, then `await()`."
+    },
+    {
+      "id": "d24q04",
+      "type": "output",
+      "topic": "newSingleThreadContext",
+      "difficulty": "Easy",
+      "question": "What does this print? (The program runs on a thread named `main`.)",
+      "code": "import kotlinx.coroutines.*\n\n@OptIn(DelicateCoroutinesApi::class, ExperimentalCoroutinesApi::class)\nfun main() {\n    newSingleThreadContext(\"db\").use { db ->\n        runBlocking {\n            val name = withContext(db) { Thread.currentThread().name }\n            println(name)\n            println(Thread.currentThread().name)\n        }\n    }\n}",
+      "options": [
+        "db\nmain",
+        "db\ndb",
+        "main\nmain",
+        "main\ndb"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`newSingleThreadContext(\"db\")` creates a dispatcher backed by one thread named `db`, and the `withContext` block runs there. When the block finishes, the caller resumes in its own context, which is `runBlocking`'s `main` thread. `use` closes the context at the end."
+    },
+    {
+      "id": "d24q05",
+      "type": "mcq",
+      "topic": "main-safety",
+      "difficulty": "Easy",
+      "question": "By the main-safety convention, where should the `withContext(Dispatchers.IO)` for a blocking file read go?",
+      "code": "class NotesRepository(private val file: File) {\n    suspend fun readNotes(): String =\n        withContext(Dispatchers.IO) { file.readText() }\n}",
+      "options": [
+        "Inside the repository function that does the read",
+        "In every ViewModel that calls the repository, around each call",
+        "In the Activity, around the `viewModelScope.launch` block",
+        "Nowhere: suspend functions always run off the main thread automatically"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A main-safe suspend function switches dispatchers itself, so callers never need to know which thread it needs. Marking a function `suspend` does not move it off the calling thread, so the switch has to be written somewhere, and the function doing the blocking work is the right place."
+    },
+    {
+      "id": "d24q06",
+      "type": "multi",
+      "topic": "Dispatchers.IO",
+      "difficulty": "Medium",
+      "question": "Which of these belong on `Dispatchers.IO`?",
+      "options": [
+        "A blocking JDBC or SQLite query that is not a suspend function",
+        "Reading a large file with `File.readBytes()`",
+        "Applying a blur filter to a bitmap pixel by pixel",
+        "Updating a `TextView`'s text",
+        "A blocking OkHttp `call.execute()`"
+      ],
+      "answer": [
+        0,
+        1,
+        4
+      ],
+      "explanation": "`IO` is for calls that block a thread while waiting on disk or network: blocking DB queries, file reads, and synchronous HTTP. Pixel-by-pixel filtering is CPU-bound and belongs on `Default`. Touching a View must happen on `Main`."
+    },
+    {
+      "id": "d24q07",
+      "type": "mcq",
+      "topic": "ANR",
+      "difficulty": "Easy",
+      "question": "What happens when a user taps the button that runs this code?",
+      "code": "button.setOnClickListener {\n    lifecycleScope.launch {\n        Thread.sleep(6_000)\n        label.text = \"Done\"\n    }\n}",
+      "options": [
+        "The UI freezes for 6 seconds, and an ANR dialog may appear",
+        "Nothing visible, because code inside `launch` always runs on a background thread",
+        "The coroutine is moved to `Dispatchers.IO` automatically when it blocks",
+        "It throws `IllegalStateException` because blocking is not allowed in coroutines"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`lifecycleScope` runs on `Dispatchers.Main`, and `Thread.sleep` blocks that thread instead of suspending. Input events can't be handled while it's blocked, and after about 5 seconds the system raises an ANR. `launch` alone never changes threads. Use `delay`, or move blocking work to `Dispatchers.IO`."
+    },
+    {
+      "id": "d24q08",
+      "type": "output",
+      "topic": "withContext suspends caller",
+      "difficulty": "Medium",
+      "question": "What does this print?",
+      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking {\n    launch { println(\"L\") }\n    val r = withContext(Dispatchers.Default) {\n        delay(50)\n        println(\"W\")\n        1\n    }\n    println(\"R$r\")\n}",
+      "options": [
+        "L\nW\nR1",
+        "W\nR1\nL",
+        "W\nL\nR1",
+        "L\nR1\nW"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`launch` only queues `L` on `runBlocking`'s thread. When `withContext` suspends the parent, that thread is free and runs `L` while the block waits 50 ms on `Default`. Then `W` prints, and the parent resumes with the result 1."
+    },
+    {
+      "id": "d24q09",
+      "type": "truefalse",
+      "topic": "closing dispatchers",
+      "difficulty": "Easy",
+      "question": "A dispatcher made with `newSingleThreadContext` or `Executors.newSingleThreadExecutor().asCoroutineDispatcher()` should be closed when it is no longer needed, or its thread keeps running.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "These dispatchers own a real thread that is not shared with anything else. Unless you call `close()` (or use `use { }`), the thread leaks for the life of the process (and a non-daemon executor thread, like the one from `Executors`, also keeps the JVM from exiting). `Dispatchers.Default` and `Dispatchers.IO` are shared and must never be closed."
+    },
+    {
+      "id": "d24q10",
+      "type": "mcq",
+      "topic": "IO thread limit",
+      "difficulty": "Medium",
+      "question": "By default, how many threads can `Dispatchers.IO` use at the same time?",
+      "options": [
+        "64 or the number of CPU cores, whichever is larger",
+        "Exactly the number of CPU cores",
+        "Unlimited: it creates a new thread for each blocking call",
+        "1, so blocking calls are serialised"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`IO` is an elastic pool capped at `max(64, cores)` by default (the `kotlinx.coroutines.io.parallelism` system property changes it). A cap equal to the core count is `Default`'s sizing, which would be far too small for threads that mostly sit waiting on I/O."
+    },
+    {
+      "id": "d24q11",
+      "type": "output",
+      "topic": "Dispatchers.Unconfined",
+      "difficulty": "Medium",
+      "question": "What does this print?",
+      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking {\n    launch(Dispatchers.Unconfined) {\n        println(\"1\")\n        delay(10)\n        println(\"3\")\n    }\n    println(\"2\")\n}",
+      "options": [
+        "1\n2\n3",
+        "2\n1\n3",
+        "1\n3\n2",
+        "2\n3\n1"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "An `Unconfined` coroutine starts right away in the caller's thread, so `1` prints before `launch` returns. At `delay` it suspends, the parent prints `2`, and the child resumes later to print `3`. With the default dispatcher it would print `2` first."
+    },
+    {
+      "id": "d24q12",
+      "type": "mcq",
+      "topic": "Room & Retrofit",
+      "difficulty": "Medium",
+      "question": "`getUser` is a `suspend` function on a Room `@Dao`, and `fetchFeed` is a `suspend` function on a Retrofit interface. What is true about the code below?",
+      "code": "viewModelScope.launch {\n    val user = userDao.getUser(id)\n    val feed = api.fetchFeed(user.token)\n    _ui.value = UiState(user, feed)\n}",
+      "options": [
+        "It is already main-safe, so the `withContext(Dispatchers.IO)` here is redundant",
+        "It will crash with `NetworkOnMainThreadException` unless each call is wrapped in `withContext(Dispatchers.IO)`",
+        "Room's call is main-safe but Retrofit's is not, so only `fetchFeed` needs `withContext`",
+        "It only works if the ViewModel uses `Dispatchers.Unconfined`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Room runs suspend DAO queries on its own executor, and Retrofit's suspend support calls the request asynchronously through OkHttp's thread pool. Both suspend without blocking the caller, so calling them from `viewModelScope` (Main) is fine. Wrapping them in `withContext(IO)` only adds a thread hop."
+    },
+    {
+      "id": "d24q13",
+      "type": "multi",
+      "topic": "withContext semantics",
+      "difficulty": "Medium",
+      "question": "Which statements about `withContext(ctx) { ... }` are true?",
+      "options": [
+        "It returns the value of the block's last expression",
+        "The calling coroutine suspends until the block completes",
+        "If `ctx` has the same dispatcher the caller is already on, no thread switch is needed",
+        "The block keeps running after the caller's scope is cancelled",
+        "It runs the block concurrently with the code after it, like `launch`"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "`withContext` is a suspending, scoped call: the caller waits, gets the result back, and the block is a child that is cancelled together with the caller. When the dispatcher doesn't change, it skips the dispatch. To run something concurrently you need `launch` or `async`."
+    },
+    {
+      "id": "d24q14",
+      "type": "mcq",
+      "topic": "Main.immediate",
+      "difficulty": "Medium",
+      "question": "What is the difference between `Dispatchers.Main.immediate` and `Dispatchers.Main`?",
+      "options": [
+        "If already on the main thread, `Main.immediate` runs it inline instead of posting it to the queue",
+        "`Main.immediate` uses a separate high-priority UI thread",
+        "`Main.immediate` skips cancellation checks, so it is faster",
+        "`Main` runs on the main thread only while an Activity is visible, and `Main.immediate` runs all the time"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Both use the same main thread. `Main` always posts the continuation to the main Handler, so it runs only after the messages already queued. `Main.immediate` checks `isDispatchNeeded` and runs inline when it is already on the main thread, which avoids that extra round trip through the queue. `viewModelScope` and `lifecycleScope` use `Main.immediate`."
+    },
+    {
+      "id": "d24q15",
+      "type": "output",
+      "topic": "limitedParallelism",
+      "difficulty": "Hard",
+      "question": "What does this print?",
+      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking {\n    val serial = Dispatchers.Default.limitedParallelism(1)\n    var counter = 0\n    coroutineScope {\n        repeat(1000) {\n            launch(serial) { counter++ }\n        }\n    }\n    println(counter)\n}",
+      "options": [
+        "1000",
+        "A number below 1000 that changes from run to run",
+        "0",
+        "It throws `ConcurrentModificationException`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`limitedParallelism(1)` makes a view of `Default` that runs at most one of its tasks at a time, with a happens-before guarantee between them. So the plain `counter++` never races, even though the tasks may run on different pool threads. With plain `Dispatchers.Default`, updates could be lost."
+    },
+    {
+      "id": "d24q16",
+      "type": "mcq",
+      "topic": "CPU work on IO",
+      "difficulty": "Medium",
+      "question": "Why is running a heavy CPU-bound computation on `Dispatchers.IO` instead of `Default` a bad idea?",
+      "options": [
+        "`IO` allows far more threads than cores, so CPU work oversubscribes the CPU",
+        "`IO` threads run at background priority, so CPU work on them is throttled by the OS",
+        "It throws an exception, because `IO` rejects tasks that don't block",
+        "Code on `IO` can't return a value from `withContext`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "CPU-bound work can only run as fast as there are cores. `Default` caps parallelism at the core count, while `IO` lets up to 64 threads compete for the same cores. That also uses up `IO` threads that real blocking calls need. It still works, it's just inefficient."
+    },
+    {
+      "id": "d24q17",
+      "type": "multi",
+      "topic": "injecting dispatchers",
+      "difficulty": "Medium",
+      "question": "A team wants to unit-test `SyncRepository`, and the ViewModels that call it, without real background threads. Which practices help?",
+      "code": "class SyncRepository @Inject constructor(\n    private val api: SyncApi,\n    @IoDispatcher private val io: CoroutineDispatcher\n) {\n    suspend fun sync() = withContext(io) { api.pushBlocking() }\n}",
+      "options": [
+        "Inject a `CoroutineDispatcher` through the constructor, e.g. with a Hilt `@IoDispatcher` qualifier",
+        "In tests, pass a `TestDispatcher` (such as `StandardTestDispatcher`) to the constructor",
+        "Hard-code `withContext(Dispatchers.IO)` inside every method",
+        "Use `Dispatchers.setMain(testDispatcher)` in tests for code that runs on `Dispatchers.Main`",
+        "Use `GlobalScope` inside the repository so tests don't need a scope"
+      ],
+      "answer": [
+        0,
+        1,
+        3
+      ],
+      "explanation": "Injecting the dispatcher lets production use `IO` and tests use a `TestDispatcher` that controls virtual time. `viewModelScope` hard-codes `Dispatchers.Main.immediate`, so tests replace `Main` with `Dispatchers.setMain`. A hard-coded `Dispatchers.IO` can't be swapped out, and `GlobalScope` makes the work impossible to control."
+    },
+    {
+      "id": "d24q18",
+      "type": "output",
+      "topic": "Unconfined resumption",
+      "difficulty": "Hard",
+      "question": "What does this print? (`runBlocking` runs on the thread named `main`.)",
+      "code": "import kotlinx.coroutines.*\nimport java.util.concurrent.Executors\n\nfun main() {\n    val worker = Executors.newSingleThreadExecutor { Thread(it, \"worker\") }\n        .asCoroutineDispatcher()\n    runBlocking {\n        launch(Dispatchers.Unconfined) {\n            println(Thread.currentThread().name)\n            withContext(worker) { delay(10) }\n            println(Thread.currentThread().name)\n        }\n    }\n    worker.close()\n}",
+      "options": [
+        "main\nworker",
+        "main\nmain",
+        "worker\nworker",
+        "worker\nmain"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`Unconfined` starts the coroutine in the caller's thread (`main`), but it has no thread of its own to return to. When `withContext(worker)` finishes on the `worker` thread, the continuation resumes right there. A confined dispatcher would have switched back to `main`."
+    },
+    {
+      "id": "d24q19",
+      "type": "truefalse",
+      "topic": "IO elasticity",
+      "difficulty": "Hard",
+      "question": "`Dispatchers.IO.limitedParallelism(100)` can run 100 blocking calls at once, even though `Dispatchers.IO` itself is limited to 64 threads by default.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`IO` is elastic: views made with `limitedParallelism` on it are not bounded by `IO`'s own 64-thread cap, and extra threads are created as needed. That is how you give one heavy blocking dependency its own budget without starving everything else. `limitedParallelism` on `Default`, by contrast, can never exceed `Default`'s core count."
+    },
+    {
+      "id": "d24q20",
+      "type": "mcq",
+      "topic": "IO and Default share threads",
+      "difficulty": "Hard",
+      "question": "A coroutine running on `Dispatchers.IO` calls `withContext(Dispatchers.Default) { parse(json) }`. What does kotlinx.coroutines do?",
+      "options": [
+        "It may stay on the same thread, since `Default` and `IO` share one thread pool",
+        "It always hands the block to a different thread and copies `json` to it",
+        "It throws, because you can't switch from `IO` to `Default` directly",
+        "It runs the block on the main thread, since `Default` means the default UI dispatcher"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`Default` and `IO` are backed by the same scheduler, with separate limits on how many threads may be doing CPU work and how many may be doing blocking work. Switching between them often avoids a real thread hop. `Default` is the CPU pool, not the main thread."
+    }
+  ]
+}

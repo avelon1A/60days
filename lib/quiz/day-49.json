@@ -1,0 +1,350 @@
+{
+  "day": 49,
+  "topic": "Build & release: Gradle, R8, build variants & modularization",
+  "questions": [
+    {
+      "id": "d49q01",
+      "type": "mcq",
+      "topic": "settings.gradle.kts",
+      "difficulty": "Easy",
+      "question": "You add a new `:feature:search` module folder with its own `build.gradle.kts`, but Gradle ignores it. Which file must you edit?",
+      "options": [
+        "`settings.gradle.kts` (add `include(\":feature:search\")`)",
+        "The root `build.gradle.kts` (add it to `allprojects {}`)",
+        "`app/build.gradle.kts` (add it under `android {}`)",
+        "`gradle.properties` (add `modules=:feature:search`)"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "The settings file defines which projects make up the build (plus plugin and dependency repositories). The root and module build files only configure projects that settings has already included."
+    },
+    {
+      "id": "d49q02",
+      "type": "output",
+      "topic": "variants",
+      "difficulty": "Easy",
+      "question": "Android names each variant flavor + BuildType. This plain-Kotlin model builds the variant matrix. What does it print?",
+      "code": "fun main() {\n    val flavors = listOf(\"free\", \"paid\")\n    val buildTypes = listOf(\"debug\", \"release\")\n    val variants = flavors.flatMap { f ->\n        buildTypes.map { b -> f + b.replaceFirstChar { it.uppercase() } }\n    }\n    println(variants.size)\n    println(variants.joinToString())\n}",
+      "options": [
+        "4\nfreeDebug, freeRelease, paidDebug, paidRelease",
+        "4\ndebugFree, releaseFree, debugPaid, releasePaid",
+        "2\nfreeDebug, paidRelease",
+        "4\nfreeDebug, paidDebug, freeRelease, paidRelease"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`flatMap` goes through every flavor and, for each one, every build type, so you get 2 × 2 = 4 combinations with the flavor first. That is also how AGP builds variants: the product flavors times the build types, named like `freeDebug`."
+    },
+    {
+      "id": "d49q03",
+      "type": "truefalse",
+      "topic": "versionCode",
+      "difficulty": "Easy",
+      "question": "Google Play rejects an upload that reuses a `versionCode` already uploaded for that app, even if `versionName` changed.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Play uses the integer `versionCode` to identify builds and decide what counts as an update, so every upload needs a new one, and an update must be higher than the installed version. `versionName` is only a display string, so bumping it alone doesn't help."
+    },
+    {
+      "id": "d49q04",
+      "type": "mcq",
+      "topic": "implementation vs api",
+      "difficulty": "Medium",
+      "question": "`:core:network` declares `implementation(libs.okhttp)`. `:feature:home` depends on `:core:network` with `implementation(project(\":core:network\"))`. What is true?",
+      "options": [
+        "`:feature:home` can't import OkHttp classes, and OkHttp changes don't recompile it",
+        "`:feature:home` can import OkHttp classes because dependencies are transitive at compile time",
+        "OkHttp is left out of the APK because `:app` doesn't declare it",
+        "The build fails because `implementation` dependencies can't be transitive"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`implementation` keeps the dependency off consumers' compile classpath (it is still packaged at runtime), so it doesn't leak and you get compile avoidance. Use `api` only when OkHttp types show up in `:core:network`'s public API."
+    },
+    {
+      "id": "d49q05",
+      "type": "mcq",
+      "topic": "version catalog",
+      "difficulty": "Easy",
+      "question": "`gradle/libs.versions.toml` contains `androidx-core-ktx = { group = \"androidx.core\", name = \"core-ktx\", version.ref = \"coreKtx\" }`. How do you use it in a module's `build.gradle.kts`?",
+      "options": [
+        "`implementation(libs.androidx.core.ktx)`",
+        "`implementation(\"libs:androidx-core-ktx\")`",
+        "`implementation(libs[\"androidx-core-ktx\"])`",
+        "`implementation(versions.coreKtx)`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Gradle generates type-safe accessors from the catalog, and the dashes in an alias become dots. Neither the string coordinate form nor a version reference adds the library."
+    },
+    {
+      "id": "d49q06",
+      "type": "multi",
+      "topic": "keep rules",
+      "difficulty": "Medium",
+      "question": "Your release build uses R8. Which of these need keep rules (from you or a library) to keep working? Select all that apply.",
+      "options": [
+        "A class loaded with `Class.forName(\"com.app.plugins.PdfPlugin\")`",
+        "Fields of a model that Gson fills by reflection from JSON field names",
+        "A Kotlin method that native C++ code calls through JNI by name",
+        "A private helper function that is only called directly from other Kotlin code",
+        "A `sealed` class that is only used in an exhaustive `when`"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "R8 can only follow references it can see in bytecode. Names looked up by string through reflection, reflection-based serialization or JNI look unused, so they get removed or renamed. Code that is called directly is traced correctly and needs no rule."
+    },
+    {
+      "id": "d49q07",
+      "type": "mcq",
+      "topic": "mapping.txt",
+      "difficulty": "Easy",
+      "question": "A Crashlytics report from your release build shows `at a.b.c(Unknown Source:12)`. What do you need to get a readable stack trace?",
+      "options": [
+        "The `mapping.txt` R8 generated for that exact build, uploaded or used with retrace",
+        "The `mapping.txt` from today's build of `main`, since R8 renames classes the same way each time",
+        "A debug build installed on the user's device",
+        "Turning off obfuscation and asking the user to reproduce it"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "R8's renaming changes from build to build, so only the mapping file from the build that crashed can decode it. That's why CI should archive or upload `mapping.txt` for every release."
+    },
+    {
+      "id": "d49q08",
+      "type": "truefalse",
+      "topic": "shrink resources",
+      "difficulty": "Medium",
+      "question": "In a release build type you can set `isShrinkResources = true` while leaving `isMinifyEnabled = false`.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "The resource shrinker relies on code shrinking to find out which resources are still referenced, so AGP fails the build if you enable resource shrinking without `isMinifyEnabled = true`."
+    },
+    {
+      "id": "d49q09",
+      "type": "mcq",
+      "topic": "flavor dimensions",
+      "difficulty": "Medium",
+      "question": "An app has `flavorDimensions += listOf(\"tier\", \"env\")`, flavors `free`/`paid` (tier) and `dev`/`prod` (env), and the build types `debug` and `release`. How many build variants are there?",
+      "options": [
+        "8",
+        "4",
+        "6",
+        "16"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "The variant count is the product of each dimension's flavors times the build types: 2 × 2 × 2 = 8, for example `freeDevDebug` or `paidProdRelease`. Dimensions multiply, they don't add."
+    },
+    {
+      "id": "d49q10",
+      "type": "output",
+      "topic": "versionCode",
+      "difficulty": "Medium",
+      "question": "A team computes `versionCode` from semantic versions. What does this print?",
+      "code": "fun code(major: Int, minor: Int, patch: Int) =\n    major * 10_000 + minor * 100 + patch\n\nfun main() {\n    val codes = listOf(code(1, 9, 0), code(1, 10, 0), code(2, 0, 1))\n    println(codes)\n    println(codes.zipWithNext().all { (a, b) -> b > a })\n    println(\"1.10.0\" > \"1.9.0\")\n}",
+      "options": [
+        "[10900, 11000, 20001]\ntrue\nfalse",
+        "[10900, 11000, 20001]\ntrue\ntrue",
+        "[10900, 1100, 20001]\nfalse\nfalse",
+        "[10900, 11000, 20001]\nfalse\nfalse"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "The integer formula always grows from 1.9.0 to 1.10.0 to 2.0.1. Comparing the strings `\"1.10.0\" > \"1.9.0\"` checks characters one by one, and `'1' < '9'`, so it gives `false`. That's why ordering must use `versionCode`, not `versionName`."
+    },
+    {
+      "id": "d49q11",
+      "type": "multi",
+      "topic": "app bundles",
+      "difficulty": "Medium",
+      "question": "Which statements about Android App Bundles (AAB) are correct? Select all that apply.",
+      "options": [
+        "Play generates optimized split APKs from the bundle, so a device downloads only the code and resources for its ABI, screen density and language",
+        "New apps published on Google Play must be uploaded as AABs, not APKs",
+        "You can't `adb install` an `.aab` directly; `bundletool` (or Play) turns it into installable APKs",
+        "Uploading an AAB means you no longer have to increase `versionCode`",
+        "An AAB doesn't need to be signed because Play signs it"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "An AAB is a publishing format: Play builds and signs split APKs for each device configuration. You still sign the bundle with your upload key, and `versionCode` must still go up."
+    },
+    {
+      "id": "d49q12",
+      "type": "mcq",
+      "topic": "play app signing",
+      "difficulty": "Easy",
+      "question": "Your app uses Play App Signing and a developer has lost the upload keystore. What happens?",
+      "options": [
+        "Google's app signing key is safe; you request an upload key reset and use the new key",
+        "The app can never be updated again and must be published under a new package name",
+        "You re-sign with the debug keystore, since Play re-signs every upload with the app signing key anyway",
+        "Play generates a new app signing key, so existing users must reinstall"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "With Play App Signing, Google keeps the key that signs what users install, and you only sign uploads with an upload key. A lost upload key can be reset, while users keep getting updates signed with the same app signing key."
+    },
+    {
+      "id": "d49q13",
+      "type": "truefalse",
+      "topic": "applicationIdSuffix",
+      "difficulty": "Easy",
+      "question": "Setting `applicationIdSuffix = \".debug\"` on the debug build type lets the debug and release builds be installed side by side on the same device.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "The suffix changes the final application ID, for example `com.app.debug`, and Android treats that as a different app. The code's `namespace` (the R and BuildConfig package) stays the same."
+    },
+    {
+      "id": "d49q14",
+      "type": "mcq",
+      "topic": "module graph",
+      "difficulty": "Medium",
+      "question": "`:feature:search` needs to open a profile screen that lives in `:feature:profile`. Following the usual modularization rules, what should you do?",
+      "options": [
+        "Expose a callback like `onOpenProfile(id)` from `:feature:search` and let `:app` wire it to the profile route",
+        "Add `implementation(project(\":feature:profile\"))` to `:feature:search`",
+        "Make both features depend on each other with `api` so they can share screens",
+        "Move the profile screen into `:core:common` so every feature can reach it without depending on another feature"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Feature modules shouldn't depend on each other: that couples them and limits parallel and incremental builds. The `:app` module (or a shared navigation contract) connects them, and core modules shouldn't absorb feature UI."
+    },
+    {
+      "id": "d49q15",
+      "type": "multi",
+      "topic": "dependency configurations",
+      "difficulty": "Medium",
+      "question": "Which statements about Gradle dependency configurations are correct? Select all that apply.",
+      "options": [
+        "`testImplementation` adds a library (e.g. MockK) only to the local unit test source set",
+        "`compileOnly` makes a library available when compiling but doesn't package it into the APK",
+        "`runtimeOnly` lets your code reference the library's classes at compile time",
+        "`api` should be the default choice because it makes dependency graphs simpler"
+      ],
+      "answer": [
+        0,
+        1
+      ],
+      "explanation": "`runtimeOnly` is the opposite of `compileOnly`: the library is packaged but not visible to the compiler. Defaulting to `api` leaks dependencies to every consumer and makes more modules recompile, so `implementation` is the right default."
+    },
+    {
+      "id": "d49q16",
+      "type": "mcq",
+      "topic": "convention plugins",
+      "difficulty": "Medium",
+      "question": "Twelve Android library modules each repeat the same `compileSdk`, `minSdk`, Kotlin JVM target and lint settings. What is the recommended fix?",
+      "options": [
+        "A convention plugin in an included `build-logic` build, applied by ID in each module",
+        "Move the block into `allprojects {}` or `subprojects {}` in the root build file, so it's applied once",
+        "Keep copy-pasting, since Gradle caches identical blocks",
+        "Put the settings in `gradle.properties` as `android.compileSdk=...`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Convention plugins keep shared config in one typed, testable place, and each module opts in explicitly. Cross-project configuration through `allprojects`/`subprojects` couples projects and conflicts with project isolation, and `gradle.properties` has no such Android DSL keys."
+    },
+    {
+      "id": "d49q17",
+      "type": "mcq",
+      "topic": "buildConfigField",
+      "difficulty": "Hard",
+      "question": "You add `buildConfigField(\"String\", \"API_URL\", \"\\\"https://dev.api\\\"\")` to the `dev` flavor, but `BuildConfig.API_URL` doesn't resolve. On current AGP, what's the most likely cause?",
+      "options": [
+        "`BuildConfig` isn't generated unless you set `buildFeatures { buildConfig = true }`",
+        "`buildConfigField` only works inside build types, so flavor fields are silently dropped",
+        "The value must not be wrapped in escaped quotes",
+        "You must use `resValue` for strings instead"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Recent AGP versions don't generate `BuildConfig` unless you opt in with `buildFeatures.buildConfig`. `buildConfigField` works in flavors and build types, and String values do need the inner escaped quotes because they're pasted into Java source."
+    },
+    {
+      "id": "d49q18",
+      "type": "multi",
+      "topic": "build speed",
+      "difficulty": "Hard",
+      "question": "A large multi-module project has slow builds. Which changes usually make them faster? Select all that apply.",
+      "options": [
+        "Turning on the Gradle configuration cache so the configuration phase can be reused",
+        "Migrating Room/Hilt annotation processing from kapt to KSP",
+        "Switching `api` to `implementation` where a dependency's types aren't exposed",
+        "Turning on `isMinifyEnabled` for the debug build type",
+        "Making every feature depend on one big `:core` module through `api`"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "The configuration cache skips reconfiguration, KSP avoids kapt's Java stub generation, and `implementation` shrinks recompilation fan-out. R8 in debug adds a slow step, and one large `api` hub makes almost every change recompile everything."
+    },
+    {
+      "id": "d49q19",
+      "type": "mcq",
+      "topic": "consumer rules",
+      "difficulty": "Hard",
+      "question": "Your Android library loads its parser classes by reflection. Apps that use it crash in release builds with `ClassNotFoundException`. What's the correct fix in the library?",
+      "options": [
+        "Ship the keep rules via `consumerProguardFiles(\"consumer-rules.pro\")` so the app's R8 applies them",
+        "Add the rules to the library's own `proguardFiles(...)` in its release build type, so the AAR keeps those classes",
+        "Set `isMinifyEnabled = false` in the library module",
+        "Tell every app to turn off R8"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Apps usually shrink the library code themselves. Only consumer rules bundled in the AAR reach the app's R8 configuration. The library's own `proguardFiles` apply only when the library itself is minified and aren't passed on to apps."
+    },
+    {
+      "id": "d49q20",
+      "type": "truefalse",
+      "topic": "r8 full mode",
+      "difficulty": "Hard",
+      "question": "On current AGP versions R8 runs in full mode by default. Full mode is more aggressive than ProGuard-compatible mode, so code that only works through reflection (such as default constructors used by a serializer) can break unless you keep it explicitly.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Full mode became the default and drops some of ProGuard's lenient assumptions, for example implicitly keeping default constructors or attributes for classes that are only kept by name. Reflection-based code often needs more precise keep rules after upgrading."
+    }
+  ]
+}

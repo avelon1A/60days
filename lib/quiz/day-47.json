@@ -1,0 +1,356 @@
+{
+  "day": 47,
+  "topic": "Testing: JUnit, MockK, Turbine & Compose UI tests",
+  "questions": [
+    {
+      "id": "d47q01",
+      "type": "mcq",
+      "topic": "test pyramid",
+      "difficulty": "Easy",
+      "question": "You write tests for a pure-Kotlin `PriceFormatter` class that has no Android dependencies. Where should they live?",
+      "options": [
+        "In `src/test`, as local unit tests that run on the JVM of your machine",
+        "In `src/androidTest`, because every class in an Android app must be tested on a device",
+        "In `src/androidTest` as Espresso tests, so the formatting is checked on real hardware",
+        "In `src/main`, next to the class, marked `@VisibleForTesting`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Code with no Android dependencies belongs at the base of the test pyramid: local JVM tests in `src/test`, which are fast and need no emulator. `androidTest` is for instrumented tests that really need a device, and they are slower and more expensive."
+    },
+    {
+      "id": "d47q02",
+      "type": "output",
+      "topic": "state equality",
+      "difficulty": "Easy",
+      "question": "A test compares UI states with `==`, which is what `assertEquals` uses. What does this print?",
+      "code": "data class UiState(val loading: Boolean, val items: List<String>)\nclass PlainState(val loading: Boolean)\n\nfun main() {\n    val expected = UiState(false, listOf(\"a\"))\n    val actual = UiState(false, mutableListOf(\"a\"))\n    println(expected == actual)\n    println(PlainState(false) == PlainState(false))\n}",
+      "options": [
+        "true\nfalse",
+        "false\nfalse",
+        "true\ntrue",
+        "false\ntrue"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A data class compares its properties, and lists are equal when their elements are equal, whatever the implementation (`listOf` vs `mutableListOf`). A plain class keeps reference equality, so two separate instances are not equal. That is why UI state is usually a data class: `assertEquals` on it works."
+    },
+    {
+      "id": "d47q03",
+      "type": "truefalse",
+      "topic": "robolectric",
+      "difficulty": "Easy",
+      "question": "True or false: Robolectric lets a test that uses Android framework classes such as `Context` or `SharedPreferences` run in `src/test` on the local JVM without an emulator, and screenshot tools such as Roborazzi build on it.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Robolectric simulates the Android framework on the JVM, so it sits between plain unit tests and instrumented tests. Roborazzi runs on top of it to record and compare screenshots against golden images with no device."
+    },
+    {
+      "id": "d47q04",
+      "type": "mcq",
+      "topic": "fakes vs mocks",
+      "difficulty": "Medium",
+      "question": "A `NewsViewModel` depends on a `NewsRepository` interface. Which test double is a fake, the kind Android's testing guidance prefers for repositories?",
+      "options": [
+        "`FakeNewsRepository`, a small in-memory implementation whose `save()` changes what `observeNews()` emits",
+        "`mockk<NewsRepository>()` with `coEvery { repo.getNews() } returns listOf(article)`",
+        "A class whose `getNews()` always returns the same hard-coded list and ignores every input",
+        "`spyk(RealNewsRepository(api, dao))`, which wraps the real repository and records every call made to it"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A fake really works, just in a simpler way (in memory instead of network and disk), so tests check behaviour instead of exact calls. The hard-coded class is a stub, the `mockk` is a mock tied to specific call expectations, and a spy still runs the real code."
+    },
+    {
+      "id": "d47q05",
+      "type": "mcq",
+      "topic": "coEvery",
+      "difficulty": "Easy",
+      "question": "`UserRepo` declares `suspend fun getUser(id: String): User`. How do you stub it with MockK?",
+      "options": [
+        "`coEvery { repo.getUser(\"42\") } returns User(\"42\", \"Ann\")`",
+        "`every { repo.getUser(\"42\") } returns User(\"42\", \"Ann\")`",
+        "`whenever(repo.getUser(\"42\")).thenReturn(User(\"42\", \"Ann\"))`",
+        "`every { repo.getUser(\"42\") } coReturns User(\"42\", \"Ann\")`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "The `every` block is not a suspend lambda, so calling a suspend function inside it does not compile. MockK provides `coEvery` (and `coVerify`) for suspend functions. `whenever` is Mockito-Kotlin syntax, not MockK."
+    },
+    {
+      "id": "d47q06",
+      "type": "multi",
+      "topic": "relaxed mocks",
+      "difficulty": "Medium",
+      "question": "Given `val analytics = mockk<Analytics>(relaxed = true)`, which statements are true? Select all that apply.",
+      "options": [
+        "Calling a method you never stubbed returns a simple default value (0, an empty string, an empty list or a child mock) instead of throwing",
+        "You can still check calls with `verify { analytics.log(\"login\") }`",
+        "On a plain `mockk<Analytics>()`, calling a method that was never stubbed throws a `MockKException`",
+        "A relaxed mock cannot be stubbed with `every { }` any more",
+        "`relaxed = true` makes unstubbed calls run the real implementation of the class"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "Relaxed mocks return defaults for unstubbed calls but still record calls and still accept `every` stubs. Plain mocks are strict and throw on unstubbed calls. Running the real code is what `spyk` does, not `relaxed`."
+    },
+    {
+      "id": "d47q07",
+      "type": "truefalse",
+      "topic": "mocking final classes",
+      "difficulty": "Easy",
+      "question": "True or false: in a local JVM unit test, MockK can mock an ordinary final Kotlin class (not `open`, no all-open plugin) without any extra setup.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Kotlin classes are final by default, and MockK was built for this: on the JVM it uses inline bytecode instrumentation, so `mockk<FinalClass>()` just works. Older Mockito setups needed `mockito-inline` or `open` classes for this."
+    },
+    {
+      "id": "d47q08",
+      "type": "truefalse",
+      "topic": "virtual time",
+      "difficulty": "Easy",
+      "question": "True or false: a `runTest { }` test whose body calls `delay(60_000)` takes about a minute of real time to finish.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "`runTest` runs on a `TestCoroutineScheduler` with virtual time. A `delay` on the test dispatcher moves the virtual clock forward (so `currentTime` becomes 60000) and returns immediately. It does not wait in real time."
+    },
+    {
+      "id": "d47q09",
+      "type": "output",
+      "topic": "fake + naming",
+      "difficulty": "Medium",
+      "question": "A hand-written fake and a Given-When-Then test name. What does this print?",
+      "code": "interface CartRepo {\n    fun add(item: String)\n    fun items(): List<String>\n}\n\nclass FakeCartRepo : CartRepo {\n    private val stored = mutableListOf<String>()\n    var addCalls = 0\n    override fun add(item: String) {\n        addCalls++\n        if (item !in stored) stored += item\n    }\n    override fun items() = stored.toList()\n}\n\nfun `given empty cart when same item added twice then stored once`() {\n    val repo = FakeCartRepo()\n    repo.add(\"apple\"); repo.add(\"apple\")\n    println(\"${repo.items()} ${repo.addCalls}\")\n}\n\nfun main() = `given empty cart when same item added twice then stored once`()",
+      "options": [
+        "[apple] 2",
+        "[apple, apple] 2",
+        "[apple] 1",
+        "Compile error: function names cannot contain spaces"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "On the JVM, backtick names with spaces are legal, which is why local tests often use Given-When-Then sentences as names. The fake counts both calls (`addCalls = 2`) but stores `apple` only once, just as the real repository would. A fake can show both behaviour and call counts."
+    },
+    {
+      "id": "d47q10",
+      "type": "mcq",
+      "topic": "StandardTestDispatcher",
+      "difficulty": "Hard",
+      "question": "What happens when this test runs?",
+      "code": "@Test\nfun counterIncrements() = runTest {\n    var count = 0\n    launch { count++ }\n    assertEquals(1, count)\n}",
+      "options": [
+        "It fails with expected 1 but was 0, because the launched coroutine is only queued",
+        "It passes, because `launch` inside `runTest` runs its body right away on the test thread",
+        "It is flaky, because the launched coroutine races the assertion on another thread",
+        "It fails with `UncompletedCoroutinesError` because the child coroutine never runs"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`StandardTestDispatcher` queues new coroutines on the scheduler instead of starting them right away. The assertion runs first and sees 0; `advanceUntilIdle()` or `runCurrent()` before it would run the child. Everything runs on one thread, so the result is deterministic, not flaky. The queued child would run before `runTest` finishes, so the error is a failed assertion, not an uncompleted coroutine."
+    },
+    {
+      "id": "d47q11",
+      "type": "mcq",
+      "topic": "MainDispatcherRule",
+      "difficulty": "Easy",
+      "question": "A local test of a ViewModel that launches in `viewModelScope` crashes with \"Module with the Main dispatcher had failed to initialize\". What is the standard fix?",
+      "options": [
+        "A JUnit `MainDispatcherRule` that calls `Dispatchers.setMain(testDispatcher)` and later `resetMain()`",
+        "Move the test to `androidTest`, since `Dispatchers.Main` only exists with a real Android main looper",
+        "Change the ViewModel to launch in `GlobalScope` so it no longer needs `Dispatchers.Main`",
+        "Wrap the test body in `runBlocking(Dispatchers.Main)`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`viewModelScope` uses `Dispatchers.Main.immediate`, and there is no Android main looper on the plain JVM. `setMain` swaps in a test dispatcher, and `resetMain` restores it so later tests are not affected. A rule keeps this boilerplate out of each test. The other options either avoid the problem or make the production code worse."
+    },
+    {
+      "id": "d47q12",
+      "type": "multi",
+      "topic": "slot capture",
+      "difficulty": "Medium",
+      "question": "`onSubmit(\"ann\")` calls `repo.save(User(\"ann\"))` (a suspend function) once in `viewModelScope`. Which statements are true after the code below? Select all that apply.",
+      "code": "val repo = mockk<UserRepo>()\nval saved = slot<User>()\ncoEvery { repo.save(capture(saved)) } just Runs\n\nval vm = SignUpViewModel(repo)\nvm.onSubmit(\"ann\")\nadvanceUntilIdle()",
+      "options": [
+        "`saved.captured` equals `User(\"ann\")`",
+        "`coVerify(exactly = 1) { repo.save(any()) }` passes",
+        "Writing `every { repo.save(capture(saved)) } just Runs` instead would work the same way",
+        "A `slot` keeps a list of every argument, so `saved.captured` is a `List<User>`"
+      ],
+      "answer": [
+        0,
+        1
+      ],
+      "explanation": "`capture(slot)` stores the argument of the matched call, so you can assert on it later. `coVerify` checks suspend calls. `every` would not compile because `save` is a suspend function. A slot keeps a single value (the last capture). To keep every argument you capture into a `mutableListOf<User>()`."
+    },
+    {
+      "id": "d47q13",
+      "type": "mcq",
+      "topic": "advanceTimeBy",
+      "difficulty": "Hard",
+      "question": "In this test, what is `done` when it is printed?",
+      "code": "@Test\nfun t() = runTest {\n    var done = false\n    launch {\n        delay(1_000)\n        done = true\n    }\n    advanceTimeBy(1_000)\n    println(done)\n}",
+      "options": [
+        "`false`: `advanceTimeBy(1_000)` doesn't run the task scheduled at exactly 1000",
+        "`true`: the clock reached 1000, so the resumed coroutine has run",
+        "`false`: `launch` on a `StandardTestDispatcher` never starts until `advanceUntilIdle()` is called",
+        "It throws, because `advanceTimeBy` can only be called from a `backgroundScope` coroutine"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`advanceTimeBy(n)` moves the virtual clock to `currentTime + n` and runs everything scheduled strictly before that time. The task at exactly 1000 is left for `runCurrent()`. The coroutine did start (it was scheduled at time 0 and ran up to its `delay`), so the \"never starts\" explanation is wrong."
+    },
+    {
+      "id": "d47q14",
+      "type": "mcq",
+      "topic": "room in-memory db",
+      "difficulty": "Medium",
+      "question": "Why do DAO tests usually build the database with `Room.inMemoryDatabaseBuilder(context, AppDb::class.java)` and close it in `@After`?",
+      "options": [
+        "Each test gets a fresh, isolated database that vanishes on close, and real SQL still runs on SQLite",
+        "An in-memory database replaces the DAO with a mock, so no SQL actually runs",
+        "It removes the need for an Android `Context`, so the test runs on the plain JVM without Robolectric or a device",
+        "It skips Room's compile-time query checks, which makes the tests build faster"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "The in-memory database keeps no file, so there is no leftover state between tests and no cleanup step, and your queries still run on real SQLite. This builder still takes a `Context` and uses Android's SQLite, so it runs as an instrumented test or under Robolectric. Query checking happens at build time, whatever builder you use."
+    },
+    {
+      "id": "d47q15",
+      "type": "mcq",
+      "topic": "testing StateFlow",
+      "difficulty": "Medium",
+      "question": "The test sets up `fakeRepo` to emit `listOf(\"a\")`, then checks `vm.state.value`. The assertion fails because `state` is still `UiState.Empty`. What fixes it?",
+      "code": "val state = repo.results()\n    .map { UiState(it) }\n    .stateIn(\n        viewModelScope,\n        SharingStarted.WhileSubscribed(5_000),\n        UiState.Empty\n    )",
+      "options": [
+        "Start a subscriber first: `backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect {} }`",
+        "Call `advanceUntilIdle()` before reading `vm.state.value`, so the queued `stateIn` upstream gets to emit",
+        "Add `Thread.sleep(100)` before the assertion to let the upstream catch up",
+        "Read `vm.state.value` twice, since the first read of a `WhileSubscribed` flow only starts the upstream"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "With `WhileSubscribed`, the upstream only runs while something collects, and reading `.value` does not count as collecting. A collector in `backgroundScope` starts sharing and is cancelled when the test ends. `advanceUntilIdle()` alone has nothing to run because the upstream never started."
+    },
+    {
+      "id": "d47q16",
+      "type": "mcq",
+      "topic": "injecting dispatchers",
+      "difficulty": "Hard",
+      "question": "This repository is tested with `runTest { repo.refresh() }`. What happens, and what is the usual fix?",
+      "code": "class FeedRepository(private val api: FeedApi) {\n    suspend fun refresh() = withContext(Dispatchers.IO) {\n        delay(30_000) // retry backoff\n        api.fetch()\n    }\n}",
+      "options": [
+        "It waits 30 real seconds, as `Dispatchers.IO` is outside virtual time; inject the dispatcher instead",
+        "`runTest` skips every `delay`, on any dispatcher, so the test finishes immediately and needs no change",
+        "It deadlocks, because `withContext(Dispatchers.IO)` cannot be called from `runTest`",
+        "It fails right away, because `Dispatchers.IO` must be replaced with `Dispatchers.setMain` first"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Virtual time only applies to coroutines that run on the test scheduler. Hard-coding `Dispatchers.IO` moves the work to real threads with a real clock, which makes the test slow and can make it flaky. Taking the dispatcher as a constructor parameter (default `Dispatchers.IO`) lets the test share the `runTest` scheduler. `setMain` only replaces `Main`."
+    },
+    {
+      "id": "d47q17",
+      "type": "truefalse",
+      "topic": "turbine",
+      "difficulty": "Medium",
+      "question": "True or false: in Turbine's `flow.test { assertEquals(Loading, awaitItem()) }`, if the flow has already emitted a second item that the block never consumes, the test fails at the end of the block unless you call `cancelAndIgnoreRemainingEvents()`.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "When the `test` block ends, Turbine cancels collection and checks that every received event was consumed, failing with an unconsumed-events error if not. `cancelAndIgnoreRemainingEvents()` is the explicit way to say the rest does not matter."
+    },
+    {
+      "id": "d47q18",
+      "type": "multi",
+      "topic": "compose ui tests",
+      "difficulty": "Medium",
+      "question": "Which statements about Compose UI tests are true? Select all that apply.",
+      "options": [
+        "`createComposeRule()` lets you call `composeTestRule.setContent { LoginScreen() }` to test a composable without writing your own Activity",
+        "`onNodeWithText(\"Login\").performClick()` finds the node in the semantics tree and clicks it",
+        "`assertIsDisplayed()` checks that the node is actually visible on screen, while `assertExists()` only checks that it is in the tree",
+        "After `performClick()` you need a `Thread.sleep()` before asserting, so recomposition has time to finish",
+        "Finders like `onNodeWithTag` look nodes up by their XML `R.id` values"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "Compose tests query the semantics tree, not view IDs. `testTag` provides an identifier for `onNodeWithTag`. The test rule syncs with the UI automatically and waits for recomposition and idle before assertions, so manual sleeps are unnecessary and cause flakiness."
+    },
+    {
+      "id": "d47q19",
+      "type": "mcq",
+      "topic": "useUnmergedTree",
+      "difficulty": "Hard",
+      "question": "Why does this assertion fail with \"no node found\", and what fixes it?",
+      "code": "composeTestRule.setContent {\n    Button(onClick = {}) {\n        Text(\"Save\", Modifier.testTag(\"saveLabel\"))\n    }\n}\ncomposeTestRule\n    .onNodeWithTag(\"saveLabel\")\n    .assertIsDisplayed()",
+      "options": [
+        "`Button` merges child semantics, so the tagged `Text` isn't a separate node; use `useUnmergedTree = true`",
+        "A `testTag` only works on layout composables like `Box`, so move the tag to a `Box` wrapping the `Text`",
+        "`onNodeWithTag` looks tags up in `R.id`, so `saveLabel` must be declared as an id in `res/values/ids.xml`",
+        "The Button is not composed until `waitForIdle()` is called, so call it before the finder"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Finders search the merged semantics tree by default. A clickable `Button` merges its descendants, and test tags are never passed up to the parent, so no node has the tag `saveLabel`. `useUnmergedTree = true` searches the raw tree. `onNodeWithText(\"Save\")` would match the merged button."
+    },
+    {
+      "id": "d47q20",
+      "type": "multi",
+      "topic": "flaky tests",
+      "difficulty": "Medium",
+      "question": "Which of these are likely to make a test flaky? Select all that apply.",
+      "options": [
+        "The cache-staleness check reads `System.currentTimeMillis()` directly",
+        "The repository uses a real `Dispatchers.IO`, and the test calls `Thread.sleep(500)` to wait for it",
+        "Tests change a shared singleton held in a `companion object` and never reset it",
+        "The repository gets a fake `Clock` and a test dispatcher through its constructor",
+        "Each DAO test builds a fresh in-memory Room database in `@Before`"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "Real time, real threads and shared mutable state make results depend on machine speed or test order. Injecting a clock and dispatcher makes time controllable, and a fresh database per test keeps tests isolated, so those two make tests more deterministic, not less."
+    }
+  ]
+}

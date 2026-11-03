@@ -1,0 +1,357 @@
+{
+  "day": 48,
+  "topic": "Performance: memory leaks, ANRs, startup & baseline profiles",
+  "questions": [
+    {
+      "id": "d48q01",
+      "type": "mcq",
+      "topic": "static leak",
+      "difficulty": "Easy",
+      "question": "The user presses Back, finishing `MainActivity`, but the app process stays alive. What is the consequence of this code?",
+      "code": "object SessionTracker {\n    var screen: Context? = null\n}\n\nclass MainActivity : AppCompatActivity() {\n    override fun onCreate(savedInstanceState: Bundle?) {\n        super.onCreate(savedInstanceState)\n        SessionTracker.screen = this\n    }\n}",
+      "options": [
+        "The finished `MainActivity` and its views stay in memory because the singleton still references them",
+        "Nothing, because the garbage collector clears singleton fields when the Activity that set them is destroyed",
+        "The app crashes with `IllegalStateException` the next time `SessionTracker.screen` is read",
+        "Only the `Context` part is retained, while the Activity's views are freed"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "An `object` lives as long as the process, so its field is a strong reference from a GC root to the finished Activity, which in turn holds all its Views. Store `applicationContext` instead, or clear the field in `onDestroy`."
+    },
+    {
+      "id": "d48q02",
+      "type": "truefalse",
+      "topic": "anr basics",
+      "difficulty": "Easy",
+      "question": "An input-dispatch ANR is reported when the app hasn't responded to an input event (a tap or key press) within about 5 seconds because its main thread is blocked.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Input events are delivered to the main thread, and if it can't handle one for about 5 seconds the system shows the \"App isn't responding\" dialog. That's why disk, network and long computations belong off the main thread."
+    },
+    {
+      "id": "d48q03",
+      "type": "output",
+      "topic": "lazy init",
+      "difficulty": "Easy",
+      "question": "Deferring work with `lazy` is a common startup trick. What does this print?",
+      "code": "class Analytics {\n    init { println(\"Analytics init\") }\n    fun log(e: String) = println(\"log $e\")\n}\n\nobject App {\n    val analytics by lazy { Analytics() }\n}\n\nfun main() {\n    println(\"onCreate\")\n    println(\"first frame\")\n    App.analytics.log(\"click\")\n    App.analytics.log(\"scroll\")\n}",
+      "options": [
+        "onCreate\nfirst frame\nAnalytics init\nlog click\nlog scroll",
+        "Analytics init\nonCreate\nfirst frame\nlog click\nlog scroll",
+        "onCreate\nfirst frame\nAnalytics init\nlog click\nAnalytics init\nlog scroll",
+        "onCreate\nAnalytics init\nfirst frame\nlog click\nlog scroll"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A `lazy` initializer runs only on the first access to `analytics`, after the first frame, and the value is cached after that. Nothing runs at startup just because the property is declared."
+    },
+    {
+      "id": "d48q04",
+      "type": "mcq",
+      "topic": "startup types",
+      "difficulty": "Easy",
+      "question": "The system killed your app's process while it was in the background. The user then taps the launcher icon. Which kind of startup is this?",
+      "options": [
+        "Cold start",
+        "Warm start",
+        "Hot start",
+        "Lukewarm start"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "With no process left, the system must create the process, run `Application.onCreate`, and create the Activity from scratch, which is a cold start. In a warm start the process still exists but the Activity is recreated, and in a hot start the existing Activity is just brought to the foreground."
+    },
+    {
+      "id": "d48q05",
+      "type": "truefalse",
+      "topic": "leakcanary setup",
+      "difficulty": "Easy",
+      "question": "LeakCanary should be added as an `implementation` dependency so that it also runs in release builds and catches leaks in production.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "LeakCanary is added with `debugImplementation`. Dumping and analysing the heap freezes the app and uses a lot of memory, so it's a development tool and doesn't belong in release builds."
+    },
+    {
+      "id": "d48q06",
+      "type": "mcq",
+      "topic": "frame budget",
+      "difficulty": "Easy",
+      "question": "On a 120Hz display, roughly how much time does the app have to produce each frame to avoid jank?",
+      "options": [
+        "About 8.3 ms",
+        "About 16.7 ms",
+        "About 33 ms",
+        "About 5 ms"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "The budget is 1000 ms divided by the refresh rate: about 16.7 ms at 60Hz, 11.1 ms at 90Hz and 8.3 ms at 120Hz. Code that fits the 16 ms rule can still drop frames on high refresh rate screens."
+    },
+    {
+      "id": "d48q07",
+      "type": "truefalse",
+      "topic": "strictmode",
+      "difficulty": "Easy",
+      "question": "A `StrictMode.ThreadPolicy` with `detectDiskReads()`, `detectDiskWrites()` and `detectNetwork()` flags those operations on the main thread, and it is normally enabled only in debug builds.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "StrictMode catches accidental main-thread I/O during development, before it turns into jank or ANRs, and can log, flash the screen or crash. It's usually set up in `Application.onCreate` behind a debug check."
+    },
+    {
+      "id": "d48q08",
+      "type": "multi",
+      "topic": "anr causes",
+      "difficulty": "Medium",
+      "question": "Which of these can cause an ANR? Select all that apply.",
+      "options": [
+        "Reading a large file synchronously inside a click handler",
+        "Calling `commit()` on a large `SharedPreferences` file from `onClick`",
+        "The main thread entering `synchronized(lock)` while a background thread holds that lock for 10 seconds",
+        "A ViewModel collecting a Flow that reads the file with `flowOn(Dispatchers.IO)`",
+        "Enqueuing a WorkManager job that runs for five minutes"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "Anything that blocks the main thread can cause an ANR: synchronous disk I/O, `commit()` (which writes to disk synchronously, unlike `apply()`), or waiting on a lock held by another thread. Work moved to `Dispatchers.IO` or into WorkManager runs off the main thread."
+    },
+    {
+      "id": "d48q09",
+      "type": "mcq",
+      "topic": "fragment binding",
+      "difficulty": "Medium",
+      "question": "`FeedFragment` is replaced by `DetailFragment` and stays on the back stack. What is wrong with how it holds its binding?",
+      "code": "class FeedFragment : Fragment(R.layout.feed) {\n    private var binding: FeedBinding? = null\n\n    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {\n        binding = FeedBinding.bind(view)\n        binding?.list?.adapter = FeedAdapter()\n    }\n}",
+      "options": [
+        "The Fragment outlives its view, so `binding` leaks the old views. Set it to `null` in `onDestroyView`",
+        "Nothing, because the binding is cleared automatically when the Fragment is paused",
+        "It should be set to `null` in `onDestroy`, which runs as soon as the Fragment goes to the back stack",
+        "The app crashes when the user goes back, because `bind()` can't be called twice on a Fragment"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A Fragment on the back stack goes through `onDestroyView` but not `onDestroy`, so its view lifecycle is shorter than the Fragment's. Holding the binding past `onDestroyView` leaks the whole detached view tree, and `onDestroy` only runs later, when the Fragment itself is removed."
+    },
+    {
+      "id": "d48q10",
+      "type": "output",
+      "topic": "downsampling",
+      "difficulty": "Medium",
+      "question": "This is the classic power-of-two `inSampleSize` calculation used to decode a smaller Bitmap. What does it print?",
+      "code": "fun inSampleSize(w: Int, h: Int, reqW: Int, reqH: Int): Int {\n    var size = 1\n    if (h > reqH || w > reqW) {\n        val halfH = h / 2\n        val halfW = w / 2\n        while (halfH / size >= reqH && halfW / size >= reqW) {\n            size *= 2\n        }\n    }\n    return size\n}\n\nfun main() {\n    println(inSampleSize(4000, 3000, 500, 500))\n    println(inSampleSize(400, 300, 500, 500))\n}",
+      "options": [
+        "4\n1",
+        "8\n1",
+        "2\n1",
+        "4\n0"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "For 4000x3000 the halves are 2000x1500. The loop doubles `size` while both halves divided by it stay at least 500 (size 2 gives 1000x750, size 4 gives 500x375, which fails), so it returns 4. A 400x300 image is already smaller than the request, so the loop never runs and `size` stays 1."
+    },
+    {
+      "id": "d48q11",
+      "type": "mcq",
+      "topic": "leakcanary detection",
+      "difficulty": "Medium",
+      "question": "How does LeakCanary decide that a destroyed Activity has leaked?",
+      "options": [
+        "It weakly references the destroyed Activity, forces a GC, and dumps the heap if it's still not cleared",
+        "It counts live Activity instances through `ActivityManager` and reports when there are more than one of a class",
+        "It instruments the bytecode of every `new` call at build time and tracks each allocation",
+        "It compares the app's total heap size before and after each configuration change"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "LeakCanary watches objects that should soon be garbage (destroyed Activities, Fragments, Fragment views, ViewModels) with weak references. If they're still reachable after a GC, it marks them as retained, dumps the heap, and shows the leak trace, the chain of references that keeps them alive."
+    },
+    {
+      "id": "d48q12",
+      "type": "multi",
+      "topic": "jank causes",
+      "difficulty": "Medium",
+      "question": "A scrolling list drops frames. Which of these are likely contributors? Select all that apply.",
+      "options": [
+        "Parsing JSON and formatting dates for every item inside `onBindViewHolder`",
+        "Allocating new `Paint` and `Path` objects in a custom View's `onDraw`",
+        "Deeply nested weighted `LinearLayout`s that need several measure passes",
+        "Several stacked opaque full-screen backgrounds, which cause overdraw",
+        "Using `ListAdapter` with `DiffUtil` instead of `notifyDataSetChanged()`",
+        "Loading images with Coil or Glide at the target View's size"
+      ],
+      "answer": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "explanation": "Per-bind work, allocations in `onDraw` (which cause GC churn), multi-pass layouts and overdraw all use up the frame budget. `DiffUtil` reduces rebinding, and decoding images at the view's size with a caching loader reduces work, so both help rather than hurt."
+    },
+    {
+      "id": "d48q13",
+      "type": "mcq",
+      "topic": "bitmap memory",
+      "difficulty": "Medium",
+      "question": "A 3 MB JPEG photo of 4000x3000 pixels is decoded at full size into an `ARGB_8888` Bitmap. About how much memory does the Bitmap use?",
+      "options": [
+        "About 48 MB",
+        "About 3 MB",
+        "About 12 MB",
+        "About 24 MB"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A decoded Bitmap takes width x height x 4 bytes in `ARGB_8888`: 12 million pixels x 4 = 48 MB. The compressed file size doesn't matter, which is why images should be decoded close to their display size (Coil or Glide do this for you) instead of at full resolution."
+    },
+    {
+      "id": "d48q14",
+      "type": "mcq",
+      "topic": "reportfullydrawn",
+      "difficulty": "Medium",
+      "question": "Your home screen draws a skeleton on its first frame (400 ms), and the real feed appears 1.2 s later. The startup benchmark reports only time to initial display. How do you measure when the feed is actually usable?",
+      "options": [
+        "Call `reportFullyDrawn()` (or `ReportDrawnWhen`) once the feed shows, so time to full display is reported",
+        "Log `System.currentTimeMillis()` in `onResume` and subtract the process start time",
+        "Log a timestamp at the end of `Application.onCreate`",
+        "Increase the Macrobenchmark iterations until time to initial display converges to the full feed load time"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Time to initial display ends at the first frame, which here is only a skeleton. `reportFullyDrawn()` tells the system when the content is ready, so you get time to full display, which Macrobenchmark's `StartupTimingMetric` also captures. `onResume` runs before anything is even drawn."
+    },
+    {
+      "id": "d48q15",
+      "type": "multi",
+      "topic": "baseline profiles",
+      "difficulty": "Medium",
+      "question": "Which statements about Baseline Profiles are true? Select all that apply.",
+      "options": [
+        "They list hot classes and methods so ART can AOT-compile them at install time instead of interpreting or JIT-compiling them on early launches",
+        "They are compiled into the app from a `baseline-prof.txt` source file and installed by Play or the ProfileInstaller library",
+        "They are usually generated by running a Macrobenchmark `BaselineProfileRule` test with the Baseline Profile Gradle plugin",
+        "They replace the need for R8 code shrinking and optimization",
+        "They only take effect after ART has collected its own profile from several days of use"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "Baseline Profiles precompile critical paths like startup and key scrolls, so code runs fast and with less jank from the very first launch. Without them, the app waits for ART to build a profile over days of use, which is the problem they solve. R8 does a separate job: shrinking and optimizing the code."
+    },
+    {
+      "id": "d48q16",
+      "type": "mcq",
+      "topic": "app startup library",
+      "difficulty": "Medium",
+      "question": "Several libraries each declare their own `ContentProvider` to initialize themselves, which slows down cold start. What does the Jetpack App Startup library give you?",
+      "options": [
+        "A single shared `ContentProvider` that runs `Initializer`s in dependency order, some lazily",
+        "Automatic parallel initialization of every library on background threads, so they no longer block the main thread",
+        "AOT compilation of each library's initialization code at install time",
+        "A guarantee that no initializer runs until the first Activity's `onResume`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Each ContentProvider has a startup cost, so App Startup merges them into one and orders `Initializer`s with `dependencies()`. Initializers still run synchronously on the main thread, so the real win is combining them and lazily initializing anything not needed at launch (turn off its auto-init and call `AppInitializer` later)."
+    },
+    {
+      "id": "d48q17",
+      "type": "mcq",
+      "topic": "handler leak",
+      "difficulty": "Hard",
+      "question": "This screen shows a rating banner after 60 seconds. The user presses Back after 2 seconds. What happens?",
+      "code": "class HomeActivity : AppCompatActivity() {\n    private val handler = Handler(Looper.getMainLooper())\n\n    override fun onCreate(savedInstanceState: Bundle?) {\n        super.onCreate(savedInstanceState)\n        handler.postDelayed({\n            binding.ratingBanner.isVisible = true\n        }, 60_000)\n    }\n}",
+      "options": [
+        "The Activity stays in memory ~60 s via the Looper's queued Message, and the runnable still runs",
+        "Nothing, because pending Handler messages are dropped automatically when the Activity that posted them is destroyed",
+        "The Activity leaks for the rest of the process's life because a Handler field is implicitly static",
+        "The app crashes right away on Back because a callback is still pending"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "The main Looper is a GC root. Its queued `Message` holds the lambda, which captures the Activity through `binding`, so the Activity can't be collected until the message runs. Unlike `lifecycleScope`, nothing ties a Handler to the lifecycle. Remove callbacks in `onDestroy`, or use `lifecycleScope` with `delay`."
+    },
+    {
+      "id": "d48q18",
+      "type": "truefalse",
+      "topic": "measuring release",
+      "difficulty": "Hard",
+      "question": "Startup times measured on a debuggable debug build are representative of release performance, as long as you test on a real device.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "Debuggable builds turn off many ART optimizations and usually skip R8, so they can be much slower than release. Measure with a non-debuggable, release-like build type (Macrobenchmark requires one) using the same R8 and profile setup you ship."
+    },
+    {
+      "id": "d48q19",
+      "type": "mcq",
+      "topic": "startup profiles",
+      "difficulty": "Hard",
+      "question": "Beyond what a Baseline Profile does, what does a Startup Profile add?",
+      "options": [
+        "At build time, it has R8/D8 put startup classes together in the primary dex, cutting page faults at launch",
+        "It enables AOT compilation at install time, which Baseline Profiles can't do since they're only JIT hints",
+        "It moves `Application.onCreate` initializers onto a background thread",
+        "It records each user's real startup on the device and uploads it to Play"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Baseline Profiles drive AOT compilation. A Startup Profile is a subset that's used at build time to optimize dex layout, so code needed at launch sits together and loads with fewer page faults. Both are generated with the same Macrobenchmark and Baseline Profile plugin tooling."
+    },
+    {
+      "id": "d48q20",
+      "type": "multi",
+      "topic": "globalscope leak",
+      "difficulty": "Hard",
+      "question": "The user leaves this screen 1 second after it opens, and `loadUser()` takes 30 seconds on a slow network. Which statements are true? Select all that apply.",
+      "code": "class ProfileActivity : AppCompatActivity() {\n    override fun onCreate(savedInstanceState: Bundle?) {\n        super.onCreate(savedInstanceState)\n        setContentView(R.layout.profile)\n        val name = findViewById<TextView>(R.id.name)\n        GlobalScope.launch(Dispatchers.Main) {\n            val user = repo.loadUser()\n            name.text = user.name\n        }\n    }\n}",
+      "options": [
+        "The coroutine keeps running after `onDestroy`, so the captured `TextView`, and through its `Context` the Activity, stay reachable until it finishes",
+        "Launching from `lifecycleScope` instead would cancel the coroutine when the Activity is destroyed and release the references",
+        "Coroutines in `GlobalScope` launched from an Activity are cancelled automatically in its `onDestroy`",
+        "Capturing only the `TextView`, not `this`, avoids the leak because the lambda never references the Activity",
+        "Switching to `Dispatchers.IO` would avoid the leak"
+      ],
+      "answer": [
+        0,
+        1
+      ],
+      "explanation": "`GlobalScope` isn't tied to any lifecycle, so the coroutine and everything it captures outlive the screen. Every View holds its Activity as its `Context`, so capturing a View is as bad as capturing `this`, and changing the dispatcher doesn't change who holds the reference. A lifecycle-bound scope like `lifecycleScope` or `viewModelScope` fixes it."
+    }
+  ]
+}

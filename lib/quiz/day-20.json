@@ -1,0 +1,360 @@
+{
+  "day": 20,
+  "topic": "lateinit vs lazy & initialization pitfalls",
+  "questions": [
+    {
+      "id": "d20q01",
+      "type": "output",
+      "topic": "lazy timing",
+      "difficulty": "Easy",
+      "question": "What does this print?",
+      "code": "class Repo {\n    init { println(\"Repo created\") }\n    val db by lazy {\n        println(\"db opened\")\n        \"DB\"\n    }\n}\n\nfun main() {\n    val r = Repo()\n    println(\"before\")\n    println(r.db)\n}",
+      "options": [
+        "Repo created\nbefore\ndb opened\nDB",
+        "Repo created\ndb opened\nbefore\nDB",
+        "db opened\nRepo created\nbefore\nDB",
+        "Repo created\nbefore\nDB"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A `lazy` initializer doesn't run when the object is constructed. It runs on the first read of `db`, which happens after `before` is printed."
+    },
+    {
+      "id": "d20q02",
+      "type": "mcq",
+      "topic": "lateinit primitives",
+      "difficulty": "Easy",
+      "question": "This does not compile. Which change keeps `retryCount` a non-null `Int` that is assigned later, and does compile?",
+      "code": "class Uploader {\n    lateinit var retryCount: Int\n}",
+      "compiles": false,
+      "options": [
+        "`var retryCount: Int by Delegates.notNull()`",
+        "`lateinit var retryCount: Int?`",
+        "`lateinit val retryCount: Int`",
+        "`lateinit var retryCount: Int = 0`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`lateinit` is not allowed on primitive types like `Int`, because it uses `null` in the field to mean \"not assigned yet\" and an unboxed `int` field can't hold `null`. `Delegates.notNull()` works for any type and throws `IllegalStateException` if you read it before assigning. `lateinit` also rejects nullable types, `val` and initializers."
+    },
+    {
+      "id": "d20q03",
+      "type": "output",
+      "topic": "initialization order",
+      "difficulty": "Medium",
+      "question": "What does this print?",
+      "code": "class Config {\n    val doubled = computeDoubled()\n    val base = 21\n    private fun computeDoubled() = base * 2\n}\n\nfun main() {\n    println(Config().doubled)\n}",
+      "options": [
+        "42",
+        "0",
+        "21",
+        "Compile error"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "Property initializers run top to bottom. When `doubled` is initialized, `base` hasn't been assigned yet, so the function reads the default `0` and the result is `0`. The compiler only catches a direct reference, not one that goes through a function."
+    },
+    {
+      "id": "d20q04",
+      "type": "truefalse",
+      "topic": "lateinit reassignment",
+      "difficulty": "Easy",
+      "question": "A `lateinit var` can be assigned again after it has been initialized.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`lateinit` only postpones the first assignment. The property is still a `var`, so you can reassign it as many times as you like (for example, a new adapter after a config change)."
+    },
+    {
+      "id": "d20q05",
+      "type": "output",
+      "topic": "lazy runs once",
+      "difficulty": "Easy",
+      "question": "What does this print?",
+      "code": "var calls = 0\nval value by lazy {\n    calls++\n    \"v$calls\"\n}\n\nfun main() {\n    println(value)\n    println(value)\n    println(calls)\n}",
+      "options": [
+        "v1\nv2\n2",
+        "v1\nv1\n1",
+        "v0\nv0\n1",
+        "v1\nv1\n2"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "The `lazy` initializer runs only on the first access, and the result is cached. The second read returns the same `v1` without running the block again, so `calls` stays `1`."
+    },
+    {
+      "id": "d20q06",
+      "type": "multi",
+      "topic": "lateinit rules",
+      "difficulty": "Medium",
+      "question": "Which of these `lateinit` declarations compile? Select all that apply.",
+      "options": [
+        "`lateinit var token: String` at the top level of a file",
+        "`lateinit var tags: List<Int>` in a class",
+        "`lateinit var msg: String` as a local variable in a function",
+        "`lateinit val id: String` in a class",
+        "`lateinit var user: User?` in a class",
+        "`lateinit var name: String` with `get() = field`"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "`lateinit` works on top-level, member and local `var`s of non-null, non-primitive types. It is rejected on `val`, on nullable types, and on properties with a custom getter or setter."
+    },
+    {
+      "id": "d20q07",
+      "type": "mcq",
+      "topic": "fragment binding",
+      "difficulty": "Medium",
+      "question": "A Fragment uses this pattern. A network callback that finishes after the user navigates away (the fragment goes to the back stack) calls `binding.title.text = ...`. What happens?",
+      "code": "private var _binding: FragmentProfileBinding? = null\nprivate val binding get() = _binding!!\n\noverride fun onDestroyView() {\n    super.onDestroyView()\n    _binding = null\n}",
+      "options": [
+        "It crashes with a `NullPointerException` from `_binding!!`",
+        "The text is updated on the old, detached view and nothing else happens",
+        "It throws `UninitializedPropertyAccessException`",
+        "The update is queued and applied when the view is recreated"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "After `onDestroyView` sets `_binding` to null, the `binding` getter's `!!` throws an NPE. The pattern frees the view hierarchy while the fragment sits on the back stack, but callbacks must be scoped to `viewLifecycleOwner` so they stop when the view is destroyed. It is a nullable property, not `lateinit`, so the exception is not `UninitializedPropertyAccessException`."
+    },
+    {
+      "id": "d20q08",
+      "type": "output",
+      "topic": "isInitialized",
+      "difficulty": "Easy",
+      "question": "What does this print?",
+      "code": "class Screen {\n    lateinit var title: String\n    fun ready() = ::title.isInitialized\n}\n\nfun main() {\n    val s = Screen()\n    print(s.ready())\n    s.title = \"Home\"\n    print(\" \" + s.ready())\n}",
+      "options": [
+        "false true",
+        "true true",
+        "false false",
+        "null Home"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`::title.isInitialized` reports whether the `lateinit` backing field has been assigned yet, without throwing. It is `false` before the assignment and `true` after."
+    },
+    {
+      "id": "d20q09",
+      "type": "mcq",
+      "topic": "lazy view binding",
+      "difficulty": "Medium",
+      "question": "A Fragment declares `private val binding by lazy { FragmentFeedBinding.inflate(layoutInflater) }` and returns `binding.root` from `onCreateView`. What is the bug?",
+      "options": [
+        "The lazy never resets, so old views leak on the back stack and are reused when the view is recreated",
+        "`lazy` cannot be used in a Fragment, so it fails to compile",
+        "The binding is inflated again on every access, so views are duplicated each time `binding` is read",
+        "`layoutInflater` is always null inside a `lazy` block, so the first access crashes with `NullPointerException`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A `lazy` `val` is computed once and can't be reset, but a Fragment's view can be destroyed and recreated many times. The cached binding keeps the old views alive after `onDestroyView` and hands stale views back to the next `onCreateView`. Use the nullable `_binding` pattern that is cleared in `onDestroyView`."
+    },
+    {
+      "id": "d20q10",
+      "type": "output",
+      "topic": "lazy exceptions",
+      "difficulty": "Hard",
+      "question": "What does this print?",
+      "code": "var attempts = 0\nval conn: String by lazy {\n    attempts++\n    if (attempts < 2) throw IllegalStateException(\"fail\")\n    \"ok after $attempts\"\n}\n\nfun main() {\n    try { println(conn) } catch (e: Exception) { println(\"caught\") }\n    println(conn)\n    println(conn)\n}",
+      "options": [
+        "caught\ncaught\ncaught",
+        "caught\nok after 2\nok after 3",
+        "caught\nok after 2\nok after 2",
+        "ok after 1\nok after 1\nok after 1"
+      ],
+      "answer": [
+        2
+      ],
+      "explanation": "If the initializer throws, `lazy` stores nothing, so the next access runs the block again. The second access succeeds and caches `ok after 2`, which the third access reuses. The failure is not cached as a permanent exception."
+    },
+    {
+      "id": "d20q11",
+      "type": "mcq",
+      "topic": "initializer forward reference",
+      "difficulty": "Medium",
+      "question": "What happens with this code?",
+      "code": "class Config {\n    val doubled = base * 2\n    val base = 21\n}\n\nfun main() {\n    println(Config().doubled)\n}",
+      "compiles": false,
+      "options": [
+        "Compile error: `base` must be initialized before `doubled` reads it",
+        "It prints `42`",
+        "It prints `0`",
+        "It throws `UninitializedPropertyAccessException` when `doubled` reads `base`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "The compiler sees a direct read of `base` before it is initialized and reports \"variable 'base' must be initialized\". Hiding the same read behind a function call compiles and silently reads `0`."
+    },
+    {
+      "id": "d20q12",
+      "type": "truefalse",
+      "topic": "runtime check",
+      "difficulty": "Easy",
+      "question": "If code reads a `lateinit` member property before it is assigned, the compiler reports an error.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "The compiler can't track when a member property gets assigned, since that might happen in a lifecycle callback or by DI. The check happens at runtime: reading it too early throws `UninitializedPropertyAccessException`."
+    },
+    {
+      "id": "d20q13",
+      "type": "output",
+      "topic": "lazy during parent init",
+      "difficulty": "Medium",
+      "question": "`by lazy` is meant to defer work safely, yet the parent constructor touches it first. What does this print?",
+      "code": "open class Base {\n    init {\n        try { println(\"Base sees ${describe()}\") }\n        catch (e: Exception) { println(\"Base init threw ${e::class.simpleName}\") }\n    }\n    open fun describe() = \"base\"\n}\n\nclass Child : Base() {\n    val name by lazy { \"child\" }\n    override fun describe() = \"name=$name\"\n}\n\nfun main() {\n    val c = Child()\n    println(c.describe())\n}",
+      "options": [
+        "Base init threw NullPointerException\nname=child",
+        "Base sees name=child\nname=child",
+        "Base sees name=null\nname=child",
+        "Base init threw UninitializedPropertyAccessException\nname=child"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`by lazy` stores a hidden delegate field (`name$delegate`) that is assigned in `Child`'s initializer, which runs after `Base`'s `init`. When `Base` calls the overridden `describe()`, that delegate field is still null, so reading `name` throws a NullPointerException instead of running the lambda. Once construction finishes, the lazy works normally. Lazy does not protect you from calling open members in a constructor."
+    },
+    {
+      "id": "d20q14",
+      "type": "mcq",
+      "topic": "viewModels timing",
+      "difficulty": "Hard",
+      "question": "An Activity declares `private val viewModel: FeedViewModel by viewModels()` and, right below it, `private val title = viewModel.title`. What happens when the Activity starts?",
+      "options": [
+        "It crashes with `IllegalStateException`: the ViewModel is requested before the Activity has an Application",
+        "It works, because `by viewModels()` creates the ViewModel eagerly when the property is declared",
+        "It works, because property initializers run after `onCreate`",
+        "It compiles to a `lateinit` field and throws `UninitializedPropertyAccessException` when `title` is first read"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`by viewModels()` is a lazy delegate, but `title`'s initializer reads it during construction. That happens before `onCreate`, when the Activity has no Application yet, so the ViewModel lookup throws. Read the ViewModel in `onCreate` or later, or make `title` lazy too."
+    },
+    {
+      "id": "d20q15",
+      "type": "multi",
+      "topic": "lazy rules",
+      "difficulty": "Medium",
+      "question": "Which statements about the default `by lazy { ... }` are true? Select all that apply.",
+      "options": [
+        "It can only back a `val`, not a `var`",
+        "Its default mode is synchronized, so the initializer runs once even if several threads race to read it",
+        "You can reset it by assigning `null`, which makes the next read recompute it",
+        "Its initializer runs when the enclosing object is constructed"
+      ],
+      "answer": [
+        0,
+        1
+      ],
+      "explanation": "`Lazy` only has `getValue`, so using it on a `var` is a compile error. Its default mode is `SYNCHRONIZED`. There is no way to reset it, and the initializer runs on first access, not at construction."
+    },
+    {
+      "id": "d20q16",
+      "type": "mcq",
+      "topic": "context leak",
+      "difficulty": "Medium",
+      "question": "`MainActivity.onCreate` runs `ImageCache.context = this`. What is the problem?",
+      "code": "object ImageCache {\n    lateinit var context: Context\n    val dir by lazy { context.cacheDir }\n}",
+      "options": [
+        "The singleton holds the Activity, so destroyed Activities leak; use `applicationContext` instead",
+        "`lateinit` cannot hold a `Context`, so it doesn't compile",
+        "The `lazy` block runs again on every rotation, so the cache dir is recreated and old files are lost",
+        "Nothing, because `object` properties are cleared automatically when the Activity that set them is destroyed"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "An `object` lives as long as the process, so a stored Activity can't be garbage-collected after it is destroyed. Its views and resources leak with it. `dir` is computed only once either way, and the cache dir is app-wide, so storing `context.applicationContext` gives the same result without the leak."
+    },
+    {
+      "id": "d20q17",
+      "type": "output",
+      "topic": "notNull vs lateinit",
+      "difficulty": "Hard",
+      "question": "What does this print?",
+      "code": "import kotlin.properties.Delegates\n\nlateinit var name: String\nvar age: Int by Delegates.notNull()\n\nfun main() {\n    try { println(name) } catch (e: Exception) { println(e::class.simpleName) }\n    try { println(age) } catch (e: Exception) { println(e::class.simpleName) }\n}",
+      "options": [
+        "UninitializedPropertyAccessException\nIllegalStateException",
+        "UninitializedPropertyAccessException\nUninitializedPropertyAccessException",
+        "NullPointerException\nIllegalStateException",
+        "IllegalStateException\nIllegalStateException"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Reading an unassigned `lateinit` throws `UninitializedPropertyAccessException`. `Delegates.notNull()` is an ordinary delegate that throws `IllegalStateException` (\"Property age should be initialized before get.\"). Neither one throws an NPE."
+    },
+    {
+      "id": "d20q18",
+      "type": "truefalse",
+      "topic": "lazy initializer release",
+      "difficulty": "Medium",
+      "question": "After a default `by lazy` value has been computed, the `Lazy` object still holds the initializer lambda and everything it captured.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "The stdlib implementation sets its `initializer` reference to null once the value is stored, so whatever the lambda captured can be garbage-collected. Before the first access, though, the lambda and its captures are held. That still includes `this`, such as an Activity."
+    },
+    {
+      "id": "d20q19",
+      "type": "mcq",
+      "topic": "isInitialized visibility",
+      "difficulty": "Hard",
+      "question": "`title` is a public `lateinit` property. Why does this fail to compile?",
+      "code": "class Screen {\n    lateinit var title: String\n}\n\nfun main() {\n    val s = Screen()\n    println(s::title.isInitialized)\n}",
+      "compiles": false,
+      "options": [
+        "`isInitialized` needs access to the backing field, which only the declaring class (or same file) has",
+        "`isInitialized` only works on `private` lateinit properties, and `title` is public",
+        "Bound references like `s::title` are not allowed on `var` properties",
+        "`isInitialized` needs `kotlin-reflect` on the classpath, which Android projects don't include by default"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`isInitialized` inspects the backing field, so K2 reports \"backing field ... is not accessible at this point\" from outside `Screen`, even though `title` is public. Expose a helper such as `fun hasTitle() = ::title.isInitialized` inside the class."
+    },
+    {
+      "id": "d20q20",
+      "type": "mcq",
+      "topic": "choosing lateinit vs lazy",
+      "difficulty": "Easy",
+      "question": "In an Activity, `adapter` is created in `onCreate` with a click listener and replaced when the user switches tabs. Which declaration fits best?",
+      "options": [
+        "`private lateinit var adapter: ProductAdapter`",
+        "`private val adapter by lazy { ProductAdapter() }`",
+        "`private val adapter: ProductAdapter? = null`",
+        "`private lateinit val adapter: ProductAdapter`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "The value is assigned from outside, in a lifecycle callback, and is reassigned later. That calls for `lateinit var`. `lazy` suits a `val` that can compute itself once and never change, and `lateinit val` doesn't compile."
+    }
+  ]
+}

@@ -1,0 +1,353 @@
+{
+  "day": 55,
+  "topic": "Scaling the app: modules, feature flags, analytics & crash reporting",
+  "questions": [
+    {
+      "id": "d55q01",
+      "type": "mcq",
+      "topic": "api/impl modules",
+      "difficulty": "Easy",
+      "question": "A team splits its feature into `:feature:search:api` and `:feature:search:impl`, and other features may depend only on `:api`. What is the main benefit?",
+      "options": [
+        "Dependents see only a small, stable contract, so `:impl` changes don't recompile them",
+        "The APK gets smaller because the `:impl` module is delivered on demand through Play Feature Delivery",
+        "R8 can skip obfuscating the `:api` module, which speeds up release builds",
+        "It lets the search feature use a different Kotlin version from the rest of the app"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Dependents compile against the thin `:api` module (interfaces, routes, models), so editing `:impl` only rebuilds `:impl` and the `:app` module that wires it up. The cost is more modules and DI wiring. It has nothing to do with on-demand delivery, which is what dynamic feature modules are for. Implementation classes also stay hidden from other features."
+    },
+    {
+      "id": "d55q02",
+      "type": "truefalse",
+      "topic": "flags & security",
+      "difficulty": "Easy",
+      "question": "Hiding the \"Download offline\" button behind a remote-config flag that is only on for paying users is enough to stop free users from downloading premium content.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "Client flags are UX controls. Anyone can patch the APK, edit cached config or call the API directly. Entitlement must be checked on the server for every download request, and the flag only decides what the UI shows."
+    },
+    {
+      "id": "d55q03",
+      "type": "mcq",
+      "topic": "incident response",
+      "difficulty": "Medium",
+      "question": "Your new release is on a 20% staged rollout, and crashes spike on about 5% of devices running it. What do you do first?",
+      "options": [
+        "Halt the staged rollout, use the feature's kill switch if there is one, then dig into the crash clusters",
+        "Raise the rollout to 100% so you collect enough crash data to find the cause quickly",
+        "Upload the previous APK again so Play rolls everyone back to the old version",
+        "Wait 48 hours for crash numbers to stabilise, since early rollout data over-represents a few device models"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "First limit the damage: halting stops new installs of the bad build, and a kill switch can fix users who already have it without waiting for a release. Then group the crashes by device, OS and app version and ship a fix. You can't re-upload an older build because Play requires a higher `versionCode`, and rolling out further only spreads the problem."
+    },
+    {
+      "id": "d55q04",
+      "type": "multi",
+      "topic": "modularization",
+      "difficulty": "Medium",
+      "question": "You're moving a monolithic app to feature modules owned by teams. Which statements are true?",
+      "options": [
+        "Gradle can reuse compiled outputs of unchanged modules, so a change in one feature's implementation rebuilds far less code",
+        "CODEOWNERS entries keyed by module path can route code reviews to the owning team automatically",
+        "A shared design-system module gives every feature the same themed components without features depending on each other",
+        "Splitting into modules makes the release APK smaller by itself",
+        "More modules always means faster builds, so one module per class is ideal"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "Modules give you build avoidance, clear ownership and shared UI building blocks. They don't shrink the APK on their own, because R8 and resource shrinking do that and the code is all merged anyway. Very fine-grained modules add configuration and dependency overhead, so there is a sweet spot."
+    },
+    {
+      "id": "d55q05",
+      "type": "mcq",
+      "topic": "symbolication",
+      "difficulty": "Easy",
+      "question": "Crash reports from your release build show frames like `at a.b.c.a(Unknown Source:12)`. What fixes this?",
+      "options": [
+        "Upload each build's R8 mapping file to the crash reporter and Play Console",
+        "Turn off R8 minification for release builds, since crash reporters can't read minified code",
+        "Add `-keep class ** { *; }` so nothing is renamed",
+        "Switch the crash reporter to debug mode in production"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "R8 renames classes and methods, and `mapping.txt` maps the short names back to the originals. Every build has its own mapping, so upload it as part of the release pipeline. Turning off R8 or keeping everything gives up size and performance just to get readable traces."
+    },
+    {
+      "id": "d55q06",
+      "type": "mcq",
+      "topic": "a/b bucketing",
+      "difficulty": "Medium",
+      "question": "How should the client assign a user to a variant of a 50/50 checkout A/B experiment?",
+      "options": [
+        "Bucket by `hash(userId + experimentKey) % 100 < 50`",
+        "Call `Random.nextInt(2)` on every app launch",
+        "Use `hash(deviceId) % 2` for every experiment",
+        "Put odd-numbered installs in A and even-numbered installs in B, based on install order"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Consistent bucketing keeps a user's experience stable across sessions, and salting with the experiment key stops every experiment from splitting users the same way. Random choice per launch mixes the two variants for one user and ruins the measurement. One unsalted hash for every experiment ties the experiments' populations together."
+    },
+    {
+      "id": "d55q07",
+      "type": "truefalse",
+      "topic": "staged rollout",
+      "difficulty": "Easy",
+      "question": "When you halt a staged rollout on Google Play, users who already installed the bad version are automatically moved back to the previous version.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "Halting only stops more users from getting the update. Users who already installed it keep it until you ship a fixed build with a higher `versionCode`. That's why kill switches, which work without a new release, are so valuable."
+    },
+    {
+      "id": "d55q08",
+      "type": "mcq",
+      "topic": "crash-free kpi",
+      "difficulty": "Easy",
+      "question": "Leadership asks: \"What fraction of our users hit at least one crash this week?\" Which metric answers that directly?",
+      "options": [
+        "Crash-free users",
+        "Crash-free sessions",
+        "Total crash count",
+        "Crashes per thousand API requests"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Crash-free users counts distinct users with no crash in the period. Crash-free sessions is weighted by usage, so a few heavy users who crash a lot move it more. Teams usually track both, because they surface different problems."
+    },
+    {
+      "id": "d55q09",
+      "type": "multi",
+      "topic": "analytics pipeline",
+      "difficulty": "Medium",
+      "question": "You're designing the client side of an analytics pipeline. Which practices are sound?",
+      "options": [
+        "Persist events to a local queue such as a Room table, so they survive offline periods and process death",
+        "Upload in batches with WorkManager, putting non-urgent batches behind unmetered-network or charging constraints and capping the queue size",
+        "Sample very high-volume, low-value events at a fixed rate and send the rate, so the backend can scale the counts back up",
+        "Send every event in its own HTTP request as soon as it happens, so dashboards are real-time",
+        "Drop events recorded while offline, since they're stale by the time the network returns"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "Batching and deferring uploads saves radio wake-ups and battery, and a persistent queue keeps offline data. Recording the sample rate keeps sampled counts accurate. One request per event drains the battery, and dropping offline events skews the data against users with poor connections."
+    },
+    {
+      "id": "d55q10",
+      "type": "mcq",
+      "topic": "flag defaults",
+      "difficulty": "Medium",
+      "question": "On first launch the device is offline, so remote config can't be fetched. How should the app behave?",
+      "options": [
+        "Use bundled safe defaults (new features off) and apply fetched config on the next launch",
+        "Keep the splash screen up until the config fetch succeeds, so flags never change mid-session",
+        "Default every flag to on, so new users see the newest features from their very first session",
+        "Show an error asking the user to connect before they can use the app"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Flags must never block startup, and the bundled defaults should be the safe, known-good behaviour. Applying fetched values at a stable point stops the UI from changing in the middle of a session. The cost is that changes reach users one launch later. Fetch in the background so startup never waits on the network."
+    },
+    {
+      "id": "d55q11",
+      "type": "truefalse",
+      "topic": "android vitals",
+      "difficulty": "Easy",
+      "question": "If your app's user-perceived crash rate or ANR rate exceeds Android vitals' bad-behaviour thresholds, Google Play may reduce your app's visibility and can show a warning on its store listing.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Play uses core vitals (user-perceived crash rate and ANR rate) for discovery, both overall and per device model. Stability problems therefore cost you installs as well as reviews."
+    },
+    {
+      "id": "d55q12",
+      "type": "mcq",
+      "topic": "breadcrumbs",
+      "difficulty": "Easy",
+      "question": "What are breadcrumbs in a crash reporting SDK?",
+      "options": [
+        "A trail of recent events (screens, taps, network results) attached to a crash report",
+        "Frame-by-frame rendering timings recorded before a crash and sent for jank analysis",
+        "The mapping entries used to deobfuscate a stack trace",
+        "The list of app versions a user upgraded through"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A stack trace shows where the app crashed, and breadcrumbs show how the user got there. Keep them small and free of PII, since they are sent with every report."
+    },
+    {
+      "id": "d55q13",
+      "type": "mcq",
+      "topic": "min supported version",
+      "difficulty": "Medium",
+      "question": "A backend change will break app versions older than 4.2, and analytics shows some users still run versions from two years ago. What is the best approach?",
+      "options": [
+        "Check a server-set minimum version at launch and force an immediate in-app update below it",
+        "Rely on Play auto-update, which updates nearly every user within a day of a release going live",
+        "Ship the backend change and let old clients fail with HTTP errors until users update",
+        "Show a toast on every launch asking users to update"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Old versions live for years because of auto-update being off, low storage or rarely opened apps. A remotely controlled minimum version lets you retire them gracefully. Use forced updates sparingly because they add friction, and keep the old API around as long as you can. Below a separate recommended version, show a dismissible prompt instead (Play In-App Updates supports both immediate and flexible flows)."
+    },
+    {
+      "id": "d55q14",
+      "type": "multi",
+      "topic": "server-driven ui",
+      "difficulty": "Hard",
+      "question": "You're considering server-driven UI, where the server sends a JSON tree of components that the app renders natively. Which are real costs of this approach?",
+      "options": [
+        "The component schema must be versioned, and old app versions need a graceful fallback for component types they don't know",
+        "Screens need a network round-trip or a cached layout before they can render, and generic rendering adds parsing and layout overhead",
+        "Testing is harder, because the behaviour depends on every combination of server payload and app version",
+        "Google Play policy forbids apps from changing their layout based on server responses",
+        "Because the UI comes from the server, native components and accessibility support can't be used"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "Server-driven UI lets you change screens without a release, but you pay for it in versioning, latency and offline handling, and testing. Play prohibits downloading executable code, not data that drives native views. Because the app renders its own components, they keep native performance and accessibility."
+    },
+    {
+      "id": "d55q15",
+      "type": "mcq",
+      "topic": "navigation contract",
+      "difficulty": "Hard",
+      "question": "`:feature:checkout` needs to open the edit-address screen owned by `:feature:profile`. How should you wire this in a multi-team modular app?",
+      "options": [
+        "Checkout depends on `:feature:profile:api` (a route or navigator interface), and `:app` binds the `:impl` via DI",
+        "`:feature:checkout` depends directly on `:feature:profile` and calls its composable",
+        "Start the screen by class name with `Class.forName(\"com.app.profile.EditAddressActivity\")` to avoid any dependency",
+        "Merge checkout and profile into one module, since they need each other"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A contract layer lets features navigate to each other without depending on each other's implementation. That avoids long rebuild chains and dependency cycles, and lets teams change internals freely. Depending on the implementation module couples them, and reflection with string class names breaks silently under R8 or a rename. `:feature:profile:impl` provides the actual screen."
+    },
+    {
+      "id": "d55q16",
+      "type": "truefalse",
+      "topic": "release logging",
+      "difficulty": "Medium",
+      "question": "`Log.d` and `Log.v` calls are automatically removed from release builds, so it's safe to log auth tokens at debug level.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "Nothing strips them by default. They still run in release and can be read via `adb logcat` or bug reports unless you strip them (e.g. R8 `-assumenosideeffects`) or route logs through a facade with no release sink. Never log secrets or PII at any level."
+    },
+    {
+      "id": "d55q17",
+      "type": "mcq",
+      "topic": "performance monitoring",
+      "difficulty": "Medium",
+      "question": "Cold start takes 600 ms on your team's flagship test phones, but Android vitals reports slow cold starts for many users. What is the best next step?",
+      "options": [
+        "Use sampled field metrics by device and OS, then reproduce on a matching low-end device with a release build",
+        "Profile a debug build on the emulator, since that's where Android Studio's profilers give the most detailed traces",
+        "Ignore vitals, because the in-house benchmark is the controlled measurement and field data is noisy",
+        "Add a longer splash animation so the wait feels shorter"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Lab results on fast phones don't represent your users, and field data shows where the real slowness is. Sampling keeps monitoring overhead low. Debug builds and emulators perform very differently from a release build on real hardware. Break the field data down by app version too, since a regression often arrives with one release."
+    },
+    {
+      "id": "d55q18",
+      "type": "multi",
+      "topic": "privacy & consent",
+      "difficulty": "Medium",
+      "question": "Which analytics and crash reporting practices protect user privacy?",
+      "options": [
+        "Keep PII such as email, phone number and precise location out of event properties and breadcrumbs",
+        "Don't collect analytics until the user consents where the law requires it, and stop when they withdraw consent",
+        "Identify users with a resettable, app-scoped pseudonymous ID instead of a hardware identifier",
+        "Hash the email with SHA-256 before sending it, which makes it anonymous",
+        "Attach full request and response bodies to crash reports for easier debugging"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "Collect as little as possible, respect consent and use resettable IDs. A hashed email is still a stable identifier that links the user across systems, and common emails can be guessed back from the hash. Request bodies often contain tokens and personal data."
+    },
+    {
+      "id": "d55q19",
+      "type": "mcq",
+      "topic": "anr reporting",
+      "difficulty": "Hard",
+      "question": "Your crash reporter shows almost no crashes, but Android vitals shows a high ANR rate. Why don't the ANRs show up in the crash reporter?",
+      "options": [
+        "ANRs aren't exceptions: the system kills the frozen app, so the uncaught-exception handler never runs",
+        "The R8 mapping file wasn't uploaded, so the crash reporter dropped the ANR traces as unreadable frames",
+        "ANRs only happen in debug builds, and vitals mistakenly includes them",
+        "The crash reporter samples out every report that has no stack trace, and ANRs never carry one"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "ANRs come from the main thread being blocked by disk I/O, locks or long work, not from exceptions, so they need dedicated detection such as main-thread watchdogs or `ApplicationExitInfo` on API 30+. A missing mapping file makes traces unreadable but doesn't hide them, and ANRs are a serious problem in release builds. Some SDKs capture ANRs separately, for example by reading `ApplicationExitInfo`."
+    },
+    {
+      "id": "d55q20",
+      "type": "multi",
+      "topic": "flag debt",
+      "difficulty": "Hard",
+      "question": "The codebase has 300 feature flags and nobody knows which are still used. Which practices fix and prevent this flag debt?",
+      "options": [
+        "Give every flag an owner and an expiry date or removal ticket when it is created",
+        "Once a rollout has been at 100% and stable, delete the flag and the dead code path in a follow-up release",
+        "While a flag is live, test both the on and off code paths",
+        "Reuse a retired flag's key for a new feature, to keep the config tidy",
+        "Keep every release flag forever, so any feature can be reverted later"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "Release flags are temporary: they need owners, deadlines and cleanup, and each live flag doubles the paths you have to test. Reusing a key is a classic trap, because old app versions still read it and would switch on the old behaviour. Keep only a few deliberate long-lived kill switches, not every flag."
+    }
+  ]
+}

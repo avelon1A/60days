@@ -1,0 +1,360 @@
+{
+  "day": 7,
+  "topic": "Extension functions & properties",
+  "questions": [
+    {
+      "id": "d07q01",
+      "type": "output",
+      "topic": "declaring",
+      "difficulty": "Easy",
+      "question": "What does this print?",
+      "code": "fun String.shout() = this.uppercase() + \"!\"\n\nfun main() {\n    println(\"hi\".shout())\n}",
+      "options": [
+        "HI!",
+        "hi!",
+        "HI",
+        "Compile error: String has no shout()"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`fun String.shout()` adds a function that can be called on any `String`. Inside it, `this` is the receiver `\"hi\"`, so it returns `\"HI\" + \"!\"`."
+    },
+    {
+      "id": "d07q02",
+      "type": "mcq",
+      "topic": "syntax",
+      "difficulty": "Easy",
+      "question": "Which declaration lets you write `context.toast(\"Saved\")` anywhere you have a `Context`?",
+      "options": [
+        "fun Context.toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()",
+        "fun toast(Context.msg: String) = Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()",
+        "extension fun Context.toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()",
+        "fun Context::toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "You declare an extension by putting the receiver type before the function name: `fun Context.toast(...)`. Kotlin has no `extension` keyword, and `::` is for callable references, not declarations."
+    },
+    {
+      "id": "d07q03",
+      "type": "truefalse",
+      "topic": "private access",
+      "difficulty": "Easy",
+      "question": "A top-level extension `fun User.debug()` can read `private` properties of `User`.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "An extension is really a static function that takes the receiver as a parameter, so it gets no special access. It can only see the members it could see from outside the class (public, plus internal in the same module)."
+    },
+    {
+      "id": "d07q04",
+      "type": "mcq",
+      "topic": "extension property",
+      "difficulty": "Easy",
+      "question": "Given this extension, what is `16.dp` on a device whose display density is `2.0`?",
+      "code": "val Int.dp: Int\n    get() = (this * Resources.getSystem().displayMetrics.density).toInt()",
+      "options": [
+        "32",
+        "16",
+        "8",
+        "It doesn't compile, because extension properties need a backing field"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`this` is the receiver `16`, and the getter multiplies it by the density `2.0`, giving `32`. Extension properties have no backing field, which is why they are written with a getter like this one."
+    },
+    {
+      "id": "d07q05",
+      "type": "output",
+      "topic": "static dispatch",
+      "difficulty": "Medium",
+      "question": "What does this print?",
+      "code": "open class Animal\nclass Dog : Animal()\n\nfun Animal.sound() = \"...\"\nfun Dog.sound() = \"Woof\"\n\nfun speak(a: Animal) = a.sound()\n\nfun main() {\n    val d = Dog()\n    println(d.sound() + \" \" + speak(d))\n}",
+      "options": [
+        "Woof ...",
+        "Woof Woof",
+        "... ...",
+        "... Woof"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Extensions are chosen at compile time from the declared type. `d` is declared as `Dog`, so you get `Woof`. Inside `speak`, the parameter `a` is declared as `Animal`, so `Animal.sound()` runs even though the object is a `Dog`."
+    },
+    {
+      "id": "d07q06",
+      "type": "mcq",
+      "topic": "generic extension",
+      "difficulty": "Easy",
+      "question": "Which declaration lets `listOf(1, 2).second()` return an `Int` and `listOf(\"a\", \"b\").second()` return a `String`?",
+      "options": [
+        "fun <T> List<T>.second(): T = this[1]",
+        "fun List<T>.second(): T = this[1]",
+        "fun List<Any>.second(): Any = this[1]",
+        "fun List<*>.second(): T = this[1]"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A generic extension declares its type parameter before the receiver, as in `fun <T> List<T>.second()`, so `T` is inferred for each call. Without `<T>`, the name `T` is undefined, and `List<Any>` would give back `Any` instead of the element type."
+    },
+    {
+      "id": "d07q07",
+      "type": "truefalse",
+      "topic": "imports",
+      "difficulty": "Easy",
+      "question": "If `fun View.gone()` is declared in package `com.app.ui.ext`, a file in package `com.app.feature` has to import it (e.g. `import com.app.ui.ext.gone`) before it can call `view.gone()`.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Top-level extensions are only visible where they are declared or imported, like any other top-level function. You import one by its name, e.g. `import com.app.ui.ext.gone` or `import com.app.ui.ext.*`."
+    },
+    {
+      "id": "d07q08",
+      "type": "output",
+      "topic": "member wins",
+      "difficulty": "Medium",
+      "question": "What does this print?",
+      "code": "class Greeter {\n    fun hello() = \"member\"\n}\n\nfun Greeter.hello() = \"extension\"\n\nfun main() {\n    println(Greeter().hello())\n}",
+      "options": [
+        "member",
+        "extension",
+        "Compile error: conflicting declarations",
+        "Compile error: ambiguous call"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "When a member and an extension have the same signature, the member always wins. The extension compiles but can never be called this way (the compiler only warns that it is shadowed)."
+    },
+    {
+      "id": "d07q09",
+      "type": "mcq",
+      "topic": "implicit receiver",
+      "difficulty": "Easy",
+      "question": "In this extension, what does `view` refer to?",
+      "code": "fun Fragment.hideKeyboard() {\n    val imm = requireContext().getSystemService(InputMethodManager::class.java)\n    imm.hideSoftInputFromWindow(view?.windowToken, 0)\n}",
+      "options": [
+        "The Fragment's own `view`, via the implicit `this` receiver",
+        "A parameter that the caller has to pass in",
+        "The host Activity's root view",
+        "Nothing, because extensions can't access properties of their receiver"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Inside an extension, `this` is the receiver (here the `Fragment`), and its public members can be used without a qualifier. So `view` and `requireContext()` mean `this.view` and `this.requireContext()`."
+    },
+    {
+      "id": "d07q10",
+      "type": "multi",
+      "topic": "android ktx",
+      "difficulty": "Medium",
+      "question": "Which of these are real extensions from AndroidX Core KTX (`androidx.core:core-ktx`)? Select all that apply.",
+      "options": [
+        "prefs.edit { putString(\"token\", t) }",
+        "view.isVisible = true",
+        "bundleOf(\"id\" to 42)",
+        "context.toast(\"Saved\")",
+        "view.gone()"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "Core KTX provides `SharedPreferences.edit { }`, the `View.isVisible` extension property and `bundleOf(...)`. `toast()` and `gone()` are popular helpers that teams write themselves (or took from the old Anko library), but they aren't part of core-ktx."
+    },
+    {
+      "id": "d07q11",
+      "type": "output",
+      "topic": "nullable receiver",
+      "difficulty": "Medium",
+      "question": "What does this print?",
+      "code": "fun String?.orDash(): String = if (this.isNullOrEmpty()) \"-\" else this\n\nfun main() {\n    val a: String? = null\n    println(a.orDash() + \"|\" + \"\".orDash() + \"|\" + \"x\".orDash())\n}",
+      "options": [
+        "-|-|x",
+        "null|-|x",
+        "-||x",
+        "Throws NullPointerException"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "An extension on `String?` can be called on `null` without `?.`. Inside it, `this` is just a nullable value, so nothing throws. Both `null` and `\"\"` count as null-or-empty, so each becomes `-`."
+    },
+    {
+      "id": "d07q12",
+      "type": "mcq",
+      "topic": "no backing field",
+      "difficulty": "Medium",
+      "question": "Why doesn't this compile?",
+      "code": "val String.lastChar: Char = this[length - 1]\n\nfun main() {\n    println(\"abc\".lastChar)\n}",
+      "options": [
+        "Extension properties have no backing field, so they can't have an initializer",
+        "Extension properties must be declared with `var`",
+        "`this` can only be used inside extension functions, not in extension property initializers",
+        "`Char` isn't allowed as the type of an extension property"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "An extension can't add state to a class, so there is nowhere to store an initial value. Write it with a getter instead: `val String.lastChar: Char get() = this[length - 1]`.",
+      "compiles": false
+    },
+    {
+      "id": "d07q13",
+      "type": "output",
+      "topic": "companion extension",
+      "difficulty": "Medium",
+      "question": "What does this print?",
+      "code": "class User(val name: String) {\n    companion object\n}\n\nfun User.Companion.guest() = User(\"guest\")\n\nfun main() {\n    println(User.guest().name)\n}",
+      "options": [
+        "guest",
+        "Compile error: guest() needs a User instance",
+        "Compile error: companion object has no members",
+        "null"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Declaring an extension on `User.Companion` lets you call it like a static factory: `User.guest()`. The class only needs a companion object to exist, even an empty one."
+    },
+    {
+      "id": "d07q14",
+      "type": "truefalse",
+      "topic": "overloading",
+      "difficulty": "Medium",
+      "question": "This code compiles, and the call in `main` runs the extension.",
+      "code": "class Logger {\n    fun log(msg: String) = println(msg)\n}\n\nfun Logger.log(msg: String, tag: String) = println(\"[$tag] $msg\")\n\nfun main() {\n    Logger().log(\"hi\", \"UI\")\n}",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "The \"member wins\" rule only applies when the member could handle the call. The member `log` takes one argument, so it can't take `(\"hi\", \"UI\")`, and the two-argument extension overload is used.",
+      "compiles": true
+    },
+    {
+      "id": "d07q15",
+      "type": "mcq",
+      "topic": "java interop",
+      "difficulty": "Medium",
+      "question": "`fun String.isEmail(): Boolean` is declared at the top level of `StringUtils.kt`. How do you call it from Java?",
+      "options": [
+        "StringUtilsKt.isEmail(\"a@b.com\")",
+        "\"a@b.com\".isEmail()",
+        "StringUtils.isEmail(\"a@b.com\")",
+        "StringUtilsKt.INSTANCE.isEmail(\"a@b.com\")"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Top-level extensions compile to static methods in a class named after the file plus `Kt`, and the receiver becomes the first parameter. Java can't use receiver syntax, and `INSTANCE` only exists for `object` declarations."
+    },
+    {
+      "id": "d07q16",
+      "type": "output",
+      "topic": "any?.tostring",
+      "difficulty": "Hard",
+      "question": "What does this print?",
+      "code": "fun main() {\n    val user: String? = null\n    println(user.toString().length)\n}",
+      "options": [
+        "4",
+        "0",
+        "null",
+        "Throws NullPointerException"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`toString()` can be called on a nullable value because the stdlib declares `fun Any?.toString()`, an extension with a nullable receiver. For `null` it returns the string `\"null\"`, whose length is 4."
+    },
+    {
+      "id": "d07q17",
+      "type": "mcq",
+      "topic": "safe call on extension",
+      "difficulty": "Medium",
+      "question": "What are the types of `a` and `b`?",
+      "code": "fun String?.safeLength(): Int = this?.length ?: 0\n\nval s: String? = null\nval a = s.safeLength()\nval b = s?.safeLength()",
+      "options": [
+        "`a` is `Int` and `b` is `Int?`",
+        "Both are `Int`",
+        "Both are `Int?`",
+        "`b` doesn't compile because the receiver type is already nullable"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`s.safeLength()` always calls the nullable-receiver extension and returns its declared `Int`. Using `?.` is still allowed, but a safe call skips the call when `s` is null and makes the result `Int?`. Here `b` is `null`."
+    },
+    {
+      "id": "d07q18",
+      "type": "output",
+      "topic": "member vs overload",
+      "difficulty": "Hard",
+      "question": "What does this print?",
+      "code": "class Box {\n    fun put(x: Any) = \"member\"\n}\n\nfun Box.put(x: String) = \"extension\"\n\nfun main() {\n    println(Box().put(\"a\"))\n}",
+      "options": [
+        "member",
+        "extension",
+        "Compile error: ambiguous call",
+        "Compile error: conflicting overloads"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Kotlin first looks for a member that can take the call. `put(x: Any)` accepts a `String`, so it wins even though the extension's `String` parameter is a closer match. The extension is only used when no member fits."
+    },
+    {
+      "id": "d07q19",
+      "type": "multi",
+      "topic": "smart cast resolution",
+      "difficulty": "Hard",
+      "question": "Given `fun Any.kind() = \"any\"` and `fun String.kind() = \"string\"`, which expressions return `\"string\"`? Select all that apply.",
+      "options": [
+        "\"hi\".kind()",
+        "val x: Any = \"hi\"; if (x is String) x.kind()",
+        "(\"hi\" as Any).kind()",
+        "val cs: CharSequence = \"hi\"; cs.kind()",
+        "listOf<Any>(\"hi\").first().kind()"
+      ],
+      "answer": [
+        0,
+        1
+      ],
+      "explanation": "The extension is picked from the compile-time type of the expression. After `x is String`, the smart cast makes the type `String`, so `String.kind()` is chosen. The other three have static type `Any` or `CharSequence`, so they get `Any.kind()` even though every value is a `String`."
+    },
+    {
+      "id": "d07q20",
+      "type": "output",
+      "topic": "dispatch receiver",
+      "difficulty": "Hard",
+      "question": "What does this print?",
+      "code": "open class Shape\nclass Circle : Shape()\n\nopen class Painter {\n    open fun Shape.paint() = \"Painter/Shape\"\n    open fun Circle.paint() = \"Painter/Circle\"\n    fun draw(s: Shape) = s.paint()\n}\n\nclass FancyPainter : Painter() {\n    override fun Shape.paint() = \"Fancy/Shape\"\n    override fun Circle.paint() = \"Fancy/Circle\"\n}\n\nfun main() {\n    println(FancyPainter().draw(Circle()))\n}",
+      "options": [
+        "Fancy/Shape",
+        "Fancy/Circle",
+        "Painter/Shape",
+        "Painter/Circle"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "An extension declared as a class member is virtual in its dispatch receiver (the `Painter`), so `FancyPainter`'s override runs. It is still static in its extension receiver: `s` is declared as `Shape`, so `Shape.paint()` is chosen, not `Circle.paint()`."
+    }
+  ]
+}

@@ -1,0 +1,356 @@
+{
+  "day": 50,
+  "topic": "System design basics: requirements, APIs & mobile constraints",
+  "questions": [
+    {
+      "id": "d50q01",
+      "type": "mcq",
+      "topic": "mvp scope",
+      "difficulty": "Easy",
+      "question": "The interviewer says \"Design Instagram for Android\" and you have 45 minutes. What is the best first move?",
+      "options": [
+        "Agree on a few core features and key non-functional goals, and explicitly park the rest",
+        "Start drawing the full architecture covering stories, reels, DMs, search and ads so nothing is missed",
+        "Begin writing the Retrofit interface and Room entities to show hands-on skill",
+        "Calculate how many servers Instagram needs worldwide"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Clarifying and scoping an MVP comes first: it makes the problem fit the time box and shows judgement. Trying to cover every feature leaves no time for the deep dives where you are actually assessed, and jumping into code or server sizing skips requirements entirely."
+    },
+    {
+      "id": "d50q02",
+      "type": "truefalse",
+      "topic": "estimation",
+      "difficulty": "Easy",
+      "question": "In a mobile system design interview, a detailed back-of-the-envelope estimate of backend QPS and database storage is usually the most important part of the answer.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "Mobile rounds focus on the client: estimate only what changes client decisions, such as payload size per page on a slow network, cache size on device or upload sizes. Deep server capacity maths is the backend round's job and eats time you need for client architecture and trade-offs."
+    },
+    {
+      "id": "d50q03",
+      "type": "mcq",
+      "topic": "client layers",
+      "difficulty": "Easy",
+      "question": "In a UI → ViewModel → repository → local/remote data source architecture, where should the logic that decides \"show cached data, then refresh from the network\" live?",
+      "options": [
+        "In the composable or Activity, since it knows when the screen is visible",
+        "In the Retrofit service interface",
+        "In the repository, which coordinates the local and remote data sources",
+        "In the Room DAO"
+      ],
+      "answer": [
+        2
+      ],
+      "explanation": "The repository owns data access policy and hides where data comes from, so ViewModels and UI just observe results. Putting it in the UI ties it to lifecycle and duplicates it per screen, while the DAO and Retrofit interface should each know only their own source."
+    },
+    {
+      "id": "d50q04",
+      "type": "multi",
+      "topic": "non-functional reqs",
+      "difficulty": "Medium",
+      "question": "For a photo-sharing app, which of these are non-functional requirements? Select all that apply.",
+      "options": [
+        "Cold start reaches the first feed frame in under 2 seconds at p95",
+        "Users can comment on a photo",
+        "Background sync uses no more than a small, bounded share of daily battery",
+        "Users can follow other users",
+        "Crash-free sessions stay at or above 99.9%"
+      ],
+      "answer": [
+        0,
+        2,
+        4
+      ],
+      "explanation": "Non-functional requirements describe qualities such as latency, battery use and reliability, not features. Commenting and following are functional requirements: things a user can do."
+    },
+    {
+      "id": "d50q05",
+      "type": "mcq",
+      "topic": "resource modelling",
+      "difficulty": "Easy",
+      "question": "Which REST endpoint best models \"add a comment to post 42\"?",
+      "options": [
+        "GET /addComment?postId=42&text=hello",
+        "POST /posts/42/comments with the comment in the body",
+        "PUT /posts/42 with the entire post including all its comments",
+        "POST /createCommentForPost"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "Comments are a sub-collection of a post, and POST to a collection creates a new item. A GET must not change state (it may be cached or prefetched), and re-sending the whole post with PUT is wasteful and races with other commenters."
+    },
+    {
+      "id": "d50q06",
+      "type": "truefalse",
+      "topic": "token lifetimes",
+      "difficulty": "Easy",
+      "question": "With OAuth2-style auth, the client uses a short-lived access token on API calls and a longer-lived refresh token to get new access tokens, so a leaked access token is only useful for a short time.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Short-lived access tokens limit the damage of a leak, and the refresh token, which is sent only to the auth endpoint and can be revoked or rotated, keeps the user signed in. The trade-off is extra refresh logic on the client."
+    },
+    {
+      "id": "d50q07",
+      "type": "mcq",
+      "topic": "pagination",
+      "difficulty": "Easy",
+      "question": "A news feed gets new posts inserted at the top every few seconds. Users scrolling with `?offset=20&limit=20` report duplicate and missing items. What fixes this best?",
+      "options": [
+        "Use a smaller page size so fewer items shift between requests",
+        "Reload the whole feed from offset 0 on every scroll to stay consistent",
+        "Sort the feed randomly so shifts are less noticeable",
+        "Switch to cursor-based pagination anchored to the last item seen"
+      ],
+      "answer": [
+        3
+      ],
+      "explanation": "Offsets count positions, so inserts at the top shift every later page and cause duplicates or skips. A cursor anchors to a specific item, so the next page is stable no matter what is inserted above. A smaller page only makes the problem smaller, it doesn't remove it."
+    },
+    {
+      "id": "d50q08",
+      "type": "multi",
+      "topic": "mobile constraints",
+      "difficulty": "Medium",
+      "question": "Which assumptions must a mobile client design NOT rely on? Select all that apply.",
+      "options": [
+        "That the process keeps running until the user finishes their task",
+        "That a request in flight will finish before the network drops",
+        "That users install the latest app version soon after it ships",
+        "That the server can change response formats without considering clients already in the field",
+        "That a file written to the app's internal storage is still there after the process is killed and restarted"
+      ],
+      "answer": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "explanation": "The OS can kill a backgrounded process at any time, networks drop mid-request, many users stay on old versions for months or years, and those old versions keep calling your API. So the design must persist in-progress state, retry safely, and keep APIs backward compatible. Files in internal storage do persist across process death, which is exactly why they are where in-progress state should go."
+    },
+    {
+      "id": "d50q09",
+      "type": "mcq",
+      "topic": "grpc",
+      "difficulty": "Medium",
+      "question": "The team proposes gRPC with protobuf instead of REST/JSON for the Android app. Which statement best describes the trade-off?",
+      "options": [
+        "gRPC cannot run on Android, so it is only an option for server-to-server calls",
+        "Protobuf payloads are usually larger than JSON, but parsing is faster because the schema is known",
+        "gRPC gives up streaming support in exchange for typed stubs and faster connection setup",
+        "Compact binary payloads and typed stubs, at the cost of debuggability, APK size and HTTP caching"
+      ],
+      "answer": [
+        3
+      ],
+      "explanation": "gRPC works on Android and is efficient and strongly typed, and it supports streaming. The costs are payloads you can't read in a proxy, a protobuf/gRPC runtime that adds to the app's size, and less help from standard HTTP caches and CDNs. Protobuf is typically smaller than the equivalent JSON, not larger."
+    },
+    {
+      "id": "d50q10",
+      "type": "truefalse",
+      "topic": "release constraints",
+      "difficulty": "Medium",
+      "question": "If a new Android release has a serious bug, you can roll it back for every user within minutes, just like a server deploy.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "Installed builds stay on devices. A fix needs a new build, store review and users actually updating, which takes days or longer. That is why mobile teams rely on staged rollouts, remote kill switches and server-side compatibility rather than fast rollback."
+    },
+    {
+      "id": "d50q11",
+      "type": "multi",
+      "topic": "graphql",
+      "difficulty": "Medium",
+      "question": "Which are genuine advantages of GraphQL over a typical REST API for a mobile client? Select all that apply.",
+      "options": [
+        "The client asks for exactly the fields a screen needs, which avoids over-fetching",
+        "Data from several resources can be fetched in one round trip, which avoids under-fetching",
+        "Standard HTTP and CDN caching works out of the box because each query gets its own URL",
+        "A strongly typed schema allows client model and query code generation",
+        "Server-side cost control becomes trivial because clients can't write expensive queries"
+      ],
+      "answer": [
+        0,
+        1,
+        3
+      ],
+      "explanation": "GraphQL's wins are field selection, fewer round trips and a typed schema for codegen. Queries usually go as POSTs to a single endpoint, so URL-based HTTP caching is harder, and clients can write deeply nested, expensive queries, so the server needs depth and cost limits."
+    },
+    {
+      "id": "d50q12",
+      "type": "mcq",
+      "topic": "token storage",
+      "difficulty": "Medium",
+      "question": "Where should an Android app store its refresh token?",
+      "options": [
+        "Encrypted with a Keystore-backed key, stored in app-private DataStore",
+        "In plain SharedPreferences, since the app sandbox already stops other apps reading it",
+        "In a `BuildConfig` field so it ships with the app",
+        "In a file on shared external storage so it survives reinstalls"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Keystore-backed keys can't be extracted from the app, so even if the stored file leaks (backups, rooted devices) the token stays encrypted. Plain SharedPreferences relies only on the sandbox, `BuildConfig` is baked into the APK and isn't per-user, and external storage is readable by other apps."
+    },
+    {
+      "id": "d50q13",
+      "type": "mcq",
+      "topic": "idempotency keys",
+      "difficulty": "Medium",
+      "question": "The user taps \"Place order\", the POST times out, and the client retries automatically. How do you make sure the user isn't charged twice?",
+      "options": [
+        "Generate a fresh UUID for every retry attempt and send it as the idempotency key",
+        "Switch the call to GET so it is safe to retry",
+        "Send one idempotency key per order and reuse it on every retry",
+        "Never retry POST requests, and show an error after the timeout"
+      ],
+      "answer": [
+        2
+      ],
+      "explanation": "Send the key in a header and have the server return the original result for a repeated key. A timeout doesn't tell you whether the server processed the order, so retries must be recognisable as the same operation. A new key per attempt defeats that, since the server sees distinct orders. Never retrying hurts users on flaky networks, and GET must not create orders."
+    },
+    {
+      "id": "d50q14",
+      "type": "truefalse",
+      "topic": "kill switch",
+      "difficulty": "Easy",
+      "question": "A remotely fetched feature flag, already built into a shipped version, lets you turn off a broken feature for users on that version without a new store release.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Remote config is read at runtime, so flipping the flag changes the behaviour of builds already installed. The catch is that the flag and its \"off\" path must exist in the build before the problem happens, so you can't add a kill switch after the fact."
+    },
+    {
+      "id": "d50q15",
+      "type": "mcq",
+      "topic": "error contract",
+      "difficulty": "Medium",
+      "question": "The API returns every validation failure as `400` with only an English sentence in `message`. Which change helps the mobile client most?",
+      "code": "{\n  \"message\": \"The coupon you entered has expired.\"\n}",
+      "options": [
+        "Return `200` with the message so the client never sees an error status",
+        "Translate `message` on the server into every supported language so users understand it",
+        "Have the client match on substrings of `message` to decide what to show",
+        "Add a stable machine-readable error code such as `COUPON_EXPIRED`, plus field details"
+      ],
+      "answer": [
+        3
+      ],
+      "explanation": "Clients need a stable contract to branch on (a code plus field details and a retryable flag, with `message` kept for logs and fallback): show a field error, offer a retry, or force a re-login. Matching on text breaks as soon as copy changes, server translation still gives the client nothing to branch on, and hiding errors behind `200` breaks retry and monitoring logic."
+    },
+    {
+      "id": "d50q16",
+      "type": "mcq",
+      "topic": "server vs client",
+      "difficulty": "Medium",
+      "question": "The checkout screen shows a cart total with discounts and tax. Where should the authoritative total be computed?",
+      "options": [
+        "On the server, with any client-side figure treated as an estimate",
+        "On the client, since it already has the item prices and it saves a round trip",
+        "On the client, with the tax rules hard-coded per country",
+        "On both sides independently, charging whichever is lower"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Pricing rules change often and must be the same across platforms, and old app versions can't be updated. Client-side values can also be tampered with. Business rules that must be correct and consistent belong on the server, while the client can still compute purely presentational things."
+    },
+    {
+      "id": "d50q17",
+      "type": "mcq",
+      "topic": "enum evolution",
+      "difficulty": "Hard",
+      "question": "The server adds a new order status `\"ARCHIVED\"`. Older app versions start crashing while parsing order lists. What client design would have prevented this?",
+      "code": "enum class OrderStatus { PENDING, SHIPPED, DELIVERED }\n\n// response: { \"id\": 7, \"status\": \"ARCHIVED\" }",
+      "options": [
+        "Make the server send the enum's ordinal number instead of its name",
+        "Map unrecognised values to an `UNKNOWN` fallback with a safe UI",
+        "Make `status` nullable and skip the whole order if it is null",
+        "Fail fast on unknown values so the bug is noticed in testing"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "Adding an enum value is a change the server considers \"additive\", but strict deserialisers treat it as breaking for clients already shipped. An `UNKNOWN` fallback keeps old versions working. Ordinals are even more fragile, failing fast just crashes users in production, and dropping orders hides real data."
+    },
+    {
+      "id": "d50q18",
+      "type": "multi",
+      "topic": "token refresh",
+      "difficulty": "Hard",
+      "question": "Five API calls return `401` at almost the same moment because the access token expired. Which behaviours are correct for the client's auth layer? Select all that apply.",
+      "options": [
+        "Allow only one refresh call in flight; the other requests wait for it and then use the new token",
+        "Retry each original request once with the new access token",
+        "If the refresh call itself is rejected, clear the session and send the user to sign in",
+        "Let each failed request start its own refresh call in parallel",
+        "Keep retrying the original request until it succeeds"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "Parallel refreshes waste calls and, with refresh-token rotation, the first one invalidates the token the others are using, which can log the user out. Serialising the refresh, retrying once, and signing out when the refresh is rejected gives correct behaviour. Endless retries loop forever when the session is truly gone."
+    },
+    {
+      "id": "d50q19",
+      "type": "mcq",
+      "topic": "request batching",
+      "difficulty": "Hard",
+      "question": "On cold start the home screen makes 12 separate API calls, and on 3G it takes several seconds to fill in. What is the most effective fix?",
+      "options": [
+        "Make the 12 calls one after another so the radio isn't overloaded",
+        "Raise the client timeout to 60 seconds so fewer calls fail on slow 3G links",
+        "Add one screen-level aggregate endpoint (backend-for-frontend) for the home screen",
+        "Poll all 12 endpoints every 30 seconds in the background so the data is always fresh"
+      ],
+      "answer": [
+        2
+      ],
+      "explanation": "On mobile each round trip pays high latency and keeps the radio awake, while server-to-server calls inside the data centre are fast. The aggregate endpoint fans out on the server and returns everything in one response. Batching into one response cuts latency and battery use, at the cost of a less generic, screen-specific endpoint. Sequential calls are slower, longer timeouts hide the problem, and polling drains the battery."
+    },
+    {
+      "id": "d50q20",
+      "type": "multi",
+      "topic": "api versioning",
+      "difficulty": "Hard",
+      "question": "A truly breaking API change is unavoidable (a new auth model). Which practices make it safe given that old app versions stay installed? Select all that apply.",
+      "options": [
+        "Serve the new contract on a new version (e.g. `/v2`) while `/v1` keeps working",
+        "Add a server-driven minimum supported version check that prompts very old clients to update",
+        "Watch app-version analytics and retire `/v1` only once its traffic is negligible",
+        "Change the `/v1` response in place on the day the new app ships",
+        "Assume store auto-update moves everyone to the new version within a week"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "Breaking changes must run side by side with the old contract until the old clients are gone, and a minimum-version gate plus usage data let you decide when that is. Changing `/v1` in place breaks every installed build, and many users disable auto-update or rarely open the app."
+    }
+  ]
+}

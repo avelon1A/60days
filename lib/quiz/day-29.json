@@ -1,0 +1,361 @@
+{
+  "day": 29,
+  "topic": "Flow basics: cold flows, builders & terminal operators",
+  "questions": [
+    {
+      "id": "d29q01",
+      "type": "output",
+      "topic": "cold flow",
+      "difficulty": "Easy",
+      "question": "What does this print?",
+      "code": "import kotlinx.coroutines.*\nimport kotlinx.coroutines.flow.*\n\nfun main() = runBlocking {\n    val f = flow {\n        println(\"start\")\n        emit(1)\n    }\n    println(\"created\")\n    f.collect { println(\"got $it\") }\n    f.collect { println(\"got $it\") }\n}",
+      "options": [
+        "created\nstart\ngot 1\nstart\ngot 1",
+        "start\ncreated\ngot 1\ngot 1",
+        "created\nstart\ngot 1\ngot 1",
+        "start\ngot 1\ncreated\ngot 1"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A `flow { }` is cold: building it runs nothing, so `created` prints first. Each `collect` runs the whole block again from the top, which is why `start` appears twice instead of the values being shared."
+    },
+    {
+      "id": "d29q02",
+      "type": "mcq",
+      "topic": "lazy execution",
+      "difficulty": "Easy",
+      "question": "The ViewModel calls `repository.users()` and stores the result in `f`, but nothing ever collects `f`. What happens?",
+      "code": "class UserRepository(private val api: Api) {\n    fun users(): Flow<User> = flow {\n        Log.d(\"Repo\", \"fetching\")\n        api.getUsers().forEach { emit(it) }\n    }\n}\n\n// in the ViewModel\nval f = repository.users()",
+      "options": [
+        "Nothing: no log line, no network request, because the `flow { }` block only runs when collected",
+        "The request runs immediately and the users are buffered until someone collects",
+        "The request runs immediately and the users are dropped because there is no collector",
+        "It throws `IllegalStateException` because a flow must be collected before it is garbage collected"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Calling a function that returns `flow { }` only creates a description of work. The block, including the log and `api.getUsers()`, runs when a terminal operator such as `collect` is called. Nothing is cached or dropped because nothing ever ran."
+    },
+    {
+      "id": "d29q03",
+      "type": "truefalse",
+      "topic": "flowOf",
+      "difficulty": "Easy",
+      "question": "`flowOf(1, 2, 3)` is a hot flow: it emits its values as soon as it is created, and a collector that subscribes later misses them.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "`flowOf` is a cold builder, just like `flow { }`. Nothing is emitted until something collects it, and every collector gets all three values from the start."
+    },
+    {
+      "id": "d29q04",
+      "type": "output",
+      "topic": "reduce & fold",
+      "difficulty": "Easy",
+      "question": "What does this print?",
+      "code": "import kotlinx.coroutines.*\nimport kotlinx.coroutines.flow.*\n\nfun main() = runBlocking {\n    val f = (1..4).asFlow()\n    val product = f.reduce { a, b -> a * b }\n    val sum = f.fold(10) { acc, x -> acc + x }\n    val evens = f.count { it % 2 == 0 }\n    println(\"$product $sum $evens\")\n}",
+      "options": [
+        "24 20 2",
+        "24 10 2",
+        "10 20 2",
+        "24 20 4"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`reduce` starts from the first element: 1*2*3*4 = 24. `fold` starts from the initial value: 10+1+2+3+4 = 20. `count { }` counts the even numbers, 2 and 4. The cold flow `f` can be collected three times, once per terminal operator."
+    },
+    {
+      "id": "d29q05",
+      "type": "mcq",
+      "topic": "room flow",
+      "difficulty": "Easy",
+      "question": "Which statement about this Room DAO method is correct?",
+      "code": "@Dao\ninterface UserDao {\n    @Query(\"SELECT * FROM user ORDER BY name\")\n    fun observeUsers(): Flow<List<User>>\n}",
+      "options": [
+        "It is not `suspend`; it emits the current rows when collected and emits a new list every time the `user` table changes",
+        "It must be marked `suspend`, otherwise Room fails to generate the DAO",
+        "It emits exactly once with the current rows and then completes",
+        "It runs the query on the collector's thread, so you must add `.flowOn(Dispatchers.IO)` to avoid blocking the main thread"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A DAO returning `Flow` is not `suspend`: it returns the flow straight away and Room runs the query when it is collected. Room watches the table and re-runs the query on every change, so the flow keeps emitting new lists until collection is cancelled. Room already runs the query on its own background executor, so `flowOn(Dispatchers.IO)` is not needed."
+    },
+    {
+      "id": "d29q06",
+      "type": "output",
+      "topic": "sequential",
+      "difficulty": "Medium",
+      "question": "What does this print?",
+      "code": "import kotlinx.coroutines.*\nimport kotlinx.coroutines.flow.*\n\nfun main() = runBlocking {\n    flow {\n        for (i in 1..2) {\n            println(\"emit $i\")\n            emit(i)\n        }\n    }.collect { println(\"collect $it\") }\n}",
+      "options": [
+        "emit 1\ncollect 1\nemit 2\ncollect 2",
+        "emit 1\nemit 2\ncollect 1\ncollect 2",
+        "collect 1\ncollect 2\nemit 1\nemit 2",
+        "emit 1\nemit 2\ncollect 2"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "By default the producer and the collector run in the same coroutine. `emit(i)` calls the collector's lambda directly and returns only after it finishes, so each emission is fully processed before the loop continues. Nothing is buffered."
+    },
+    {
+      "id": "d29q07",
+      "type": "mcq",
+      "topic": "launchIn",
+      "difficulty": "Easy",
+      "question": "What is `job`, and when does collection start?",
+      "code": "val job = repository.events()\n    .onEach { render(it) }\n    .launchIn(viewModelScope)",
+      "options": [
+        "A `Job`; collection starts right away in `viewModelScope`",
+        "A `List` of all events, returned once the flow completes",
+        "A new cold `Flow` that starts collecting when `job.start()` is called",
+        "A `Deferred<Unit>` that has to be awaited before collection starts"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`launchIn(scope)` is shorthand for `scope.launch { flow.collect() }`. It returns the `Job` of that coroutine immediately, so you can cancel it later. The work goes in `onEach`, because `launchIn` takes no lambda."
+    },
+    {
+      "id": "d29q08",
+      "type": "multi",
+      "topic": "terminal operators",
+      "difficulty": "Medium",
+      "question": "Which of these are terminal operators, meaning that calling them actually starts collecting the flow? Select all that apply.",
+      "options": [
+        "`collect`",
+        "`toList`",
+        "`launchIn`",
+        "`map`",
+        "`onEach`",
+        "`filter`"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "Terminal operators (`collect`, `toList`, `first`, `launchIn`, ...) start collection. Of these, all but `launchIn` are suspend functions. `map`, `onEach` and `filter` are intermediate: they return a new `Flow` right away and run nothing until something downstream collects."
+    },
+    {
+      "id": "d29q09",
+      "type": "output",
+      "topic": "first",
+      "difficulty": "Medium",
+      "question": "What does this print?",
+      "code": "import kotlinx.coroutines.*\nimport kotlinx.coroutines.flow.*\n\nfun main() = runBlocking {\n    val f = flowOf(1, 2, 3).map {\n        println(\"map $it\")\n        it * 10\n    }\n    println(\"built\")\n    println(f.first())\n}",
+      "options": [
+        "built\nmap 1\n10",
+        "map 1\nmap 2\nmap 3\nbuilt\n10",
+        "built\nmap 1\nmap 2\nmap 3\n10",
+        "map 1\nbuilt\n10"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`map` is intermediate and lazy, so building `f` prints nothing. `first()` collects until it receives one value and then cancels the flow, so `map` only runs for `1`. It does not run for the whole list first."
+    },
+    {
+      "id": "d29q10",
+      "type": "truefalse",
+      "topic": "emit suspends",
+      "difficulty": "Easy",
+      "question": "`emit` is a suspend function, so when the collector is slow, the code inside `flow { }` is suspended at `emit` until the collector has finished with the value.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`emit` is declared `suspend` and, without a buffer, it calls the downstream collector directly. The producer cannot continue until that call returns, so a slow collector slows down emission."
+    },
+    {
+      "id": "d29q11",
+      "type": "mcq",
+      "topic": "single",
+      "difficulty": "Medium",
+      "question": "What happens when this runs?",
+      "code": "import kotlinx.coroutines.*\nimport kotlinx.coroutines.flow.*\n\nfun main() = runBlocking {\n    val x = flowOf(1, 2).single()\n    println(x)\n}",
+      "options": [
+        "It throws `IllegalArgumentException`",
+        "It returns `1`, the first element",
+        "It returns `2`, the last element",
+        "It returns `null` because the flow does not have exactly one element"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`single()` expects exactly one element. It throws `IllegalArgumentException` if there are more and `NoSuchElementException` if the flow is empty. `singleOrNull()` is the variant that returns `null`, and `first()` is the one that takes the first value."
+    },
+    {
+      "id": "d29q12",
+      "type": "multi",
+      "topic": "flowOn",
+      "difficulty": "Medium",
+      "question": "Which of the labelled parts run on `Dispatchers.IO`? Select all that apply.",
+      "code": "repository.rawEvents()            // flow { ... }  (A)\n    .map { parse(it) }            // (B)\n    .flowOn(Dispatchers.IO)\n    .filter { it.isVisible }      // (C)\n    .collect { render(it) }       // (D)",
+      "options": [
+        "The `flow { }` body (A)",
+        "The `map` lambda (B)",
+        "The `filter` lambda (C)",
+        "The `collect` lambda (D)"
+      ],
+      "answer": [
+        0,
+        1
+      ],
+      "explanation": "`flowOn` changes the context only for the operators above it (upstream). A and B run on `Dispatchers.IO`. C and D are downstream, so they keep running in the collector's context, for example `viewModelScope`'s main thread."
+    },
+    {
+      "id": "d29q13",
+      "type": "truefalse",
+      "topic": "exception transparency",
+      "difficulty": "Medium",
+      "question": "In this code, the `try/catch` around `emit` catches the collector's exception and the collector then receives `-1` as a fallback value.",
+      "code": "flow {\n    try {\n        emit(1)\n    } catch (e: Exception) {\n        emit(-1)\n    }\n}.collect { value ->\n    if (value == 1) throw RuntimeException(\"boom\")\n    println(value)\n}",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "`emit` calls the downstream collector, so the `try/catch` does catch the collector's exception. Emitting again after that breaks exception transparency, and the flow throws `IllegalStateException` (\"Flow exception transparency is violated\") instead of delivering `-1`. Use the `catch` operator for upstream errors and let downstream errors propagate."
+    },
+    {
+      "id": "d29q14",
+      "type": "mcq",
+      "topic": "flow invariant",
+      "difficulty": "Medium",
+      "question": "A repository switches threads like this. What happens when a ViewModel collects it?",
+      "code": "fun loadUsers(): Flow<List<User>> = flow {\n    withContext(Dispatchers.IO) {\n        emit(api.fetchUsers())\n    }\n}",
+      "options": [
+        "It throws `IllegalStateException`, because `emit` is called from a different context",
+        "It works. The fetch and the collector both run on `Dispatchers.IO`",
+        "It works. The fetch runs on IO and the value is sent back to the collector's dispatcher automatically",
+        "It does not compile, because `withContext` cannot be called inside `flow { }`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A `flow { }` must emit from the same coroutine context it was collected in (context preservation). Emitting inside `withContext(Dispatchers.IO)` breaks that, and the flow throws `IllegalStateException` at runtime. It compiles fine. `flowOn` is the supported way to move the upstream to another dispatcher."
+    },
+    {
+      "id": "d29q15",
+      "type": "output",
+      "topic": "onStart & onCompletion",
+      "difficulty": "Medium",
+      "question": "What does this print?",
+      "code": "import kotlinx.coroutines.*\nimport kotlinx.coroutines.flow.*\n\nfun main() = runBlocking {\n    flowOf(\"a\", \"b\")\n        .onEach { println(\"each $it\") }\n        .onStart { println(\"start\") }\n        .onCompletion { println(\"done\") }\n        .collect { println(\"got $it\") }\n}",
+      "options": [
+        "start\neach a\ngot a\neach b\ngot b\ndone",
+        "each a\neach b\nstart\ngot a\ngot b\ndone",
+        "each a\nstart\ngot a\neach b\ngot b\ndone",
+        "start\neach a\neach b\ngot a\ngot b\ndone"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`onStart` runs before the upstream starts emitting, even though it comes after `onEach` in the chain. Then each value goes through `onEach` and on to `collect` one at a time, because everything runs sequentially. `onCompletion` runs once the flow finishes."
+    },
+    {
+      "id": "d29q16",
+      "type": "mcq",
+      "topic": "buffer",
+      "difficulty": "Hard",
+      "question": "Each emission takes 100 ms to produce and each value takes 300 ms to collect. Roughly how long does collecting the 3 values take with `buffer()`, compared with about 1200 ms without it?",
+      "code": "flow {\n    repeat(3) {\n        delay(100)\n        emit(it)\n    }\n}\n    .buffer()\n    .collect {\n        delay(300)\n        println(it)\n    }",
+      "options": [
+        "About 1000 ms",
+        "About 1200 ms, because `buffer()` does not change total time",
+        "About 400 ms",
+        "About 300 ms"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Without a buffer everything is sequential: 3 × (100 + 300) = 1200 ms. `buffer()` runs the producer in a separate coroutine, so it makes the next values while the collector is busy. After the first 100 ms, the collector processes items back to back: 100 + 3 × 300 ≈ 1000 ms. The slow collector still sets the minimum time, which is why 400 ms is impossible."
+    },
+    {
+      "id": "d29q17",
+      "type": "mcq",
+      "topic": "conflate",
+      "difficulty": "Medium",
+      "question": "A sensor flow emits every 100 ms, and the UI collector takes 250 ms per value. What does adding `.conflate()` before `collect` do?",
+      "options": [
+        "The producer never waits; only the newest value is kept while the collector is busy",
+        "Every value is buffered without limit, so the collector eventually processes all of them",
+        "The newest value is dropped while the collector is busy, so the collector only sees older values",
+        "The collector's current processing is cancelled whenever a new value arrives"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`conflate()` is a buffer of size one that keeps the latest value: the producer runs freely and values the collector had no time for are overwritten. It does not cancel the work in progress. That is what `collectLatest` does."
+    },
+    {
+      "id": "d29q18",
+      "type": "output",
+      "topic": "catch operator",
+      "difficulty": "Hard",
+      "question": "What does this print?",
+      "code": "import kotlinx.coroutines.*\nimport kotlinx.coroutines.flow.*\n\nfun main() = runBlocking {\n    flowOf(1, 2, 3)\n        .map {\n            check(it != 2) { \"bad $it\" }\n            it\n        }\n        .catch { e ->\n            println(\"caught: ${e.message}\")\n            emit(-1)\n        }\n        .collect { println(it) }\n}",
+      "options": [
+        "1\ncaught: bad 2\n-1",
+        "1\ncaught: bad 2\n-1\n3",
+        "1\ncaught: bad 2\n3",
+        "caught: bad 2\n-1"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "The exception from `map` comes from upstream, so `catch` handles it and can `emit` a fallback value. The upstream flow has already ended with the exception, though, so `3` is never emitted. `catch` replaces the rest of the flow and does not resume it. It also only sees upstream errors, so an exception thrown inside `collect` would not reach it."
+    },
+    {
+      "id": "d29q19",
+      "type": "mcq",
+      "topic": "callbackFlow",
+      "difficulty": "Hard",
+      "question": "In this `callbackFlow`, what does `awaitClose` do, and what happens if you leave it out?",
+      "code": "fun LocationClient.updates(): Flow<Location> = callbackFlow {\n    val cb = object : LocationCallback {\n        override fun onLocation(l: Location) {\n            trySend(l)\n        }\n    }\n    register(cb)\n    awaitClose { unregister(cb) }\n}",
+      "options": [
+        "It suspends until the flow is closed, then unregisters. Without it, the builder throws `IllegalStateException`",
+        "It waits until the first location arrives. Without it, the flow emits nothing",
+        "It is optional cleanup. Without it, the flow simply completes when the block finishes and the callback stays registered",
+        "It blocks the calling thread until the client disconnects. Without it, collection happens on a background thread"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "The body of `callbackFlow` returns right after registering, but values keep arriving through `trySend`. `awaitClose` keeps the producer suspended so the channel stays open, and runs its block when the collector goes away. That is where you unregister the listener. Leaving it out is treated as a bug: the builder throws `IllegalStateException` instead of quietly leaking the listener."
+    },
+    {
+      "id": "d29q20",
+      "type": "output",
+      "topic": "cancellation",
+      "difficulty": "Hard",
+      "question": "What does this print?",
+      "code": "import kotlinx.coroutines.*\nimport kotlinx.coroutines.flow.*\n\nfun main() = runBlocking {\n    val job = launch {\n        flow {\n            repeat(5) {\n                emit(it)\n                delay(100)\n            }\n        }\n            .onCompletion { println(\"cancelled=${it is CancellationException}\") }\n            .collect { println(it) }\n    }\n    delay(250)\n    job.cancel()\n    job.join()\n    println(\"end\")\n}",
+      "options": [
+        "0\n1\n2\ncancelled=true\nend",
+        "0\n1\n2\nend",
+        "0\n1\n2\n3\n4\ncancelled=false\nend",
+        "0\n1\ncancelled=true\nend"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Values arrive at 0, 100 and 200 ms. At 250 ms the job is cancelled while the flow is suspended in `delay`, so the flow stops with a `CancellationException`. `onCompletion` still runs and receives that exception as its cause, and it is not `null`. Cancelling the collecting coroutine is enough to stop the producer, because both run in the same coroutine."
+    }
+  ]
+}

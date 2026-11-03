@@ -111,7 +111,8 @@ h1 small { color: var(--faint); font-size: 18px; font-weight: 700; }
 .links { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
 .pill-btn { border: 1px solid var(--line); background: var(--card); border-radius: 999px; padding: 4px 12px; font-size: 13px; font-weight: 600; color: var(--muted); }
 .pill-btn:hover { border-color: var(--strong); color: var(--fg); }
-.pill-btn[aria-expanded="true"] { background: var(--blue-soft); border-color: transparent; color: var(--blue-ink); }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.pill-btn[aria-pressed="true"], .pill-btn[aria-expanded="true"] { background: var(--blue-soft); border-color: transparent; color: var(--blue-ink); }
 .sub { margin-top: 12px; padding: 14px 16px; border-radius: 12px; background: var(--bg); border: 1px solid var(--line-2); }
 .sub p { margin: 0 0 8px; }
 .sub .k { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-right: 6px; }
@@ -150,6 +151,17 @@ pre { margin: 10px 0; padding: 12px 14px; background: var(--card); border: 1px s
 .wk.later .t { color: var(--faint); }
 .wk.past .t { color: var(--muted); }
 .wk .s { font: 12px var(--mono); color: var(--faint); }
+.wk-tog { border: 0; background: none; padding: 0; width: 100%; text-align: left; font: inherit; }
+.wk-tog .t::after { content: " ▸"; color: var(--faint); font-size: 11px; }
+.wk-tog[aria-expanded="true"] .t::after { content: " ▾"; }
+.rdays { margin: 0 0 6px 46px; border-left: 2px solid var(--line-2); }
+.rd { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 6px; align-items: baseline; width: 100%; text-align: left; border: 0; background: none; padding: 4px 0 4px 10px; font-size: 13px; color: var(--muted); border-radius: 0 8px 8px 0; }
+.rd:hover:not([disabled]) { background: var(--bg); color: var(--fg); }
+.rd[disabled] { cursor: default; color: var(--faint); }
+.rd .n { font: 600 11px var(--mono); color: var(--faint); }
+.rd.sel { color: var(--fg); font-weight: 700; } .rd.sel .n { color: var(--blue); }
+.rd .s { font: 11px var(--mono); color: var(--faint); white-space: nowrap; }
+.rd .s.full { color: var(--easy); }
 .rules { margin: 0; padding-left: 18px; font-size: 14px; color: var(--muted); }
 .rules li { margin: 4px 0; }
 .empty { font-size: 14px; color: var(--faint); margin: 0; }
@@ -182,6 +194,55 @@ dialog::backdrop { background: rgba(15, 29, 51, .35); }
 .mem .acts { display: flex; gap: 6px; }
 .add-row { display: grid; grid-template-columns: minmax(0, 1fr) 96px auto; gap: 8px; align-items: end; margin-top: 6px; }
 .section-t { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin: 18px 0 4px; }
+.seg { display: inline-flex; padding: 4px; gap: 4px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; align-self: flex-start; }
+.seg button { border: 0; background: none; padding: 7px 14px; border-radius: 9px; font-weight: 700; font-size: 14px; color: var(--muted); display: inline-flex; align-items: center; gap: 6px; }
+.seg button[aria-selected="true"] { background: var(--blue); color: #fff; }
+.seg .badge { font: 600 11px var(--mono); padding: 1px 6px; border-radius: 999px; background: var(--blue-soft); color: var(--blue-ink); }
+.seg button[aria-selected="true"] .badge { background: rgba(255, 255, 255, .22); color: #fff; }
+.qbar { height: 6px; background: var(--line-2); }
+.qbar div { height: 100%; background: var(--blue); transition: width .2s; }
+.qwrap { padding: 18px; }
+.qmeta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+.qtag { font: 600 12px var(--mono); color: var(--blue-ink); background: var(--blue-soft); padding: 2px 9px; border-radius: 999px; }
+.qkind { font-size: 12px; color: var(--muted); font-weight: 600; }
+.qtext { font-size: 16px; font-weight: 600; margin: 0 0 4px; overflow-wrap: anywhere; }
+.qtext code, .qexp code, .opt code { font: 13px var(--mono); background: var(--code-bg); border: 1px solid var(--line-2); padding: 0 5px; border-radius: 6px; }
+pre.kt { background: var(--code-bg); }
+.kt .kw { color: #7c3aed; font-weight: 500; } .kt .str { color: #15803d; } .kt .num { color: #c2410c; } .kt .cm { color: var(--faint); font-style: italic; } .kt .an { color: #b45309; }
+:root[data-theme="dark"] .kt .kw { color: #c4b5fd; } :root[data-theme="dark"] .kt .str { color: #86efac; } :root[data-theme="dark"] .kt .num { color: #fdba74; } :root[data-theme="dark"] .kt .an { color: #fcd34d; }
+.opts { display: grid; gap: 8px; margin-top: 12px; }
+.opt { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 10px; align-items: start; text-align: left; width: 100%; padding: 11px 14px; border-radius: 12px; border: 1.5px solid var(--line); background: var(--card); font-size: 15px; }
+.opt:hover { border-color: var(--strong); }
+.opt .key { width: 24px; height: 24px; border-radius: 50%; border: 1.5px solid var(--strong); display: grid; place-items: center; font: 700 12px var(--sans); color: var(--muted); }
+.opt.multi .key { border-radius: 6px; }
+.opt .otext { white-space: pre-wrap; overflow-wrap: anywhere; padding-top: 1px; }
+.opt .otext.mono { font: 13.5px/1.5 var(--mono); }
+.opt.on { border-color: var(--blue); background: var(--blue-soft); }
+.opt.on .key { background: var(--blue); border-color: var(--blue); color: #fff; }
+.opt.right { border-color: var(--easy); background: var(--easy-bg); cursor: default; }
+.opt.right .key { background: var(--easy); border-color: var(--easy); color: var(--on-easy); }
+.opt.wrong { border-color: var(--hard); background: var(--hard-bg); cursor: default; }
+.opt.wrong .key { background: var(--hard); border-color: var(--hard); color: #fff; }
+.opt.plain { cursor: default; }
+.qnav { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+.dots { display: flex; flex-wrap: wrap; gap: 5px; padding: 0 18px 16px; }
+.dot { width: 28px; height: 28px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); font: 600 12px var(--sans); padding: 0; color: var(--muted); font-variant-numeric: tabular-nums; }
+.dot.ans { background: var(--blue-soft); border-color: transparent; color: var(--blue-ink); }
+.dot.cur { outline: 2px solid var(--fg); outline-offset: 1px; }
+.dot.ok { background: var(--easy-bg); color: var(--easy); border-color: transparent; }
+.dot.bad { background: var(--hard-bg); color: var(--hard); border-color: transparent; }
+.qscore { display: flex; align-items: center; gap: 18px; padding: 18px; border-bottom: 1px solid var(--line-2); flex-wrap: wrap; }
+.qscore b { font-size: 34px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+.qscore b small { font-size: 18px; color: var(--faint); }
+.qscore .msg { font-size: 14px; color: var(--muted); }
+.late { font-size: 12px; font-weight: 700; color: var(--med); background: var(--med-bg); padding: 2px 8px; border-radius: 999px; }
+.qres { padding: 16px 18px; border-bottom: 1px solid var(--line-2); }
+.qres:last-of-type { border-bottom: 0; }
+.qexp { margin: 12px 0 0; padding: 12px 14px; border-radius: 12px; background: var(--bg); border: 1px solid var(--line-2); font-size: 14px; color: var(--fg); }
+.qexp .k { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-right: 6px; }
+.filter { display: flex; gap: 6px; }
+.qempty { padding: 28px 18px; text-align: center; color: var(--muted); font-size: 14px; }
+.qempty .big { font-size: 34px; display: block; margin-bottom: 6px; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
@@ -230,6 +291,7 @@ dialog::backdrop { background: rgba(15, 29, 51, .35); }
         <section class="card hero" id="hero"></section>
         <section class="stats" id="stats"></section>
         <nav class="strip" id="strip" aria-label="Days"></nav>
+        <div class="seg" role="tablist" id="tabs" aria-label="Section"></div>
         <section class="card" id="day"></section>
       </div>
       <aside class="col">
@@ -238,7 +300,11 @@ dialog::backdrop { background: rgba(15, 29, 51, .35); }
           <div id="lb"></div>
         </section>
         <section class="card side">
-          <h2>Roadmap</h2>
+          <h2>Kotlin quiz board</h2>
+          <div id="qlb"></div>
+        </section>
+        <section class="card side">
+          <h2 id="roadT">Roadmap</h2>
           <div id="road"></div>
         </section>
         <section class="card side">
@@ -248,6 +314,7 @@ dialog::backdrop { background: rgba(15, 29, 51, .35); }
             <li>Try for 30 minutes before opening the hint or solution</li>
             <li>Discussion opens once you solve a problem, so no spoilers</li>
             <li>Missed a day? Catch up, don't skip</li>
+            <li>20 Kotlin questions a day. One attempt, so no peeking at the IDE</li>
           </ol>
         </section>
       </aside>
@@ -319,7 +386,11 @@ document.querySelectorAll("[data-theme-toggle]").forEach(b => b.addEventListener
 darkQuery.addEventListener("change", e => { if (!savedTheme()) applyTheme(e.matches ? "dark" : "light"); });
 
 let BANK = [];
-const S = { cur: 1, sel: 1, me: null, uid: null, users: {}, solves: {}, mine: {}, sols: {}, comments: {}, open: {}, drafts: {} };
+let SYL = { weeks: [], days: [] };
+const quizTopic = day => (SYL.days.find(x => x.day === day) || {}).topic || "Kotlin";
+const S = { cur: 1, sel: 1, me: null, uid: null, users: {}, solves: {}, mine: {}, sols: {}, comments: {}, open: {}, drafts: {},
+  tab: savedTab(), quizScores: {}, quiz: {}, qa: {}, qi: {}, qfilter: {}, roadOpen: {} };
+function savedTab() { try { return localStorage.getItem("sdp-tab") === "quiz" ? "quiz" : "dsa"; } catch { return "dsa"; } }
 
 const $ = id => document.getElementById(id);
 function currentDay() { return Math.min(60, Math.max(1, Math.floor((Date.now() - START) / DAYMS) + 1)); }
@@ -382,7 +453,7 @@ function renderHero() {
   const ring = el("div", { class: "ring" + (n === 3 ? " full" : ""), style: `--p:${Math.round(n / 3 * 100)}`, role: "img", "aria-label": `${n} of 3 solved` }, el("div", {}, `${n}/3`));
   $("hero").replaceChildren(
     el("div", { style: "min-width:0" },
-      el("div", { class: "eyebrow" }, `Week ${Math.min(9, Math.ceil(d.day / 7))} · ${d.topic}`),
+      el("div", { class: "eyebrow" }, `Week ${Math.min(9, Math.ceil(d.day / 7))} · ${S.tab === "quiz" ? "Kotlin · " + quizTopic(d.day) : d.topic}`),
       el("h1", {}, `Day ${d.day} `, el("small", {}, "/ 60")),
       el("div", { style: "font-size:13px;color:var(--muted);margin-top:2px" }, d.day === S.cur ? `Today · ${dateLabel(d.date)}` : d.day > S.cur ? `Preview · opens ${dateLabel(d.date)}, 6 AM` : dateLabel(d.date))),
     ring);
@@ -409,6 +480,7 @@ function renderStrip() {
 }
 
 function renderDay() {
+  if (S.tab === "quiz") return renderQuiz();
   const d = BANK[S.sel - 1], box = $("day"), solved = mySolved(d.day);
   const focused = document.activeElement && document.activeElement.id;
   const linked = !!S.me.leetcode, preview = d.day > S.cur;
@@ -479,19 +551,233 @@ function renderLeaderboard() {
     el("span", { class: "st", title: "Day streak" }, r.st ? "🔥 " + r.st : ""), el("span", { class: "tot" }, r.total))));
 }
 
+const QKIND = { mcq: "Pick one", output: "What does it print?", truefalse: "True or false?", multi: "Pick all that apply" };
+const KT_RE = /(\/\/[^\n]*|\/\*[\s\S]*?\*\/)|("""[\s\S]*?"""|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\])+')|(@[A-Za-z]+)|\b(\d[\d_]*(?:\.\d+)?[LfFuU]?)\b|\b(abstract|annotation|as|break|by|catch|class|companion|const|constructor|continue|crossinline|data|do|else|enum|false|final|finally|for|fun|get|if|import|in|infix|init|inline|inner|interface|internal|is|lateinit|noinline|null|object|open|operator|out|override|package|private|protected|public|reified|return|sealed|set|super|suspend|tailrec|this|throw|true|try|typealias|val|value|var|vararg|when|where|while)\b/g;
+
+function ktCode(code) {
+  const c = el("code", {});
+  let last = 0, m;
+  KT_RE.lastIndex = 0;
+  while ((m = KT_RE.exec(code))) {
+    if (m.index > last) c.append(code.slice(last, m.index));
+    c.append(el("span", { class: m[1] ? "cm" : m[2] ? "str" : m[3] ? "an" : m[4] ? "num" : "kw" }, m[0]));
+    last = KT_RE.lastIndex;
+  }
+  c.append(code.slice(last));
+  return el("pre", { class: "kt" }, c);
+}
+// `backticks` in question text become inline code. Everything goes in as text nodes, never HTML.
+const rich = text => String(text || "").split("`").map((part, i) => i % 2 ? el("code", {}, part) : part);
+const myQuiz = day => (S.quizScores[S.uid] || {})[day];
+
+function renderTabs() {
+  const a = myQuiz(S.sel), n = mySolved(S.sel).filter(Boolean).length;
+  const mk = (id, label, badge) => el("button", { role: "tab", "aria-selected": S.tab === id ? "true" : "false", onclick: () => setTab(id) },
+    label, badge ? el("span", { class: "badge" }, badge) : null);
+  $("tabs").replaceChildren(mk("dsa", "🧩 DSA", S.sel > S.cur ? null : `${n}/3`), mk("quiz", "🟣 Kotlin quiz", a ? `${a.score}/${a.total}` : null));
+}
+function setTab(t) { S.tab = t; try { localStorage.setItem("sdp-tab", t); } catch {} render(); }
+
+const draftKey = day => `sdp-quiz-${S.uid}-${day}`;
+function quizDraft(day) {
+  if (!S.qa[day]) {
+    let v = {};
+    try { v = JSON.parse(localStorage.getItem(draftKey(day)) || "{}") || {}; } catch {}
+    S.qa[day] = v;
+  }
+  return S.qa[day];
+}
+function saveDraft(day) { try { localStorage.setItem(draftKey(day), JSON.stringify(S.qa[day] || {})); } catch {} }
+function clearDraft(day) { delete S.qa[day]; try { localStorage.removeItem(draftKey(day)); } catch {} }
+
+async function loadQuiz(day) {
+  S.quiz[day] = { loading: true };
+  try { S.quiz[day] = await api("/api/quiz/" + day); }
+  catch (e) { if (e.status === 401) { delete S.quiz[day]; return; } S.quiz[day] = { error: e.message, status: e.status }; }
+  if (S.sel === day && S.tab === "quiz") renderDay();
+}
+
+function qempty(icon, text, extra) {
+  return el("div", { class: "qempty" }, el("span", { class: "big", "aria-hidden": "true" }, icon), text, extra ? el("div", { style: "margin-top:12px" }, extra) : null);
+}
+function quizHead(day, right) {
+  return el("div", { class: "list-head" }, el("h2", {}, day === S.cur ? "Today's Kotlin quiz" : `Day ${day} Kotlin quiz`), right);
+}
+
+function renderQuiz() {
+  const day = S.sel, box = $("day");
+  if (day > S.cur) return box.replaceChildren(quizHead(day, el("span", {}, `👀 Opens ${whenAt6(opensAt(day))}`)),
+    qempty("🔒", `${quizTopic(day)}. 20 questions open ${whenAt6(opensAt(day))}. Quizzes have no preview.`));
+  const qz = S.quiz[day];
+  if (!qz) loadQuiz(day);
+  if (!qz || qz.loading) return box.replaceChildren(quizHead(day, null), qempty("⏳", "Loading questions…"));
+  if (qz.error) return box.replaceChildren(quizHead(day, el("span", {}, quizTopic(day))), qempty(qz.status === 404 ? "🛠️" : "⚠️", qz.status === 404 ? `${quizTopic(day)}. These questions are still being written. Check back soon.` : qz.error,
+    qz.status === 404 ? null : el("button", { class: "btn ghost sm", onclick: () => { delete S.quiz[day]; renderQuiz(); } }, "Try again")));
+  return qz.attempt ? renderQuizResult(qz) : renderQuizTake(qz);
+}
+
+function renderQuizTake(qz) {
+  const day = qz.day, box = $("day"), qs = qz.questions, ans = quizDraft(day);
+  const i = Math.max(0, Math.min(S.qi[day] || 0, qs.length - 1)); S.qi[day] = i;
+  const q = qs[i], picked = ans[q.id] || [], multi = q.type === "multi", mono = q.type === "output";
+  const done = qs.filter(x => (ans[x.id] || []).length).length, last = i === qs.length - 1;
+  const focused = document.activeElement && box.contains(document.activeElement) ? document.activeElement.dataset.qf : null;
+  const opts = el("div", { class: "opts", role: multi ? "group" : "radiogroup", "aria-label": "Answers" }, q.options.map((o, k) => {
+    const on = picked.includes(k);
+    return el("button", { class: "opt" + (multi ? " multi" : "") + (on ? " on" : ""), role: multi ? "checkbox" : "radio", "aria-checked": on ? "true" : "false", "data-qf": "o" + k, onclick: () => pick(day, q, k) },
+      el("span", { class: "key", "aria-hidden": "true" }, multi && on ? "✓" : "ABCDEF"[k]),
+      el("span", { class: "otext" + (mono ? " mono" : "") }, mono ? o : rich(o)));
+  }));
+  box.replaceChildren(
+    quizHead(day, el("span", {}, `${qz.topic} · ${done}/${qs.length} answered`)),
+    el("div", { class: "qbar", role: "progressbar", "aria-label": "Answered", "aria-valuemin": "0", "aria-valuemax": String(qs.length), "aria-valuenow": String(done) },
+      el("div", { style: `width:${done / qs.length * 100}%` })),
+    el("div", { class: "qwrap" },
+      el("div", { class: "qmeta" }, el("span", { class: "qkind" }, `Question ${i + 1} of ${qs.length} · ${QKIND[q.type]}`),
+        el("span", { class: "qtag" }, q.topic), el("span", { class: "diff d-" + q.difficulty }, q.difficulty)),
+      el("p", { class: "qtext" }, rich(q.question)),
+      q.code ? ktCode(q.code) : null,
+      opts,
+      el("div", { class: "qnav" },
+        el("button", { class: "btn ghost", "data-qf": "prev", disabled: i === 0, onclick: () => goQ(day, i - 1) }, "← Prev"),
+        last ? el("button", { class: "btn", "data-qf": "submit", onclick: () => submitQuiz(day) }, `Submit ${done}/${qs.length}`)
+          : el("button", { class: "btn", "data-qf": "next", onclick: () => goQ(day, i + 1) }, "Next →"))),
+    el("div", { class: "dots", role: "navigation", "aria-label": "Jump to question" }, qs.map((x, k) =>
+      el("button", { class: "dot" + ((ans[x.id] || []).length ? " ans" : "") + (k === i ? " cur" : ""), "data-qf": "d" + k, "aria-label": `Question ${k + 1}`, "aria-current": k === i ? "true" : null, onclick: () => goQ(day, k) }, k + 1))),
+    el("div", { class: "foot" }, "One attempt per day. Picks are saved on this device until you submit. Keys: A–D to answer, ← → to move. Answers and explanations show after you submit."));
+  if (focused) { const f = box.querySelector(`[data-qf="${focused}"]`); if (f && !f.disabled) f.focus(); }
+}
+
+function pick(day, q, k) {
+  const ans = quizDraft(day), cur = ans[q.id] || [];
+  ans[q.id] = q.type === "multi" ? (cur.includes(k) ? cur.filter(x => x !== k) : [...cur, k]) : [k];
+  saveDraft(day); renderDay();
+}
+function scrollToDay() { const r = $("day").getBoundingClientRect(); if (r.top < 70) window.scrollBy(0, r.top - 80); }
+function goQ(day, i) { S.qi[day] = i; renderDay(); scrollToDay(); }
+
+async function submitQuiz(day) {
+  const qz = S.quiz[day], ans = quizDraft(day), left = qz.questions.filter(x => !(ans[x.id] || []).length).length;
+  if (!confirm(left ? `${left} question${left > 1 ? "s are" : " is"} unanswered and will count as wrong. Submit anyway?` : "Submit your answers? You get one attempt.")) return;
+  const b = $("day").querySelector('[data-qf="submit"]'); if (b) { b.disabled = true; b.textContent = "Submitting…"; }
+  try { S.quiz[day] = await api("/api/quiz/" + day, { method: "POST", body: { answers: ans } }); }
+  catch (e) {
+    if (e.status === 401) return;
+    if (e.status !== 409) { alert(e.message); return renderDay(); }
+    delete S.quiz[day];
+  }
+  clearDraft(day); S.qfilter[day] = "all";
+  await refresh(); scrollToDay();
+}
+
+function renderQuizResult(qz) {
+  const day = qz.day, box = $("day"), a = qz.attempt, qs = qz.questions, f = S.qfilter[day] || "all";
+  const pct = a.score / a.total, wrong = qs.filter(q => !q.correct).length;
+  const msg = pct === 1 ? "Perfect score. Kotlin wizard 🧙" : pct >= .8 ? "Strong. Review the misses below." : pct >= .5 ? "Decent. The explanations below are worth a read." : "Tough one. Read every explanation below.";
+  const all = Object.entries(S.quizScores).filter(([id]) => S.users[id]).map(([, days]) => days[day]).filter(Boolean);
+  const avg = all.length > 1 ? ` · Group average ${(all.reduce((s, x) => s + x.score, 0) / all.length).toFixed(1)} from ${all.length}` : "";
+  const fbtn = (id, label) => el("button", { class: "pill-btn", "aria-pressed": f === id ? "true" : "false", onclick: () => { S.qfilter[day] = id; renderDay(); } }, label);
+  const jump = (q) => {
+    if (f === "wrong" && q.correct) { S.qfilter[day] = "all"; renderDay(); }
+    const t = $("qr-" + q.id); if (t) t.scrollIntoView({ block: "center", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+  };
+  box.replaceChildren(
+    quizHead(day, el("div", { class: "filter" }, fbtn("all", "All 20"), fbtn("wrong", `Wrong · ${wrong}`))),
+    el("div", { class: "qscore" },
+      el("b", {}, a.score, el("small", {}, ` / ${a.total}`)),
+      el("div", { style: "min-width:0;flex:1" }, el("div", { style: "font-weight:700" }, msg),
+        el("div", { class: "msg" }, `${qz.topic} · taken ${ago(a.at)}`, avg, a.late ? " " : null, a.late ? el("span", { class: "late", title: "Taken after the day closed. Counts for points, not streak." }, "Late") : null))),
+    el("div", { class: "dots", style: "padding-top:14px", role: "navigation", "aria-label": "Jump to question" }, qs.map((q, k) =>
+      el("button", { class: "dot " + (q.correct ? "ok" : "bad"), "aria-label": `Question ${k + 1}, ${q.correct ? "correct" : "wrong"}`, onclick: () => jump(q) }, k + 1))),
+    ...qs.map((q, k) => ({ q, k })).filter(({ q }) => f === "all" || !q.correct).map(({ q, k }) => resultItem(q, k)),
+    f === "wrong" && !wrong ? qempty("🎯", "Nothing wrong. Nice.") : null,
+    el("div", { class: "foot" }, day === S.cur ? `Tomorrow's 20 questions open ${whenAt6(opensAt(day + 1))}.` : "Missed days can still be taken. They count for points, not for your streak."));
+}
+
+function resultItem(q, k) {
+  const mono = q.type === "output";
+  return el("div", { class: "qres", id: "qr-" + q.id },
+    el("div", { class: "qmeta" }, el("span", { role: "img", "aria-label": q.correct ? "Correct" : "Wrong" }, q.correct ? "✅" : "❌"),
+      el("span", { class: "qkind" }, `Question ${k + 1} · ${QKIND[q.type]}`), el("span", { class: "qtag" }, q.topic), el("span", { class: "diff d-" + q.difficulty }, q.difficulty)),
+    el("p", { class: "qtext" }, rich(q.question)),
+    q.code ? ktCode(q.code) : null,
+    el("div", { class: "opts" }, q.options.map((o, j) => {
+      const right = q.answer.includes(j), mine = q.picked.includes(j);
+      return el("div", { class: "opt plain" + (q.type === "multi" ? " multi" : "") + (right ? " right" : mine ? " wrong" : "") },
+        el("span", { class: "key", "aria-hidden": "true" }, right ? "✓" : mine ? "✗" : "ABCDEF"[j]),
+        el("span", { class: "otext" + (mono ? " mono" : "") }, mono ? o : rich(o),
+          right ? el("span", { class: "sr-only" }, " (correct answer)") : null,
+          mine ? el("span", { class: "qkind", style: "font-family:var(--sans)" }, "  · your pick") : null));
+    })),
+    q.picked.length ? null : el("p", { class: "note", style: "margin-top:8px" }, "You skipped this one."),
+    el("div", { class: "qexp" }, el("span", { class: "k" }, "Why"), rich(q.explanation)));
+}
+
+function quizStreak(days) {
+  const ok = d => days[d] && !days[d].late;
+  let d = S.cur; if (!ok(d)) d--;
+  let n = 0; while (d >= 1 && ok(d)) { n++; d--; } return n;
+}
+function renderQuizBoard() {
+  const rows = Object.entries(S.quizScores).filter(([id]) => S.users[id]).map(([id, days]) => {
+    const v = Object.values(days);
+    return { id, pts: v.reduce((s, x) => s + x.score, 0), n: v.length, st: quizStreak(days) };
+  }).filter(r => r.n).sort((a, b) => b.pts - a.pts || b.st - a.st || nameOf(a.id).localeCompare(nameOf(b.id)));
+  rows.forEach((r, i) => { r.rank = i && rows[i - 1].pts === r.pts ? rows[i - 1].rank : i + 1; });
+  if (!rows.length) return $("qlb").replaceChildren(el("p", { class: "empty" }, "Take today's Kotlin quiz to get on the board."));
+  $("qlb").replaceChildren(...rows.map(r => el("div", { class: "lb-row" + (r.id === S.uid ? " mine" : "") },
+    el("span", { class: "rk r" + r.rank }, r.rank), avatar(r.id, nameOf(r.id)),
+    el("span", { class: "nm" }, nameOf(r.id) + (r.id === S.uid ? " (you)" : ""),
+      el("span", { style: "display:block;font:500 12px var(--sans);color:var(--faint)" }, `${r.n} quiz${r.n > 1 ? "zes" : ""} · ${Math.round(r.pts / (r.n * 20) * 100)}% avg`)),
+    el("span", { class: "st", title: "On-time quiz streak" }, r.st ? "🔥 " + r.st : ""), el("span", { class: "tot", title: "Correct answers" }, r.pts))));
+}
+
+document.addEventListener("keydown", e => {
+  if (S.tab !== "quiz" || $("appView").hidden || document.querySelector("dialog[open]") || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (/^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement || {}).tagName)) return;
+  const qz = S.quiz[S.sel];
+  if (S.sel > S.cur || !qz || !qz.questions || qz.attempt) return;
+  const i = S.qi[S.sel] || 0, q = qz.questions[i];
+  let k = "abcdef".indexOf(e.key.toLowerCase()); if (k < 0) k = "123456".indexOf(e.key);
+  if (k >= 0 && k < q.options.length) { e.preventDefault(); pick(S.sel, q, k); }
+  else if (e.key === "ArrowRight" && i < qz.questions.length - 1) { e.preventDefault(); goQ(S.sel, i + 1); }
+  else if (e.key === "ArrowLeft" && i > 0) { e.preventDefault(); goQ(S.sel, i - 1); }
+});
+
 function lcUrl(name) { return "https://leetcode.com/u/" + encodeURIComponent(name) + "/"; }
 function lcLink(id) { const n = S.lc[id]; return n ? el("a", { class: "lcl", href: lcUrl(n), target: "_blank", rel: "noopener" }, "@" + n) : null; }
 
 function renderRoad() {
-  const box = $("road"); box.replaceChildren();
-  WEEKS.forEach(([a, b, t], i) => {
-    let done = 0; for (let d = a; d <= b; d++) done += mySolved(d).filter(Boolean).length;
+  const quiz = S.tab === "quiz", box = $("road");
+  $("roadT").textContent = quiz ? "Roadmap · Kotlin quiz" : "Roadmap · DSA";
+  const weeks = quiz && SYL.weeks.length ? SYL.weeks : WEEKS;
+  const per = quiz ? 20 : 3;
+  const dayScore = d => quiz ? (myQuiz(d) || {}).score || 0 : mySolved(d).filter(Boolean).length;
+  box.replaceChildren();
+  weeks.forEach(([a, b, t], i) => {
+    let done = 0; for (let d = a; d <= b; d++) done += dayScore(d);
     const state = S.cur > b ? "past" : S.cur >= a ? "now" : "later";
-    box.append(el("div", { class: "wk " + state }, el("span", { class: "n" }, i < 8 ? "Wk " + (i + 1) : "57–60"), el("span", { class: "t" }, t), el("span", { class: "s" }, `${done}/${(b - a + 1) * 3}`)));
+    const key = (quiz ? "q" : "d") + i;
+    const open = S.roadOpen[key] ?? (S.sel >= a && S.sel <= b);
+    box.append(el("button", { class: "wk wk-tog " + state, "aria-expanded": open ? "true" : "false", onclick: () => { S.roadOpen[key] = !open; renderRoad(); } },
+      el("span", { class: "n" }, i < 8 ? "Wk " + (i + 1) : `${a}–${b}`), el("span", { class: "t" }, t), el("span", { class: "s" }, `${done}/${(b - a + 1) * per}`)));
+    if (!open) return;
+    const list = el("div", { class: "rdays" });
+    for (let d = a; d <= b; d++) {
+      const lock = quiz ? d > S.cur : d > S.cur + 1;
+      const topic = quiz ? quizTopic(d) : (BANK[d - 1] || {}).topic || "";
+      const a1 = quiz ? myQuiz(d) : null, n = mySolved(d).filter(Boolean).length;
+      const stat = quiz ? (a1 ? `${a1.score}/${a1.total}` : d === S.cur ? "today" : lock ? "" : "–") : (lock ? "" : `${n}/3`);
+      const full = quiz ? a1 && a1.score === a1.total : n === 3;
+      list.append(el("button", { class: "rd" + (d === S.sel ? " sel" : ""), disabled: lock, title: lock ? `Opens ${whenAt6(opensAt(d))}` : null,
+        "aria-current": d === S.sel ? "true" : null, onclick: () => { S.sel = d; render(); } },
+        el("span", { class: "n" }, "D" + d), el("span", {}, topic), el("span", { class: "s" + (full ? " full" : "") }, stat)));
+    }
+    box.append(list);
   });
 }
 
-function render() { renderClock(); renderHero(); renderStats(); renderStrip(); renderDay(); renderRoad(); renderLeaderboard(); }
+function render() { renderClock(); renderHero(); renderStats(); renderStrip(); renderTabs(); renderDay(); renderRoad(); renderLeaderboard(); renderQuizBoard(); }
 
 function applyState(st) {
   S.me = st.me; S.uid = String(st.me.id); S.users = st.users;
@@ -502,6 +788,7 @@ function applyState(st) {
   const m = {};
   for (const c of st.comments) (m[c.d + ":" + c.p] ||= []).push(c);
   S.comments = m;
+  S.quizScores = st.quiz || {};
 }
 
 async function refresh() {
@@ -704,6 +991,7 @@ setInterval(() => {
   try { BANK = await (await fetch("/bank.json")).json(); }
   catch { document.body.textContent = "Couldn't load the problem list. Refresh to try again."; return; }
   if (BANK.days) BANK = BANK.days;
+  try { const r = await fetch("/quiz-syllabus.json"); if (r.ok) SYL = await r.json(); } catch {}
   try { await api("/api/me"); await showApp(); } catch (e) { if (e.status !== 401) showLogin(); }
 })();
 </script>

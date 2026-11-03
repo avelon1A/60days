@@ -1,0 +1,358 @@
+{
+  "day": 8,
+  "topic": "Scope functions I: let, also & apply",
+  "questions": [
+    {
+      "id": "d08q01",
+      "type": "output",
+      "topic": "let return value",
+      "difficulty": "Easy",
+      "question": "What does this print?",
+      "code": "fun main() {\n    val n = \"hello\".let { it.length }\n    println(n)\n}",
+      "options": [
+        "5",
+        "hello",
+        "kotlin.Unit",
+        "true"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`let` returns whatever its lambda returns. The last expression is `it.length`, so `n` is the `Int` 5, not the original string."
+    },
+    {
+      "id": "d08q02",
+      "type": "mcq",
+      "topic": "apply receiver",
+      "difficulty": "Easy",
+      "question": "Inside this `apply` block, what does `color` refer to?",
+      "code": "val paint = Paint().apply {\n    color = Color.RED\n    strokeWidth = 4f\n    isAntiAlias = true\n}",
+      "options": [
+        "The `color` property of the new `Paint`, accessed through `this`",
+        "A `color` property of the enclosing View, because `apply` has no receiver",
+        "Nothing: inside `apply` you must write `it.color`",
+        "A new local variable named `color`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`apply` runs the block with the object as its receiver (`this`), so unqualified `color` and `strokeWidth` resolve to the `Paint`'s own properties. `it` is not available in `apply`."
+    },
+    {
+      "id": "d08q03",
+      "type": "truefalse",
+      "topic": "also uses it",
+      "difficulty": "Easy",
+      "question": "Inside an `also { }` block, the receiver object is available as `this`, just like in `apply`.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "`also` passes the object as the lambda parameter `it` (which you can rename, e.g. `also { user -> }`). It is `apply` that makes the object `this`."
+    },
+    {
+      "id": "d08q04",
+      "type": "output",
+      "topic": "apply return value",
+      "difficulty": "Easy",
+      "question": "What does this print?",
+      "code": "fun main() {\n    val list = mutableListOf(1).apply { add(2) }\n    println(list)\n}",
+      "options": [
+        "[1, 2]",
+        "true",
+        "[1]",
+        "kotlin.Unit"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`apply` always returns its receiver, so `list` is the mutable list after `add(2)`. The `Boolean` returned by `add` is ignored."
+    },
+    {
+      "id": "d08q05",
+      "type": "mcq",
+      "topic": "also for logging",
+      "difficulty": "Easy",
+      "question": "In a ViewModel you want to log the filtered list in the middle of this chain without changing what flows into `map`. What should replace `???`?",
+      "code": "val names = repo.users()\n    .filter { it.active }\n    ???\n    .map { it.name }",
+      "options": [
+        "`.also { Log.d(TAG, \"users=$it\") }`",
+        "`.let { Log.d(TAG, \"users=$it\") }`",
+        "`.apply { Log.d(TAG, \"users=$it\") }`",
+        "`.also { Log.d(TAG, \"users=$this\") }`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`also` returns the receiver unchanged and exposes it as `it`, which is exactly a side effect in the middle of a chain. The `let` version makes the chain the `Int` returned by `Log.d`, `apply` has no `it`, and `$this` inside `also` is the ViewModel, not the list."
+    },
+    {
+      "id": "d08q06",
+      "type": "output",
+      "topic": "?.let on null",
+      "difficulty": "Easy",
+      "question": "What does this print?",
+      "code": "fun main() {\n    val name: String? = null\n    println(name?.let { \"Hi $it\" })\n}",
+      "options": [
+        "null",
+        "Hi null",
+        "Hi ",
+        "kotlin.Unit"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "With `?.`, the `let` call is skipped entirely when the receiver is null and the whole expression is `null`. The lambda never runs, so `\"Hi null\"` is never built."
+    },
+    {
+      "id": "d08q07",
+      "type": "mcq",
+      "topic": "also return value",
+      "difficulty": "Easy",
+      "question": "In a ViewModel: `val saved = repository.newDraft().also { _draft.value = it }`. What is `saved`?",
+      "options": [
+        "The draft returned by `newDraft()`",
+        "`Unit`, because the lambda ends with an assignment",
+        "It doesn't compile: assignments are not expressions",
+        "The `_draft` state holder"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`also` ignores whatever its lambda produces and returns the receiver, so `saved` is the draft. An assignment as the last statement of a lambda is fine, it just makes the lambda return `Unit`, which `also` throws away."
+    },
+    {
+      "id": "d08q08",
+      "type": "output",
+      "topic": "also swap",
+      "difficulty": "Medium",
+      "question": "What does this print?",
+      "code": "fun main() {\n    var a = 1\n    var b = 2\n    a = b.also { b = a }\n    println(\"$a $b\")\n}",
+      "options": [
+        "2 1",
+        "2 2",
+        "1 1",
+        "1 2"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`b.also { ... }` evaluates to the old `b` (2) before the block runs, then the block sets `b = a` (1), then that saved 2 is assigned to `a`. Hence the classic swap idiom."
+    },
+    {
+      "id": "d08q09",
+      "type": "multi",
+      "topic": "also vs apply",
+      "difficulty": "Medium",
+      "question": "When is `also` a better fit than `apply`? Select all that apply.",
+      "options": [
+        "Inside an Activity, the block needs `this` to still mean the Activity",
+        "The block mostly passes the object as an argument to other functions, e.g. `cache.put(it)`",
+        "You want the block's last expression to be the result",
+        "The block mostly assigns the object's own properties"
+      ],
+      "answer": [
+        0,
+        1
+      ],
+      "explanation": "`also` keeps the outer `this` untouched and names the object `it`, which reads well when the object is an argument. Assigning many properties reads better with `apply`'s implicit `this`, and neither function returns the block's result: that is `let`."
+    },
+    {
+      "id": "d08q10",
+      "type": "output",
+      "topic": "let returning Unit",
+      "difficulty": "Medium",
+      "question": "What does this print?",
+      "code": "fun main() {\n    val r = \"kotlin\".let { println(it.length) }\n    println(r)\n}",
+      "options": [
+        "6\nkotlin.Unit",
+        "6\nkotlin",
+        "6\n6",
+        "6\nnull"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "The lambda's last expression is `println(...)`, which returns `Unit`, and `let` returns the lambda's result. So `r` is `Unit`, which prints as `kotlin.Unit`; returning the receiver is what `also` does."
+    },
+    {
+      "id": "d08q11",
+      "type": "mcq",
+      "topic": "let with var property",
+      "difficulty": "Medium",
+      "question": "`user` is a mutable `var` property of a Fragment. Why does `user?.let { render(it) }` compile when `if (user != null) render(user)` does not?",
+      "code": "class ProfileFragment : Fragment() {\n    private var user: User? = null\n\n    fun bind() {\n        if (user != null) render(user)   // error\n        user?.let { render(it) }         // OK\n    }\n}",
+      "options": [
+        "`let` gets the value read once as a non-null `it`, unaffected by later changes",
+        "`?.let` locks the property so other threads can't modify it during the block",
+        "The compiler skips nullability checks inside inline lambdas",
+        "`let` copies the `User` object, so `it` is a defensive clone"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A mutable property can change between the null check and the use, so it can't be smart cast. `?.let` reads it once and passes that reference as a non-null `User` parameter. Nothing is locked or copied, `it` is the same object."
+    },
+    {
+      "id": "d08q12",
+      "type": "truefalse",
+      "topic": "?.let smart cast",
+      "difficulty": "Medium",
+      "question": "For `val user: User? = repo.find(id)`, the type of `it` inside `user?.let { ... }` is the non-nullable `User`.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`?.` only calls `let` when `user` is non-null, so `let` is invoked on a `User` and its parameter is typed `User`. That is why you can write `it.name` without `?.` inside."
+    },
+    {
+      "id": "d08q13",
+      "type": "output",
+      "topic": "nested it shadowing",
+      "difficulty": "Medium",
+      "question": "What does this print?",
+      "code": "fun main() {\n    val a = 1\n    val r = a.let { (it + 1).let { it * 10 } + it }\n    println(r)\n}",
+      "options": [
+        "21",
+        "22",
+        "20",
+        "30"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Inside the inner `let`, `it` is 2, so it yields 20. The `+ it` sits outside the inner lambda, so it refers to the outer `it` (1), giving 21. Shadowing `it` compiles (the IDE only flags it), which is why naming nested parameters is recommended."
+    },
+    {
+      "id": "d08q14",
+      "type": "mcq",
+      "topic": "?.let with elvis",
+      "difficulty": "Medium",
+      "question": "`name` on `User` is a non-null `String`. What is the type of `names`?",
+      "code": "val response: Response<UsersDto> = api.getUsers()\nval names = response.body()?.let { body ->\n    body.users.map { it.name }\n} ?: emptyList()",
+      "options": [
+        "`List<String>`",
+        "`List<String>?`",
+        "`List<String?>`",
+        "`Any`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`body()?.let { ... }` is `List<String>?` (null when the body is null), and `?: emptyList()` removes the null case, so `names` is `List<String>`. Without the elvis it would stay nullable."
+    },
+    {
+      "id": "d08q15",
+      "type": "output",
+      "topic": "chaining",
+      "difficulty": "Medium",
+      "question": "What does this print?",
+      "code": "fun main() {\n    val sb = StringBuilder()\n    val n = sb.apply { append(\"x\") }\n        .also { println(\"len=${it.length}\") }\n        .let { it.append(\"yz\").length }\n    println(\"$n $sb\")\n}",
+      "options": [
+        "len=1\n3 xyz",
+        "len=1\n3 x",
+        "len=0\n3 xyz",
+        "len=1\n2 xyz"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`apply` appends \"x\" and returns the same builder, `also` logs its length (1), and `let` appends \"yz\" to that same object and returns its length 3. All three operate on one `StringBuilder`, so `sb` is \"xyz\"."
+    },
+    {
+      "id": "d08q16",
+      "type": "truefalse",
+      "topic": "?.apply",
+      "difficulty": "Medium",
+      "question": "`config?.apply { retries = 3 }` skips the block when `config` is null, and the whole expression evaluates to `null`.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Safe-call works with any scope function: if `config` is null, `apply` is never called and the result is `null`; otherwise it configures and returns `config`."
+    },
+    {
+      "id": "d08q17",
+      "type": "output",
+      "topic": "?.let ?: pitfall",
+      "difficulty": "Hard",
+      "question": "What does this print?",
+      "code": "fun log(s: String): String? {\n    println(\"log $s\")\n    return null\n}\n\nfun main() {\n    val user: String? = \"ann\"\n    user?.let { log(it) } ?: run { println(\"no user\") }\n}",
+      "options": [
+        "log ann\nno user",
+        "log ann",
+        "no user",
+        "log ann\nnull"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "The elvis checks the result of the whole `user?.let { ... }` expression, not whether `user` was null. `log` returns `null`, so the `let` evaluates to null and the fallback runs too. Use `if (user != null) ... else ...` when both branches must be exclusive."
+    },
+    {
+      "id": "d08q18",
+      "type": "mcq",
+      "topic": "this inside apply",
+      "difficulty": "Hard",
+      "question": "What happens with this code in an Activity?",
+      "code": "class MainActivity : AppCompatActivity() {\n    fun openDetail() {\n        val intent = Intent().apply {\n            setClass(this, DetailActivity::class.java)\n        }\n        startActivity(intent)\n    }\n}",
+      "options": [
+        "Compile error: inside `apply`, `this` is the `Intent`; use `this@MainActivity`",
+        "It works: `this` falls back to `MainActivity` because an `Intent` is not a `Context`",
+        "It compiles but crashes with `ActivityNotFoundException`",
+        "It works because `this` in a lambda always means the enclosing class"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "In `apply`, bare `this` is always the innermost receiver, the `Intent`; Kotlin never picks a different receiver based on the expected type. `setClass(Context, Class)` therefore gets an `Intent` and fails to compile, and the fix is the labeled `this@MainActivity`."
+    },
+    {
+      "id": "d08q19",
+      "type": "output",
+      "topic": "apply implicit receiver",
+      "difficulty": "Hard",
+      "question": "What does this print?",
+      "code": "class Label { var text = \"\" }\n\nclass Screen {\n    var text = \"Home\"\n    var title = \"Home\"\n    fun header() = Label().apply {\n        title = \"Profile\"\n        text = title\n    }\n}\n\nfun main() {\n    val s = Screen()\n    val l = s.header()\n    println(\"${s.title} ${l.text}\")\n}",
+      "options": [
+        "Profile Profile",
+        "Home Profile",
+        "Home Home",
+        "Profile Home"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`Label` has no `title`, so inside `apply` the unqualified `title = \"Profile\"` silently resolves to the outer `Screen.title`. `text` exists on `Label` (innermost receiver wins), so the label gets the now-changed `Screen.title`. The outer object being modified by accident is the classic `apply` bug."
+    },
+    {
+      "id": "d08q20",
+      "type": "multi",
+      "topic": "bundle setup",
+      "difficulty": "Hard",
+      "question": "In a Fragment factory, which of these give `args` a `Bundle` that contains the key `\"id\"`? Select all that apply.",
+      "options": [
+        "`val args = Bundle().apply { putInt(\"id\", 1) }`",
+        "`val args = Bundle().also { it.putInt(\"id\", 1) }`",
+        "`val args = Bundle().let { it.putInt(\"id\", 1) }`",
+        "`val args = Bundle().apply { it.putInt(\"id\", 1) }`",
+        "`val args = Bundle().let { it.putInt(\"id\", 1); it }`"
+      ],
+      "answer": [
+        0,
+        1,
+        4
+      ],
+      "explanation": "`apply` and `also` return the bundle, and the last `let` explicitly returns `it`. The plain `let` returns what `putInt` returns (`Unit`), so `args` is `Unit`, and `apply` has no `it`, so that line doesn't compile."
+    }
+  ]
+}

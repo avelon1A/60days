@@ -1,0 +1,354 @@
+{
+  "day": 45,
+  "topic": "Networking: Retrofit, OkHttp interceptors & serialization",
+  "questions": [
+    {
+      "id": "d45q01",
+      "type": "mcq",
+      "topic": "httpexception",
+      "difficulty": "Easy",
+      "question": "The server answers this call with HTTP 500. What happens at the call site?",
+      "code": "interface UserApi {\n    @GET(\"me\")\n    suspend fun me(): User\n}\n\n// in a ViewModel\nval user = api.me()",
+      "options": [
+        "It throws `HttpException` whose `code()` is 500",
+        "It returns `null` because the body couldn't be parsed",
+        "It returns a `User` with default field values",
+        "It throws `IOException` because the request failed"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "When a suspend Retrofit method returns the body type `T` directly, any non-2xx response throws `retrofit2.HttpException`. `IOException` is for transport failures (no connection, timeout), not for a server that did answer."
+    },
+    {
+      "id": "d45q02",
+      "type": "truefalse",
+      "topic": "main-safety",
+      "difficulty": "Easy",
+      "question": "A Retrofit `suspend` function can be called directly from `viewModelScope.launch` (which runs on the main thread) without wrapping it in `withContext(Dispatchers.IO)`.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Retrofit's suspend support enqueues the call on OkHttp's own dispatcher threads and resumes the coroutine with the result, so the call is main-safe. Adding `withContext(Dispatchers.IO)` is harmless but unnecessary."
+    },
+    {
+      "id": "d45q03",
+      "type": "output",
+      "topic": "backoff",
+      "difficulty": "Easy",
+      "question": "A retry helper computes its delays like this. What does it print?",
+      "code": "fun main() {\n    var delayMs = 100L\n    val delays = mutableListOf<Long>()\n    repeat(4) {\n        delays += delayMs\n        delayMs = (delayMs * 2).coerceAtMost(500)\n    }\n    println(delays)\n}",
+      "options": [
+        "[100, 200, 400, 500]",
+        "[100, 200, 400, 800]",
+        "[200, 400, 500, 500]",
+        "[100, 200, 400]"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Each delay is recorded before doubling, so the list starts at 100. The fourth doubling would give 800, but `coerceAtMost(500)` caps it at 500. Capping exponential backoff stops retry waits from growing without limit."
+    },
+    {
+      "id": "d45q04",
+      "type": "mcq",
+      "topic": "shared okhttpclient",
+      "difficulty": "Easy",
+      "question": "Every repository in the app builds its own `OkHttpClient()` (some even build one per request). What is the main problem?",
+      "options": [
+        "Each client has its own connection pool, threads and cache, so none are reused",
+        "OkHttp throws an exception when more than one client exists in a process",
+        "Interceptors are registered globally, so each new client adds them a second time",
+        "Nothing, because `OkHttpClient()` returns an internal singleton"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "OkHttp performs best with a single shared client: connection pool, dispatcher and cache all belong to the instance. For a variant (say, a longer timeout), call `sharedClient.newBuilder()`, which reuses the same pool and dispatcher. Multiple clients are legal, just wasteful."
+    },
+    {
+      "id": "d45q05",
+      "type": "multi",
+      "topic": "cleartext",
+      "difficulty": "Easy",
+      "question": "An app targeting a recent SDK calls `http://api.example.com` and fails with \"CLEARTEXT communication to api.example.com not permitted by network security policy\". Which changes make the request succeed?",
+      "options": [
+        "Switch the URL to `https://`",
+        "Add a network security config `domain-config` with `cleartextTrafficPermitted=\"true\"` for that domain",
+        "Add the `INTERNET` permission to the manifest",
+        "Increase OkHttp's `connectTimeout`"
+      ],
+      "answer": [
+        0,
+        1
+      ],
+      "explanation": "Since API 28, cleartext HTTP is blocked by default. HTTPS is the right fix, and a domain-scoped network security config exception also works (for example for a local dev server). The error isn't about permissions or timeouts: a missing `INTERNET` permission fails differently."
+    },
+    {
+      "id": "d45q06",
+      "type": "mcq",
+      "topic": "ignoreunknownkeys",
+      "difficulty": "Easy",
+      "question": "The backend adds a new `avatar` field to the user JSON. The app decodes with a default `Json` instance. What happens?",
+      "code": "@Serializable\ndata class User(val id: Int, val name: String)\n\n// response: {\"id\":1,\"name\":\"Ann\",\"avatar\":\"a.png\"}\nval user = Json.decodeFromString<User>(body)",
+      "options": [
+        "Decoding throws a `SerializationException` for the unknown key",
+        "The extra field is silently ignored, as with Gson and Moshi",
+        "Decoding succeeds and `avatar` is kept in a hidden extras map",
+        "The code stops compiling until `avatar` is added to the class"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "kotlinx.serialization is strict by default and rejects keys the class doesn't declare. Gson and Moshi ignore unknown fields, which is why people expect that here. For network models, `ignoreUnknownKeys = true` keeps old app versions working when the server adds fields."
+    },
+    {
+      "id": "d45q07",
+      "type": "truefalse",
+      "topic": "logging",
+      "difficulty": "Easy",
+      "question": "Leaving `HttpLoggingInterceptor` at `Level.BODY` in release builds is harmless, because only your app can read its own logs.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "Logs show up in `adb logcat` and in bug reports, so `BODY` leaks tokens and personal data. It also buffers every body, which costs memory and speed. Enable it only in debug builds (e.g. `if (BuildConfig.DEBUG)`), use `Level.NONE`/`BASIC` otherwise, and `redactHeader(\"Authorization\")`."
+    },
+    {
+      "id": "d45q08",
+      "type": "mcq",
+      "topic": "response<t>",
+      "difficulty": "Medium",
+      "question": "The server returns 404 with a JSON error body. What do you get?",
+      "code": "interface UserApi {\n    @GET(\"users/{id}\")\n    suspend fun user(@Path(\"id\") id: String): Response<User>\n}\n\nval res = api.user(\"42\")",
+      "options": [
+        "No exception: `isSuccessful` is false and the error JSON is in `errorBody()`",
+        "It throws `HttpException` for the 404, the same as a method returning `User` does",
+        "`body()` holds the error JSON parsed into a `User`",
+        "`isSuccessful` is true because the server sent a response"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Wrapping the type in `Response<T>` means Retrofit doesn't throw for non-2xx statuses. You check `code()`/`isSuccessful` yourself and read the error with `errorBody()` (`body()` is null), which can be read only once. Network failures still throw `IOException`."
+    },
+    {
+      "id": "d45q09",
+      "type": "multi",
+      "topic": "gson pitfalls",
+      "difficulty": "Medium",
+      "question": "Gson (via `GsonConverterFactory`) parses `{}` into this Kotlin class. Which statements are true?",
+      "code": "data class User(val name: String, val age: Int = 18)\n\nval u = gson.fromJson(\"{}\", User::class.java)",
+      "options": [
+        "`u.name` is null at runtime despite its non-null `String` type, so a later use can throw NPE",
+        "`u.age` is 0, not 18",
+        "Gson throws `JsonSyntaxException` because `name` is missing",
+        "Gson calls the primary constructor, so `age` is 18"
+      ],
+      "answer": [
+        0,
+        1
+      ],
+      "explanation": "The class has no no-arg constructor, so Gson allocates the object with `Unsafe` and skips the Kotlin constructor completely. That bypasses both the null checks and the default values. Moshi's Kotlin support and kotlinx.serialization respect nullability and defaults."
+    },
+    {
+      "id": "d45q10",
+      "type": "truefalse",
+      "topic": "coerceinputvalues",
+      "difficulty": "Medium",
+      "question": "Decoding `{\"role\": null}` into `@Serializable data class Member(val role: String = \"user\")` with a default `Json` fails, but with `Json { coerceInputValues = true }` it gives `Member(role = \"user\")`.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A default value is used only when a key is missing, not when it is an explicit `null`. So a null for a non-null property is an error by default. `coerceInputValues = true` replaces such nulls (and unknown enum values) with the property's default."
+    },
+    {
+      "id": "d45q11",
+      "type": "mcq",
+      "topic": "auth interceptor",
+      "difficulty": "Medium",
+      "question": "This interceptor is supposed to add a bearer token. What does it actually do?",
+      "code": "class AuthInterceptor(private val tokens: TokenStore) : Interceptor {\n    override fun intercept(chain: Interceptor.Chain): Response {\n        val request = chain.request()\n        request.newBuilder()\n            .header(\"Authorization\", \"Bearer ${tokens.access}\")\n            .build()\n        return chain.proceed(request)\n    }\n}",
+      "options": [
+        "It sends the original request without the header, because the rebuilt request is discarded",
+        "It crashes, because inside an interceptor `header()` must be `addHeader()` to modify a request",
+        "It sends the `Authorization` header twice",
+        "It adds the header correctly"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`Request` is immutable: `newBuilder().build()` returns a new object, and here that object is thrown away. The fix is `chain.proceed(request.newBuilder().header(\"Authorization\", \"Bearer $token\").build())`. `header()` replaces any existing value and `addHeader()` appends, and both are valid."
+    },
+    {
+      "id": "d45q12",
+      "type": "output",
+      "topic": "error mapping",
+      "difficulty": "Medium",
+      "question": "A repository maps exceptions to domain errors. What does this print?",
+      "code": "import java.io.IOException\nimport java.net.SocketTimeoutException\n\nclass HttpException(val code: Int) : RuntimeException(\"HTTP $code\")\n\nfun toDomain(e: Throwable): String = when (e) {\n    is HttpException -> when (e.code) {\n        401 -> \"Unauthorized\"\n        in 500..599 -> \"Server\"\n        else -> \"Client\"\n    }\n    is IOException -> \"Network\"\n    else -> \"Unknown\"\n}\n\nfun main() {\n    val errors = listOf(SocketTimeoutException(), HttpException(503), HttpException(404), IllegalStateException())\n    println(errors.joinToString { toDomain(it) })\n}",
+      "options": [
+        "Network, Server, Client, Unknown",
+        "Unknown, Server, Client, Unknown",
+        "Network, Server, Unauthorized, Unknown",
+        "Network, Server, Client, Network"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`SocketTimeoutException` extends `IOException`, so it maps to `Network`. 503 is in `500..599` and 404 falls to `else`, giving `Client`. `IllegalStateException` matches neither type. Retrofit splits errors the same way: `HttpException` means the server answered with an error, `IOException` means the transport failed."
+    },
+    {
+      "id": "d45q13",
+      "type": "mcq",
+      "topic": "timeouts",
+      "difficulty": "Medium",
+      "question": "The client uses OkHttp's defaults (connect/read/write 10 s, no call timeout). A download trickles one byte every 5 seconds for 10 minutes. What happens?",
+      "options": [
+        "It finishes after about 10 minutes; no single read waits more than 10 s",
+        "It fails after 10 s with a read timeout, since the transfer runs past `readTimeout`",
+        "It fails after 10 s with a connect timeout",
+        "It fails after 30 s, the sum of the three timeouts"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`readTimeout` limits how long one read can wait between bytes, not how long the whole transfer takes. Only `callTimeout` covers the entire call (DNS, connect, write, server time, read), and it is disabled by default."
+    },
+    {
+      "id": "d45q14",
+      "type": "multi",
+      "topic": "error handling",
+      "difficulty": "Medium",
+      "question": "A repository wraps `api.me()` (a suspend function returning `User`) in a try/catch. Which statements are correct?",
+      "options": [
+        "`IOException` (e.g. `UnknownHostException`, `SocketTimeoutException`) usually means no complete response arrived: offline, DNS failure or timeout",
+        "`HttpException` means the server replied with a non-2xx status, and `e.code()` tells 401 from 404 from 503",
+        "Mapping these to a domain error type in the repository keeps Retrofit/OkHttp types out of the UI layer",
+        "A blanket `catch (e: Exception)` that turns everything into an error state is fine inside `viewModelScope.launch`",
+        "A `SerializationException` means the device is offline"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "Transport failures surface as `IOException` and server error statuses as `HttpException`, and the repository should translate both into domain errors. A blanket `catch (e: Exception)` also swallows `CancellationException`, which breaks cancellation, so rethrow it. A `SerializationException` means the payload didn't match the model, not that the device is offline."
+    },
+    {
+      "id": "d45q15",
+      "type": "mcq",
+      "topic": "http cache",
+      "difficulty": "Medium",
+      "question": "The `OkHttpClient` has a `Cache(File(context.cacheDir, \"http\"), 10L * 1024 * 1024)`. A GET response came back with `Cache-Control: max-age=60`. The user repeats the same GET 30 seconds later. What happens?",
+      "options": [
+        "OkHttp serves the stored response from disk with no network request",
+        "OkHttp always sends a conditional request with `If-None-Match` first",
+        "It goes to the network, because Retrofit bypasses OkHttp's cache",
+        "Nothing is cached, because only POST responses are cacheable"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "The response is still fresh (30 s < 60 s), so the cache answers on its own. Conditional requests (`If-None-Match`/`If-Modified-Since`) happen only once the entry is stale and has validators. Retrofit runs on OkHttp, so the cache applies to its calls."
+    },
+    {
+      "id": "d45q16",
+      "type": "truefalse",
+      "topic": "idempotent retries",
+      "difficulty": "Medium",
+      "question": "It is safe to add a generic retry-with-backoff interceptor that retries every request, including `POST /payments`, after a `SocketTimeoutException`.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "A timeout doesn't tell you whether the server processed the request, so retrying a non-idempotent POST can charge the user twice. Automatically retry only idempotent requests (GET, PUT, DELETE), or send an idempotency key that the server deduplicates."
+    },
+    {
+      "id": "d45q17",
+      "type": "mcq",
+      "topic": "encodedefaults",
+      "difficulty": "Hard",
+      "question": "The app sends a PATCH body built with a default `Json` instance. What JSON does `Json.encodeToString(Patch(name = \"A\"))` produce?",
+      "code": "@Serializable\ndata class Patch(\n    @SerialName(\"display_name\") val name: String? = null,\n    val bio: String? = null,\n)",
+      "options": [
+        "{\"display_name\":\"A\"}",
+        "{\"display_name\":\"A\",\"bio\":null}",
+        "{\"name\":\"A\"}",
+        "{\"name\":\"A\",\"bio\":null}"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`@SerialName` renames the key. `encodeDefaults` is false by default, so `bio`, which still equals its default `null`, is left out. A server that expects an explicit `null` to clear a field never receives one. Turn on `encodeDefaults = true` (or use `@EncodeDefault`) when that matters."
+    },
+    {
+      "id": "d45q18",
+      "type": "multi",
+      "topic": "interceptor types",
+      "difficulty": "Hard",
+      "question": "Which statements about OkHttp application interceptors (`addInterceptor`) and network interceptors (`addNetworkInterceptor`) are true?",
+      "options": [
+        "An application interceptor runs once per call, even when OkHttp follows a redirect or retries",
+        "A network interceptor runs for every network request, including each redirect hop",
+        "An application interceptor can return a response without calling `chain.proceed()`",
+        "An application interceptor sees the `Accept-Encoding: gzip` header that OkHttp adds transparently",
+        "A network interceptor runs even when the response comes entirely from the cache"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "Application interceptors wrap the whole call: they run once, see the request as your code built it, and can short-circuit it. Network interceptors sit next to the wire, so they run on every hop and see headers OkHttp adds such as `Accept-Encoding`. A pure cache hit never reaches them."
+    },
+    {
+      "id": "d45q19",
+      "type": "mcq",
+      "topic": "authenticator",
+      "difficulty": "Hard",
+      "question": "Five parallel requests all get 401 because the access token expired. Which `Authenticator.authenticate()` strategy is correct?",
+      "options": [
+        "Synchronize, reuse a token another call already refreshed, else refresh once; return `null` on failure or repeat",
+        "Each call refreshes the token on its own and retries, so all five recover independently and in parallel",
+        "Return `response.request` unchanged so OkHttp retries it, since the server may have refreshed the session",
+        "Throw an `IOException` so Retrofit retries the call automatically after a backoff"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Without synchronization, five 401s cause five refreshes, which can invalidate each other's refresh tokens. Comparing tokens lets the waiting calls reuse the new token. Returning `null` (also after a retry, detectable via `priorResponse`) stops the loop, whereas returning the unchanged request just repeats the 401 until OkHttp gives up on too many follow-ups."
+    },
+    {
+      "id": "d45q20",
+      "type": "mcq",
+      "topic": "certificate pinning",
+      "difficulty": "Hard",
+      "question": "What is the main operational risk of adding certificate pinning (OkHttp `CertificatePinner` or a network security config `pin-set`)?",
+      "options": [
+        "If the server key rotates outside the pin set, installed versions can't connect until users update",
+        "It turns off TLS hostname verification for the pinned host, since the pin already identifies the server",
+        "It makes HTTPS unnecessary, so cleartext gets allowed for that host",
+        "It cannot be bypassed even on rooted devices, so debugging proxies stop working permanently"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Pinning narrows which certificates are trusted, so an unplanned key or CA change locks out every old build. Mitigate with backup pins (SPKI hashes of a spare key or intermediate) and a `pin-set` expiration. Pinning adds to normal TLS checks rather than replacing them, and it can be bypassed on rooted devices."
+    }
+  ]
+}

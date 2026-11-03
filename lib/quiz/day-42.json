@@ -1,0 +1,353 @@
+{
+  "day": 42,
+  "topic": "Dependency injection with Hilt",
+  "questions": [
+    {
+      "id": "d42q01",
+      "type": "mcq",
+      "topic": "why di",
+      "difficulty": "Easy",
+      "question": "A `ProfileViewModel` creates its own `ProfileRepository(RetrofitApi())` inside its constructor. What is the main practical problem DI solves here?",
+      "options": [
+        "A unit test can't swap in a fake repository or API, so it ends up hitting the real network",
+        "The ViewModel will not survive configuration changes",
+        "Retrofit calls made from a ViewModel need an injected `CoroutineScope`, so without DI the request never runs",
+        "The app will leak the Activity on every rotation"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "When a class builds its own dependencies, they're hard-wired and can't be replaced, so tests can't pass in fakes. Having them passed in from outside (constructor injection) fixes that. Surviving configuration changes is the ViewModel's job and has nothing to do with DI."
+    },
+    {
+      "id": "d42q02",
+      "type": "truefalse",
+      "topic": "@HiltAndroidApp",
+      "difficulty": "Easy",
+      "question": "A Hilt app needs an `Application` subclass annotated with `@HiltAndroidApp` (and registered in the manifest). This annotation triggers generation of the app-level `SingletonComponent` that every other Hilt component is a child of.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`@HiltAndroidApp` generates the base Application class that owns the `SingletonComponent`. Without it, `@AndroidEntryPoint` classes have no container to inject from and the build or app fails."
+    },
+    {
+      "id": "d42q03",
+      "type": "output",
+      "topic": "swapping fakes",
+      "difficulty": "Easy",
+      "question": "`SessionManager` gets its `Clock` through the constructor, so a test can pass a fake. What does this print?",
+      "code": "interface Clock { fun now(): Long }\nclass FakeClock(var t: Long) : Clock {\n    override fun now() = t\n}\n\nclass SessionManager(private val clock: Clock) {\n    private val start = clock.now()\n    fun expired() = clock.now() - start > 1000\n}\n\nfun main() {\n    val clock = FakeClock(0)\n    val s = SessionManager(clock)\n    print(s.expired())\n    clock.t = 1500\n    println(\" \" + s.expired())\n}",
+      "options": [
+        "false true",
+        "false false",
+        "true true",
+        "true false"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`start` is read once, as 0. Moving the fake clock to 1500 makes `1500 - 0 > 1000` true. Because the clock is injected, the test controls time and doesn't have to sleep."
+    },
+    {
+      "id": "d42q04",
+      "type": "mcq",
+      "topic": "hiltViewModel",
+      "difficulty": "Easy",
+      "question": "`FeedViewModel` is annotated `@HiltViewModel` and has an `@Inject constructor(repo: FeedRepository)`. How should a composable inside a navigation destination get it?",
+      "options": [
+        "`val vm: FeedViewModel = hiltViewModel()`",
+        "`val vm = remember { FeedViewModel(FeedRepository()) }`",
+        "`@Inject lateinit var vm: FeedViewModel` declared inside the composable",
+        "`val vm = FeedViewModel.create()`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`hiltViewModel()` uses Hilt's ViewModel factory, scoped to the current `ViewModelStoreOwner` (here, the back stack entry). `remember { ... }` skips the graph and isn't retained across configuration changes, and composables can't have injected fields."
+    },
+    {
+      "id": "d42q05",
+      "type": "mcq",
+      "topic": "@AndroidEntryPoint",
+      "difficulty": "Medium",
+      "question": "`SettingsFragment` is annotated `@AndroidEntryPoint` and has `@Inject lateinit var prefs: Prefs`. Its host `MainActivity` is a plain `AppCompatActivity` with no Hilt annotation. What happens?",
+      "options": [
+        "It crashes with an `IllegalStateException` when the Fragment attaches, since its host Activity isn't an `@AndroidEntryPoint`",
+        "It works: Hilt sees no annotated Activity and falls back to injecting the Fragment straight from `SingletonComponent`, so `prefs` is set as usual",
+        "`prefs` is silently left uninitialized and throws `UninitializedPropertyAccessException` only when it's read",
+        "Hilt automatically treats the host Activity as an entry point"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`FragmentComponent` is a child of `ActivityComponent`, so the host Activity must be an entry point too. Hilt checks this when the Fragment attaches and throws \"Hilt Fragments must be attached to an @AndroidEntryPoint Activity\". It doesn't skip straight to the singleton component."
+    },
+    {
+      "id": "d42q06",
+      "type": "multi",
+      "topic": "@Binds vs @Provides",
+      "difficulty": "Medium",
+      "question": "You need `NewsRepository` (an interface) to resolve to `NewsRepositoryImpl @Inject constructor(api: NewsApi)`. Which statements about using `@Binds` for this are true?",
+      "code": "@Module\n@InstallIn(SingletonComponent::class)\nabstract class RepoModule {\n    @Binds\n    abstract fun bindNews(impl: NewsRepositoryImpl): NewsRepository\n}",
+      "options": [
+        "A `@Binds` method is abstract: its single parameter is the implementation and its return type is the interface",
+        "`NewsRepositoryImpl` must itself be injectable (here via its `@Inject constructor`) for the binding to work",
+        "`@Binds` is the right tool for building a `Retrofit` instance with its builder",
+        "`@Binds` methods must have a body that returns `impl`",
+        "`@Provides` can only be used in an `abstract class` module"
+      ],
+      "answer": [
+        0,
+        1
+      ],
+      "explanation": "`@Binds` just tells Dagger \"when the interface is requested, use this implementation\". It has no body, which makes it cheaper than an equivalent `@Provides`. Building a third-party object like Retrofit needs real code, so that's `@Provides`, which goes in an `object` or a concrete module."
+    },
+    {
+      "id": "d42q07",
+      "type": "mcq",
+      "topic": "@Provides",
+      "difficulty": "Easy",
+      "question": "You want one shared `Retrofit` instance for the whole app. You can't add `@Inject` to Retrofit's constructor because it's a library class. What's the idiomatic Hilt setup?",
+      "options": [
+        "An `@InstallIn(SingletonComponent::class)` `object` module with a `@Provides @Singleton fun provideRetrofit()` that builds it",
+        "An `abstract` module with a `@Binds @Singleton` method that maps `Retrofit` to `Retrofit.Builder`, so Hilt calls `build()` for you on first use",
+        "Annotate your `Application` class with `@Provides(Retrofit::class)`",
+        "Subclass `Retrofit` and add `@HiltViewModel` to it"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "For types you don't own, or that need a builder, use a `@Provides` function that contains the construction code. `@Singleton` matches `SingletonComponent`, so every injection site shares the same instance. `@Binds` only maps an interface to an implementation that is already injectable."
+    },
+    {
+      "id": "d42q08",
+      "type": "truefalse",
+      "topic": "constructor injection",
+      "difficulty": "Easy",
+      "question": "A class like `class Analytics @Inject constructor(private val logger: Logger)` needs no `@Module` at all, provided Hilt already knows how to create `Logger`.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "An `@Inject` constructor is itself a binding: Hilt knows how to build the class from its constructor parameters. You only need modules for interfaces, third-party types, or objects that need construction logic."
+    },
+    {
+      "id": "d42q09",
+      "type": "mcq",
+      "topic": "scope mismatch",
+      "difficulty": "Medium",
+      "question": "An Activity injects `ScreenTracker`. What happens when you build this?",
+      "code": "@Module\n@InstallIn(SingletonComponent::class)\nobject UiModule {\n    @Provides\n    @ActivityScoped\n    fun provideTracker(): ScreenTracker = ScreenTracker()\n}",
+      "options": [
+        "The build fails: a `SingletonComponent` module can't hold an `@ActivityScoped` binding",
+        "It compiles, and `ScreenTracker` ends up as an app-wide singleton",
+        "It compiles, and Hilt quietly moves the binding to `ActivityComponent`",
+        "It compiles but crashes the first time an Activity injects `ScreenTracker`, since no Activity scope exists yet"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A scope annotation must match the component the module is installed in. Here that's `@Singleton` for `SingletonComponent` or `@ActivityScoped` for `ActivityComponent`. Dagger reports an incompatibly-scoped binding at compile time and doesn't move or reinterpret it."
+    },
+    {
+      "id": "d42q10",
+      "type": "output",
+      "topic": "scoped vs unscoped",
+      "difficulty": "Medium",
+      "question": "This hand-written container mimics a scoped binding (`lazy`) and an unscoped binding (a function). What does it print?",
+      "code": "var created = 0\nclass Api { init { created++ } }\n\nclass Container {\n    val scopedApi by lazy { Api() }\n    fun unscopedApi() = Api()\n}\n\nfun main() {\n    val c = Container()\n    repeat(3) { c.scopedApi }\n    println(created)\n    repeat(3) { c.unscopedApi() }\n    println(created)\n}",
+      "options": [
+        "1\n4",
+        "3\n6",
+        "1\n2",
+        "0\n3"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "The scoped one is created once on first access and then reused, so the count is 1. The unscoped one is built fresh on every request, adding 3 for a total of 4. Hilt works the same way: an unscoped binding gives you a new instance for every injection."
+    },
+    {
+      "id": "d42q11",
+      "type": "mcq",
+      "topic": "activity retained scope",
+      "difficulty": "Hard",
+      "question": "`CartCache` is `@ActivityRetainedScoped` and `ScreenLogger` is `@ActivityScoped`, and both are injected into `CheckoutActivity`. The user rotates the screen. Which statement is correct?",
+      "options": [
+        "`CartCache` survives the rotation; `ScreenLogger` is recreated with the new Activity",
+        "Both are recreated, because both are tied to the Activity",
+        "Both keep the same instance, because every Hilt scope survives configuration changes like a ViewModel",
+        "`ScreenLogger` keeps the same instance, but `CartCache` is recreated"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`ActivityRetainedComponent` lives across configuration changes, like a ViewModel, and is destroyed only when the Activity truly finishes. `ActivityComponent` is tied to each Activity instance, so rotation creates a new one, along with new `@ActivityScoped` objects."
+    },
+    {
+      "id": "d42q12",
+      "type": "multi",
+      "topic": "context qualifiers",
+      "difficulty": "Medium",
+      "question": "`class ImageCache @Inject constructor(...)` is annotated `@Singleton`. Which constructor parameters will Hilt accept without a build error?",
+      "options": [
+        "`@ApplicationContext context: Context`",
+        "`app: Application`",
+        "`@ActivityContext context: Context`",
+        "`activity: Activity`",
+        "`savedStateHandle: SavedStateHandle`"
+      ],
+      "answer": [
+        0,
+        1
+      ],
+      "explanation": "`SingletonComponent` only has app-level defaults: `Application` and `@ApplicationContext Context`. Activity bindings only exist in `ActivityComponent` and below, and `SavedStateHandle` only in `ViewModelComponent`. A singleton can't see them, so you get a missing-binding error, which also stops you leaking an Activity into an app-wide object."
+    },
+    {
+      "id": "d42q13",
+      "type": "mcq",
+      "topic": "qualifiers",
+      "difficulty": "Medium",
+      "question": "A module has two `@Provides` functions that both return `CoroutineDispatcher`, one for `Dispatchers.IO` and one for `Dispatchers.Default`. What happens, and what's the fix?",
+      "options": [
+        "Build error for a duplicate binding; fix it with custom `@Qualifier` annotations such as `@IoDispatcher`",
+        "Hilt injects whichever function is declared first",
+        "Hilt injects `Dispatchers.Default` because it is the default",
+        "No error: Hilt matches each injection site by parameter name, so `ioDispatcher` gets `provideIoDispatcher()`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Dagger identifies a binding by its type plus any qualifier, never by function or parameter names. Two unqualified bindings of the same type cause a duplicate-binding build error. A custom `@Qualifier` annotation tells them apart."
+    },
+    {
+      "id": "d42q14",
+      "type": "truefalse",
+      "topic": "compile-time validation",
+      "difficulty": "Easy",
+      "question": "With Hilt (using KSP or kapt), an `@Inject constructor` parameter that has no binding anywhere in the graph is reported as a build error, not a runtime crash.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Hilt is built on Dagger, which checks the whole dependency graph during annotation processing. KSP is the recommended processor today. A missing or duplicate binding fails the build with a `[Dagger/MissingBinding]`-style error, before the app ever runs."
+    },
+    {
+      "id": "d42q15",
+      "type": "mcq",
+      "topic": "Lazy vs Provider",
+      "difficulty": "Hard",
+      "question": "`Parser` has an `@Inject constructor` and no scope. How many `Parser` instances does this create?",
+      "code": "class Importer @Inject constructor(\n    private val lazyParser: Lazy<Parser>,       // dagger.Lazy\n    private val parserProvider: Provider<Parser> // javax.inject.Provider\n) {\n    fun run() {\n        lazyParser.get(); lazyParser.get()\n        parserProvider.get(); parserProvider.get()\n    }\n}",
+      "options": [
+        "3",
+        "2",
+        "4",
+        "1"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A `dagger.Lazy` creates its value on the first `get()` and returns that same object every time after, so that's 1. A `Provider` of an unscoped binding builds a new instance on every `get()`, so that's 2 more, 3 in total. If `Parser` were `@Singleton`, both would return the one shared instance."
+    },
+    {
+      "id": "d42q16",
+      "type": "multi",
+      "topic": "assisted injection",
+      "difficulty": "Medium",
+      "question": "`UploadJob` needs an injected `Api` plus a `fileUri: Uri` that's only known at runtime. Which statements about Hilt's assisted injection are true?",
+      "code": "class UploadJob @AssistedInject constructor(\n    private val api: Api,\n    @Assisted private val fileUri: Uri\n) {\n    @AssistedFactory\n    interface Factory { fun create(fileUri: Uri): UploadJob }\n}",
+      "options": [
+        "Callers inject `UploadJob.Factory` and call `create(uri)`, not `UploadJob` directly",
+        "For a ViewModel you can write `@HiltViewModel(assistedFactory = DetailViewModel.Factory::class)` and get it with `hiltViewModel<DetailViewModel, DetailViewModel.Factory> { it.create(id) }`",
+        "`UploadJob` can also be annotated `@Singleton` so all callers share one job",
+        "Hilt fills `@Assisted` parameters by looking up a `Uri` binding in the graph",
+        "Injecting `UploadJob` directly works too, with `fileUri` set to null"
+      ],
+      "answer": [
+        0,
+        1
+      ],
+      "explanation": "Assisted injection mixes graph dependencies with values supplied by the caller, through a generated factory. Assisted types can't be scoped, `@Assisted` values come from the `create()` arguments rather than the graph, and requesting the type directly is a build error. For simple navigation args, ViewModels can also read `SavedStateHandle`."
+    },
+    {
+      "id": "d42q17",
+      "type": "mcq",
+      "topic": "@EntryPoint",
+      "difficulty": "Medium",
+      "question": "A `ContentProvider` needs your Hilt-provided `NotesDao`, but `@AndroidEntryPoint` doesn't support `ContentProvider`. What's the Hilt way to get it?",
+      "options": [
+        "An `@EntryPoint` interface installed in `SingletonComponent`, read via `EntryPointAccessors.fromApplication(...)`",
+        "Annotate the provider with `@HiltViewModel` and use `by viewModels()`",
+        "Add `@Inject lateinit var dao: NotesDao`; Hilt field-injects every manifest component, `ContentProvider` included",
+        "Create a new `NotesDatabase` by hand inside `onCreate()`, because Hilt can't help here"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`@EntryPoint` gives code that Hilt doesn't manage a typed way to pull bindings out of a component, e.g. `interface NotesEntryPoint { fun dao(): NotesDao }` read with `EntryPointAccessors.fromApplication(context, NotesEntryPoint::class.java).dao()`. A `ContentProvider` can run before `Application.onCreate`, which is one reason field injection isn't supported there, and building a second database by hand would duplicate the singleton."
+    },
+    {
+      "id": "d42q18",
+      "type": "truefalse",
+      "topic": "koin contrast",
+      "difficulty": "Medium",
+      "question": "With Koin's standard Kotlin DSL (`module { single { NewsRepository(get()) } }`), a missing dependency fails the build, just like a missing binding in Hilt.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "Koin's DSL is a runtime service locator: `get()` resolves when the object is first requested, so a missing definition crashes at runtime unless a test such as `verify()`/`checkModules` catches it. Hilt/Dagger generate code and validate the graph at compile time."
+    },
+    {
+      "id": "d42q19",
+      "type": "multi",
+      "topic": "hilt testing",
+      "difficulty": "Hard",
+      "question": "Which statements about testing with Hilt are true?",
+      "options": [
+        "In a `@HiltAndroidTest` class, `@Inject` fields are only populated after you call `hiltRule.inject()` on the `HiltAndroidRule`",
+        "A `@TestInstallIn(components = [SingletonComponent::class], replaces = [NetworkModule::class])` module replaces `NetworkModule` for every test in that test source set",
+        "A `@BindValue` field in the test class (e.g. `@BindValue val api: Api = FakeApi()`) adds that object to the test's graph as the binding for its type",
+        "Instrumented Hilt tests run on your production `@HiltAndroidApp` Application class by default",
+        "`@UninstallModules` is preferred over `@TestInstallIn` because it makes test builds faster"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "Hilt tests run on `HiltTestApplication` (set through a custom test runner) or a `@CustomTestApplication`, not the production app. `@UninstallModules` works per test class but makes Hilt generate a separate component for each such class, which slows builds. That's why a shared `@TestInstallIn` fake module is usually preferred."
+    },
+    {
+      "id": "d42q20",
+      "type": "mcq",
+      "topic": "@ViewModelScoped",
+      "difficulty": "Hard",
+      "question": "`FormState` has an `@Inject constructor` and is `@ViewModelScoped`. `EditViewModel` injects `FormState` and also a `ValidateUseCase` that itself injects `FormState`. Two different screens each hold their own `EditViewModel`. Which statement is correct?",
+      "options": [
+        "Inside one `EditViewModel`, the ViewModel and its `ValidateUseCase` share a single `FormState`, and the two screens' ViewModels each get their own",
+        "Every injection site gets a fresh `FormState`, including inside the same ViewModel",
+        "Both screens' ViewModels share one `FormState`, because `@ViewModelScoped` means one instance shared by every ViewModel of that class for the whole app process",
+        "It's a build error, because a use case can't depend on a `@ViewModelScoped` type"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Each ViewModel gets its own `ViewModelComponent`, and a `@ViewModelScoped` binding is a single instance within that component. Everything built for that ViewModel, including its use cases, shares the instance, while a different ViewModel gets a separate one. Using a `@Singleton` here would share the form state across screens by mistake."
+    }
+  ]
+}

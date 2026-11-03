@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { q, dbUrl, dbEnvNames } from "../lib/db.js";
 import { findLeetcodeUser, syncUser, validLeetcodeName } from "../lib/leetcode.js";
+import { quizDay, quizOpensAt, lateAfter, viewQuestion, grade } from "../lib/quiz.js";
 import { currentUser, login, sessionCookie, clearCookie, ensureAdmin, hashPin, nameKey, validPin } from "../lib/auth.js";
 
 const TOTAL_DAYS = 60;
@@ -82,12 +83,15 @@ async function handle(req, res) {
   if (path === "/api/me" && method === "GET") return send(res, 200, { user: me });
 
   if (path === "/api/state" && method === "GET") {
-    const [users, solves, sols, comments] = await Promise.all([
+    const [users, solves, sols, comments, quiz] = await Promise.all([
       q("SELECT id, name, leetcode FROM users ORDER BY id"),
       q("SELECT user_id, days FROM solves"),
       q("SELECT day, data FROM solutions"),
       q("SELECT id, user_id, d, p, t, at FROM comments ORDER BY at"),
+      q("SELECT user_id, day, score, total, late FROM quiz_attempts"),
     ]);
+    const quizScores = {};
+    for (const a of quiz) (quizScores[a.user_id] ||= {})[a.day] = { score: a.score, total: a.total, late: a.late };
     return send(res, 200, {
       me,
       users: Object.fromEntries(users.map(u => [u.id, u.name])),
@@ -95,7 +99,41 @@ async function handle(req, res) {
       solves: Object.fromEntries(solves.map(s => [s.user_id, s.days || {}])),
       solutions: Object.fromEntries(sols.map(s => [s.day, s.data])),
       comments,
+      quiz: quizScores,
     });
+  }
+
+  const quizMatch = path.match(/^\/api\/quiz\/(\d+)$/);
+  if (quizMatch) {
+    const day = Number(quizMatch[1]);
+    if (!validDay(day)) return send(res, 404, { error: "No such day." });
+    if (Date.now() < quizOpensAt(day)) return send(res, 403, { error: "This quiz isn't open yet." });
+    const quiz = quizDay(day);
+    if (!quiz) return send(res, 404, { error: "This day's quiz isn't ready yet." });
+    const [prev] = await q("SELECT answers, score, total, late, at FROM quiz_attempts WHERE user_id = $1 AND day = $2", [me.id, day]);
+    const result = (a) => ({
+      day, topic: quiz.topic,
+      attempt: { score: a.score, total: a.total, late: a.late, at: Number(a.at) },
+      questions: quiz.questions.map(qq => viewQuestion(me.id, qq, true, a.answers[qq.id])),
+    });
+
+    if (method === "GET") {
+      if (prev) return send(res, 200, result(prev));
+      return send(res, 200, { day, topic: quiz.topic, attempt: null, questions: quiz.questions.map(qq => viewQuestion(me.id, qq, false)) });
+    }
+    if (method === "POST") {
+      if (prev) return send(res, 409, { error: "You've already taken this quiz.", ...result(prev) });
+      const { answers } = await readBody(req);
+      const { picks, score } = grade(me.id, quiz, answers);
+      const at = Date.now(), late = at > lateAfter(day), total = quiz.questions.length;
+      const [row] = await q("INSERT INTO quiz_attempts (user_id, day, answers, score, total, late, at) VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (user_id, day) DO NOTHING RETURNING score",
+        [me.id, day, JSON.stringify(picks), score, total, late, at]);
+      if (!row) {
+        const [again] = await q("SELECT answers, score, total, late, at FROM quiz_attempts WHERE user_id = $1 AND day = $2", [me.id, day]);
+        return send(res, 409, { error: "You've already taken this quiz.", ...result(again) });
+      }
+      return send(res, 200, result({ answers: picks, score, total, late, at }));
+    }
   }
 
   if (path === "/api/solves" && method === "PUT") {

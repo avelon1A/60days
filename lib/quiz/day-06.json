@@ -1,0 +1,356 @@
+{
+  "day": 6,
+  "topic": "Functions: defaults, named args, vararg & infix",
+  "questions": [
+    {
+      "id": "d06q01",
+      "type": "output",
+      "topic": "single-expression",
+      "difficulty": "Easy",
+      "question": "What does this print?",
+      "code": "fun square(x: Int) = x * x\n\nfun main() {\n    println(square(3) + square(4))\n}",
+      "options": [
+        "25",
+        "49",
+        "7",
+        "34"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`square` is a single-expression function whose return type is inferred as `Int`. It computes 9 + 16 = 25. You would get 49 only from `square(3 + 4)`."
+    },
+    {
+      "id": "d06q02",
+      "type": "mcq",
+      "topic": "return type",
+      "difficulty": "Easy",
+      "question": "Which statement about these two declarations is true?",
+      "code": "fun a(x: Int) = x * 2\n\nfun b(x: Int) {\n    return x * 2\n}",
+      "options": [
+        "`a` returns `Int`, and `b` fails because a block body defaults to `Unit`",
+        "Both compile and both return `Int`",
+        "`a` does not compile because single-expression functions need an explicit return type",
+        "Both compile, but `b` returns `Any`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Return types are inferred only for expression bodies (`= ...`). A block body with no declared type returns `Unit`, so `return x * 2` is a type mismatch."
+    },
+    {
+      "id": "d06q03",
+      "type": "output",
+      "topic": "default arguments",
+      "difficulty": "Easy",
+      "question": "What does this print?",
+      "code": "fun box(w: Int, h: Int = w * 2) = \"${w}x$h\"\n\nfun main() {\n    println(box(3))\n    println(box(3, 4))\n}",
+      "options": [
+        "3x6\n3x4",
+        "3x0\n3x4",
+        "3x3\n3x4",
+        "3x6\n3x8"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A default value can refer to parameters declared before it, so `h` defaults to `w * 2` = 6. When `h` is passed explicitly, the default isn't used."
+    },
+    {
+      "id": "d06q04",
+      "type": "truefalse",
+      "topic": "unit",
+      "difficulty": "Easy",
+      "question": "`fun log(msg: String) { println(msg) }` and `fun log(msg: String): Unit { println(msg) }` declare the same function signature.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "When a block-body function returns nothing useful, `: Unit` can be omitted because it's the default return type. Writing it out changes nothing."
+    },
+    {
+      "id": "d06q05",
+      "type": "output",
+      "topic": "default evaluation",
+      "difficulty": "Medium",
+      "question": "What does this print?",
+      "code": "var counter = 0\nfun next(): Int {\n    counter++\n    return counter\n}\n\nfun log(id: Int = next()) = println(id)\n\nfun main() {\n    log()\n    log(10)\n    log()\n}",
+      "options": [
+        "1\n10\n2",
+        "1\n10\n1",
+        "1\n10\n3",
+        "0\n10\n1"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Kotlin evaluates a default expression on each call that omits the argument, and only then. Unlike Python, the value isn't computed once and cached. `log(10)` doesn't call `next()`, so the second default call gets 2, not 3."
+    },
+    {
+      "id": "d06q06",
+      "type": "mcq",
+      "topic": "named arguments",
+      "difficulty": "Easy",
+      "question": "Given `fun detailIntent(context: Context, userId: String, fromPush: Boolean = false, source: String = \"home\"): Intent`, which call does NOT compile?",
+      "options": [
+        "`detailIntent(ctx, source = \"push\", \"u1\")`",
+        "`detailIntent(ctx, \"u1\", source = \"push\")`",
+        "`detailIntent(userId = \"u1\", context = ctx)`",
+        "`detailIntent(ctx, source = \"push\", userId = \"u1\")`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Named arguments can appear in any order, and you can skip defaulted ones. But a positional argument can't follow a named argument that is out of its position. After `source = ...`, the compiler has no way to tell which parameter `\"u1\"` is for."
+    },
+    {
+      "id": "d06q07",
+      "type": "output",
+      "topic": "infix to",
+      "difficulty": "Medium",
+      "question": "What does this print?",
+      "code": "fun main() {\n    val p = \"a\" to 1 to true\n    println(p)\n    println(1 + 2 to 3)\n}",
+      "options": [
+        "((a, 1), true)\n(3, 3)",
+        "(a, (1, true))\n(3, 3)",
+        "((a, 1), true)\n(1, 5)",
+        "(a, 1, true)\n(3, 3)"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`to` is an ordinary infix function and associates left to right, so you get `Pair(Pair(\"a\", 1), true)`, not a triple. Infix calls bind more loosely than arithmetic operators, so `1 + 2 to 3` is `(1 + 2) to 3`."
+    },
+    {
+      "id": "d06q08",
+      "type": "truefalse",
+      "topic": "mixing named",
+      "difficulty": "Medium",
+      "question": "For `fun diff(a: Int, b: Int) = a - b`, the call `diff(a = 1, 2)` compiles (Kotlin 1.4+).",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Since Kotlin 1.4, positional arguments may follow named ones as long as every named argument is in its own position. Here `a` is first, so `2` binds to `b`. The call compiles and returns -1."
+    },
+    {
+      "id": "d06q09",
+      "type": "output",
+      "topic": "overload vs default",
+      "difficulty": "Medium",
+      "question": "What does this print?",
+      "code": "fun show(x: Int) = println(\"one\")\nfun show(x: Int, y: Int = 0) = println(\"two\")\n\nfun main() {\n    show(1)\n}",
+      "options": [
+        "one",
+        "two",
+        "Compile error: ambiguous call",
+        "one\ntwo"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Both overloads match, but Kotlin prefers the candidate that needs no default values. `show(x: Int)` is more specific, so it wins and the call isn't ambiguous."
+    },
+    {
+      "id": "d06q10",
+      "type": "mcq",
+      "topic": "@JvmOverloads",
+      "difficulty": "Medium",
+      "question": "Why do custom Views often declare `class ChartView @JvmOverloads constructor(context: Context, attrs: AttributeSet? = null, defStyleAttr: Int = 0) : View(context, attrs, defStyleAttr)`?",
+      "options": [
+        "It emits `(Context)` and `(Context, AttributeSet)` Java overloads, which layout inflation calls",
+        "It makes Kotlin callers able to omit `attrs` and `defStyleAttr`, which they otherwise couldn't",
+        "It generates one Java constructor per possible combination of parameters, including `(Context, int)`",
+        "It is required for any Kotlin class that extends a Java class"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Java has no default arguments, so without the annotation only the full three-argument constructor exists in bytecode. `@JvmOverloads` emits one overload per trailing default, dropping defaults from the end, which gives the `(Context, AttributeSet)` constructor that inflation needs. Kotlin callers can omit the defaults with or without the annotation."
+    },
+    {
+      "id": "d06q11",
+      "type": "output",
+      "topic": "spread operator",
+      "difficulty": "Medium",
+      "question": "What does this print?",
+      "code": "fun count(vararg s: String) = s.size\n\nfun main() {\n    val arr = arrayOf(\"a\", \"b\")\n    val list = listOf(\"c\", \"d\", \"e\")\n    println(count(*arr, \"x\", *list.toTypedArray()))\n}",
+      "options": [
+        "6",
+        "3",
+        "4",
+        "2"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "The spread operator `*` unpacks an array into individual vararg elements, and you can mix spread and plain arguments. That gives 2 + 1 + 3 = 6. A `List` must become an array first, which is why `toTypedArray()` is there."
+    },
+    {
+      "id": "d06q12",
+      "type": "multi",
+      "topic": "infix rules",
+      "difficulty": "Medium",
+      "question": "Which of these declarations compile? Select all that apply.",
+      "options": [
+        "`class Money(val cents: Long) { infix fun plus(other: Money) = Money(cents + other.cents) }`",
+        "`infix fun Int.pow(exp: Int): Int = (1..exp).fold(1) { acc, _ -> acc * this }`",
+        "`infix fun pow(base: Int, exp: Int): Int = 1`",
+        "`infix fun Int.anyOf(vararg xs: Int): Boolean = this in xs`",
+        "`infix fun Int.negate(): Int = -this`"
+      ],
+      "answer": [
+        0,
+        1
+      ],
+      "explanation": "An infix function must be a member or an extension and take exactly one non-vararg parameter. A top-level function with two parameters has no receiver, a vararg parameter isn't allowed, and a function with zero parameters has nothing to put on the right-hand side."
+    },
+    {
+      "id": "d06q13",
+      "type": "mcq",
+      "topic": "vararg primitives",
+      "difficulty": "Medium",
+      "question": "Given `fun total(vararg n: Int) = n.sum()` and `val xs = listOf(1, 2, 3)`, which call compiles?",
+      "options": [
+        "`total(*xs.toIntArray())`",
+        "`total(*xs.toTypedArray())`",
+        "`total(*xs)`",
+        "`total(xs)`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Inside the function, `vararg n: Int` is an `IntArray` (primitive `int[]`), so the spread needs an `IntArray`. `toTypedArray()` gives `Array<Int>` (boxed `Integer[]`), which is a type mismatch. You also can't spread a `List` directly."
+    },
+    {
+      "id": "d06q14",
+      "type": "output",
+      "topic": "local functions",
+      "difficulty": "Easy",
+      "question": "What does this print?",
+      "code": "fun main() {\n    var total = 0\n    fun add(n: Int) {\n        total += n\n    }\n    add(3)\n    add(4)\n    println(total)\n}",
+      "options": [
+        "7",
+        "0",
+        "4",
+        "3"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A local function closes over the enclosing scope's variables and can modify a captured `var`. Both calls update the same `total`, so it ends up as 7."
+    },
+    {
+      "id": "d06q15",
+      "type": "multi",
+      "topic": "top-level & java",
+      "difficulty": "Easy",
+      "question": "`DateUtils.kt` contains a top-level `fun formatDate(millis: Long): String`. Which statements are true? Select all that apply.",
+      "options": [
+        "Java calls it as `DateUtilsKt.formatDate(millis)`",
+        "Putting `@file:JvmName(\"DateUtils\")` at the top of the file lets Java call `DateUtils.formatDate(millis)`",
+        "After adding `@file:JvmName(\"DateUtils\")`, Kotlin callers must also write `DateUtils.formatDate(millis)`",
+        "Java must first create an instance with `new DateUtilsKt()` to call it"
+      ],
+      "answer": [
+        0,
+        1
+      ],
+      "explanation": "Top-level functions compile to static methods on a facade class named after the file plus `Kt`. `@file:JvmName` renames that class for Java only. Kotlin still calls the function by its package-level name, and no instance is ever needed."
+    },
+    {
+      "id": "d06q16",
+      "type": "output",
+      "topic": "vararg not last",
+      "difficulty": "Hard",
+      "question": "What does this print?",
+      "code": "fun tag(vararg parts: String, sep: String = \"-\") =\n    parts.joinToString(sep)\n\nfun main() {\n    println(tag(\"a\", \"b\", sep = \"+\"))\n    println(tag(\"a\", \"b\", \"+\"))\n}",
+      "options": [
+        "a+b\na-b-+",
+        "a+b\na+b",
+        "a+b\na-b",
+        "a-b-+\na-b-+"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "When a vararg isn't the last parameter, the parameters after it can only be passed by name. In the second call `\"+\"` is just another vararg element, so `sep` stays `\"-\"` and you get `a-b-+`."
+    },
+    {
+      "id": "d06q17",
+      "type": "mcq",
+      "topic": "tailrec",
+      "difficulty": "Hard",
+      "question": "What happens with this declaration?",
+      "code": "tailrec fun sum(n: Int): Int =\n    if (n == 0) 0 else n + sum(n - 1)\n\nfun main() {\n    println(sum(10))\n}",
+      "compiles": true,
+      "options": [
+        "It compiles with a warning, and the recursion is not turned into a loop",
+        "It compiles and the compiler turns the recursion into a loop",
+        "It fails to compile because the recursive call is not in tail position",
+        "It compiles, but `tailrec` makes it throw at runtime because the call isn't a tail call"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`tailrec` only takes effect when the recursive call is the last operation. Here `n + sum(n - 1)` still has an addition to do after the call returns. The compiler warns and emits ordinary recursion, so a large `n` can still overflow the stack. Rewriting with an accumulator parameter fixes it."
+    },
+    {
+      "id": "d06q18",
+      "type": "truefalse",
+      "topic": "@JvmOverloads pitfall",
+      "difficulty": "Hard",
+      "question": "Inflating `class FancyButton @JvmOverloads constructor(context: Context, attrs: AttributeSet? = null, defStyleAttr: Int = 0) : MaterialButton(context, attrs, defStyleAttr)` from XML gives the same default styling as a plain `MaterialButton`.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "The inflater calls the two-argument constructor. Here that passes `defStyleAttr = 0` straight to the parent's three-argument constructor and skips `MaterialButton`'s own default, `R.attr.materialButtonStyle`, so the theme's button style is lost. Use the parent's default style attribute instead of `0`, or write the constructors by hand."
+    },
+    {
+      "id": "d06q19",
+      "type": "mcq",
+      "topic": "nothing",
+      "difficulty": "Medium",
+      "question": "Why can `id` be declared as a non-null `String` here?",
+      "code": "fun fail(msg: String): Nothing =\n    throw IllegalStateException(msg)\n\nval id: String = intent.getStringExtra(\"id\") ?: fail(\"missing id\")",
+      "options": [
+        "`fail` returns `Nothing`, a subtype of every type, so the expression is `String`",
+        "`Nothing` is an alias for `Unit`, and `Unit` is converted to an empty string",
+        "The compiler inserts `!!` on `getStringExtra` because the right side of `?:` always throws",
+        "It can't. `id` must be `String?` because `fail` might return null"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A function returning `Nothing` never completes normally. Because `Nothing` is a subtype of every type, `String? ?: Nothing` has type `String`. If `fail` were declared to return `Unit`, the type would be `Any` and the declaration wouldn't compile."
+    },
+    {
+      "id": "d06q20",
+      "type": "output",
+      "topic": "evaluation order",
+      "difficulty": "Hard",
+      "question": "What does this print?",
+      "code": "fun f(a: Int, b: Int) = println(\"f($a, $b)\")\n\nfun v(x: Int): Int {\n    print(\"v$x \")\n    return x\n}\n\nfun main() {\n    f(b = v(1), a = v(2))\n}",
+      "options": [
+        "v1 v2 f(2, 1)",
+        "v2 v1 f(2, 1)",
+        "v1 v2 f(1, 2)",
+        "v2 v1 f(1, 2)"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Arguments are evaluated in the order they're written at the call site, not in parameter order, so `v(1)` runs first. They're then bound by name, so `a = 2` and `b = 1`."
+    }
+  ]
+}

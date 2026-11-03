@@ -1,0 +1,359 @@
+{
+  "day": 34,
+  "topic": "ViewModel, config changes, process death & SavedStateHandle",
+  "questions": [
+    {
+      "id": "d34q01",
+      "type": "multi",
+      "topic": "config changes",
+      "difficulty": "Easy",
+      "question": "By default (no `android:configChanges` in the manifest), which of these cause the foreground Activity to be destroyed and recreated?",
+      "options": [
+        "Rotating the device",
+        "Switching the system to dark theme",
+        "Changing the device language",
+        "Changing the system font size",
+        "Pressing Home to send the app to the background",
+        "Pulling down the notification shade"
+      ],
+      "answer": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "explanation": "Orientation, UI mode (dark theme), locale and font scale are configuration changes, so the Activity is recreated to load matching resources. Pressing Home only stops the Activity, and the notification shade at most pauses it. Neither changes the configuration."
+    },
+    {
+      "id": "d34q02",
+      "type": "truefalse",
+      "topic": "onCleared",
+      "difficulty": "Easy",
+      "question": "`ViewModel.onCleared()` is called every time the user rotates the device.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "The ViewModel is kept across a configuration change, so `onCleared()` is not called on rotation. It runs only when the owner goes away for good, for example when the Activity finishes or a Fragment is permanently removed."
+    },
+    {
+      "id": "d34q03",
+      "type": "mcq",
+      "topic": "viewmodelstore",
+      "difficulty": "Easy",
+      "question": "How does a ViewModel obtained with `by viewModels()` in a `ComponentActivity` survive a rotation?",
+      "options": [
+        "The `ViewModelStore` is kept in memory as a non-configuration instance and handed to the new Activity",
+        "The ViewModel is serialized into the saved instance state `Bundle` and deserialized in the new Activity",
+        "Every ViewModel is a process-wide singleton, so the same instance is always returned",
+        "The ViewModel is written to disk in `onStop()` and read back in `onCreate()`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "The `ViewModelStore` object is handed straight from the old Activity instance to the new one and is cleared only if the Activity is destroyed without `isChangingConfigurations`. Nothing is serialized, which is exactly why a ViewModel does not survive process death."
+    },
+    {
+      "id": "d34q04",
+      "type": "output",
+      "topic": "store retention",
+      "difficulty": "Easy",
+      "question": "This program models a `ViewModelStore`. What does it print?",
+      "code": "class Vm { var count = 0 }\nclass Store { val map = mutableMapOf<String, Vm>() }\nfun obtain(store: Store) = store.map.getOrPut(\"main\") { Vm() }\n\nfun main() {\n    val store = Store()\n    obtain(store).count++\n    // rotation: Activity recreated, store retained\n    obtain(store).count++\n    val afterRotation = obtain(store).count\n    // process death: a fresh process starts with a new store\n    val afterDeath = obtain(Store()).count\n    println(\"$afterRotation $afterDeath\")\n}",
+      "options": [
+        "2 0",
+        "2 2",
+        "1 0",
+        "1 1"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Like a real `ViewModelStore`, the retained store returns the same instance after \"rotation\", so `count` reaches 2. A new process has a new, empty store, so a brand-new `Vm` with `count = 0` is created. In-memory state does not outlive the process."
+    },
+    {
+      "id": "d34q05",
+      "type": "truefalse",
+      "topic": "process death",
+      "difficulty": "Easy",
+      "question": "If the system kills your app's process while it is in the background, the ViewModel instance and its fields are restored when the user returns.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "A ViewModel lives only in memory, so process death destroys it. The system restores only the saved state `Bundle` (which backs `SavedStateHandle` and `rememberSaveable`) plus whatever you persisted to disk."
+    },
+    {
+      "id": "d34q06",
+      "type": "mcq",
+      "topic": "activityViewModels",
+      "difficulty": "Easy",
+      "question": "`ListFragment` and `DetailFragment` are hosted in the same Activity, and both declare `private val vm: SelectionVm by activityViewModels()`. What is true?",
+      "code": "class ListFragment : Fragment() {\n    private val vm: SelectionVm by activityViewModels()\n}\n\nclass DetailFragment : Fragment() {\n    private val vm: SelectionVm by activityViewModels()\n}",
+      "options": [
+        "Both get the same instance, scoped to the Activity, which is cleared when the Activity finishes",
+        "Each Fragment gets its own instance, because ViewModels are always scoped to the Fragment that declares them",
+        "They share one instance, but it is cleared as soon as either Fragment is destroyed",
+        "They share an instance only if both Fragments are added with the same tag"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`activityViewModels()` uses the host Activity's `ViewModelStore`, so both Fragments see the same `SelectionVm`, and that makes it a common way to share a selection between them. With `by viewModels()`, each Fragment would get its own instance instead."
+    },
+    {
+      "id": "d34q07",
+      "type": "multi",
+      "topic": "memory leaks",
+      "difficulty": "Easy",
+      "question": "Which of these are safe for a ViewModel to keep a reference to?",
+      "options": [
+        "The application `Context` obtained through `AndroidViewModel`",
+        "A repository passed in through the constructor",
+        "A `MutableStateFlow` holding the screen's UI state",
+        "The `Activity` that first created the ViewModel",
+        "A `TextView` from the screen's layout",
+        "The Fragment's `requireContext()`"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "The ViewModel outlives the Activity across rotation, so holding the Activity, its Views, or a Fragment's (Activity) `Context` leaks the old Activity. The application `Context`, repositories and state holders don't reference an Activity, so the ViewModel can hold them safely."
+    },
+    {
+      "id": "d34q08",
+      "type": "mcq",
+      "topic": "viewModelScope",
+      "difficulty": "Medium",
+      "question": "The ViewModel starts a network request with `viewModelScope.launch` and writes the result into a `StateFlow` that the UI collects. The user rotates the screen while it is loading. What happens?",
+      "code": "fun load() {\n    viewModelScope.launch {\n        _state.value = UiState.Loading\n        _state.value = UiState.Data(repo.fetch())\n    }\n}",
+      "options": [
+        "The request keeps running, and the new Activity collects the same `StateFlow` and gets the result",
+        "The request is cancelled when the old Activity is destroyed, because `viewModelScope` follows the Activity",
+        "The request finishes, but the result is lost because it was delivered to the destroyed Activity",
+        "The request is restarted from scratch when the new Activity calls `viewModels()`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`viewModelScope` is cancelled only in `onCleared()`, which a rotation doesn't trigger. The new Activity gets the same ViewModel and collects the current state. If the request had been launched in the Activity's `lifecycleScope`, it would have been cancelled by the rotation."
+    },
+    {
+      "id": "d34q09",
+      "type": "multi",
+      "topic": "what survives",
+      "difficulty": "Medium",
+      "question": "The user fills in a sign-up form, sends the app to the background, and the OS kills the process. When they return from Recents, which of these still hold their values?",
+      "options": [
+        "The email stored with `savedStateHandle[\"email\"] = email`",
+        "Text held in a `rememberSaveable` state in the composable",
+        "A draft row the ViewModel inserted into Room",
+        "A plain `var phone: String` property on the ViewModel",
+        "A `var` in a `companion object`",
+        "An in-memory cache inside an `object` repository singleton"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "`SavedStateHandle` and `rememberSaveable` are both written into the saved instance state, which the system keeps across process death, and Room data is on disk. ViewModel fields, static and companion fields, and singletons exist only in the old process's memory, so they are gone."
+    },
+    {
+      "id": "d34q10",
+      "type": "mcq",
+      "topic": "factory",
+      "difficulty": "Medium",
+      "question": "Without Hilt, how should you create a `CheckoutVm(repo: CartRepository, handle: SavedStateHandle)` so that it is retained correctly?",
+      "options": [
+        "Pass a `viewModelFactory { initializer { CheckoutVm(repo, createSavedStateHandle()) } }` to `by viewModels(...)`",
+        "Call `CheckoutVm(repo, SavedStateHandle())` directly in `onCreate()` and store it in a field",
+        "Use `by viewModels()` with no factory, because the default factory injects constructor parameters by reflection",
+        "Give it a no-arg constructor and set a `lateinit var repo` from the Activity in `onCreate()`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A custom `ViewModelProvider.Factory` (here built with the `viewModelFactory` DSL) creates the instance once and stores it in the `ViewModelStore`, and `createSavedStateHandle()` reads the owner's saved state from `CreationExtras`. Calling the constructor yourself creates a new, unretained instance on every recreation. The default factory only handles no-arg or `(Application)`/`(SavedStateHandle)`-style constructors."
+    },
+    {
+      "id": "d34q11",
+      "type": "output",
+      "topic": "saved vs in-memory",
+      "difficulty": "Medium",
+      "question": "This program models a ViewModel that is backed by saved state. What does it print?",
+      "code": "class Handle(private val saved: MutableMap<String, String>) {\n    operator fun get(key: String): String? = saved[key]\n    operator fun set(key: String, value: String) { saved[key] = value }\n}\n\nclass FormVm(private val handle: Handle) {\n    var nameInMemory = \"\"\n    var nameSaved: String\n        get() = handle[\"name\"] ?: \"\"\n        set(v) { handle[\"name\"] = v }\n}\n\nfun main() {\n    val persisted = mutableMapOf<String, String>()\n    val vm1 = FormVm(Handle(persisted))\n    vm1.nameInMemory = \"Ann\"\n    vm1.nameSaved = \"Ann\"\n    // process death: a new ViewModel is restored from the persisted map\n    val vm2 = FormVm(Handle(persisted.toMutableMap()))\n    println(\"[${vm2.nameInMemory}] [${vm2.nameSaved}]\")\n}",
+      "options": [
+        "[] [Ann]",
+        "[Ann] [Ann]",
+        "[] []",
+        "[Ann] []"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`vm2` is a new object, so its plain field starts empty again. The property backed by the handle reads from the persisted map, the way `SavedStateHandle` reads from the restored `Bundle`, so it still returns `Ann`."
+    },
+    {
+      "id": "d34q12",
+      "type": "mcq",
+      "topic": "nav args",
+      "difficulty": "Medium",
+      "question": "With type-safe Navigation Compose, the destination is `@Serializable data class Profile(val userId: String)`. What is the recommended way for `ProfileViewModel` to read `userId`?",
+      "code": "@Serializable\ndata class Profile(val userId: String)\n\nclass ProfileViewModel(\n    savedStateHandle: SavedStateHandle\n) : ViewModel() {\n    val userId: String = TODO()\n}",
+      "options": [
+        "`savedStateHandle.toRoute<Profile>().userId`",
+        "Pass the `NavController` into the ViewModel and read the current back stack entry",
+        "Read it from the Activity's `intent.extras`",
+        "There is no way to read it, so the composable must call a `vm.init(userId)` method"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Navigation puts a destination's arguments into the `SavedStateHandle` of ViewModels scoped to that back stack entry, and `toRoute<T>()` decodes them into the route object. Holding a `NavController` in a ViewModel leaks UI objects, and an `init(userId)` call has to be repeated after every recreation."
+    },
+    {
+      "id": "d34q13",
+      "type": "truefalse",
+      "topic": "don't keep activities",
+      "difficulty": "Medium",
+      "question": "Turning on \"Don't keep activities\" in Developer options fully simulates process death, so if your app works with it enabled, it handles process death correctly.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "That option destroys each Activity once you leave it, but the process stays alive, so singletons, static fields and in-memory caches survive and can hide bugs. To test real process death, background the app and run `adb shell am kill <package>`."
+    },
+    {
+      "id": "d34q14",
+      "type": "mcq",
+      "topic": "getStateFlow",
+      "difficulty": "Medium",
+      "question": "A ViewModel exposes `val query: StateFlow<String> = savedStateHandle.getStateFlow(\"query\", \"\")`. How should `onQueryChanged(q)` update it so that collectors see the new value and it survives process death?",
+      "code": "class SearchVm(private val savedStateHandle: SavedStateHandle) : ViewModel() {\n    val query: StateFlow<String> =\n        savedStateHandle.getStateFlow(\"query\", \"\")\n\n    fun onQueryChanged(q: String) {\n        // ???\n    }\n}",
+      "options": [
+        "`savedStateHandle[\"query\"] = q`",
+        "`(query as MutableStateFlow).value = q`",
+        "`query.value = q`",
+        "`savedStateHandle.getStateFlow(\"query\", q)`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Writing to the handle under the same key updates the saved state, and the `StateFlow` returned by `getStateFlow` emits the new value. `StateFlow.value` is read-only, so `query.value = q` doesn't compile. Casting relies on an implementation detail, and calling `getStateFlow` with a different default doesn't change the stored value."
+    },
+    {
+      "id": "d34q15",
+      "type": "mcq",
+      "topic": "configChanges",
+      "difficulty": "Medium",
+      "question": "To stop a form losing its data on rotation, a teammate adds `android:configChanges=\"orientation|screenSize\"` to the Activity. Why is this discouraged as a general fix?",
+      "options": [
+        "You must handle those changes yourself, and data is still lost on process death or locale changes",
+        "It is deprecated and ignored from Android 10, so the Activity is still recreated on every rotation",
+        "It makes the system call `onCleared()` on the ViewModel on every rotation, wiping the form",
+        "It forces the Activity into portrait mode, which breaks tablets and foldables"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "The attribute only means \"don't recreate me for these changes, I'll handle them\". The data is still lost on dark-mode or locale changes and on process death, and you take over the job of reloading resources. Keeping state in a ViewModel and in saved state fixes the actual problem."
+    },
+    {
+      "id": "d34q16",
+      "type": "mcq",
+      "topic": "testing process death",
+      "difficulty": "Medium",
+      "question": "What is a reliable way to reproduce process death while testing?",
+      "options": [
+        "Background the app with Home, run `adb shell am kill <package>`, then reopen it from Recents",
+        "Swipe the app away in Recents, which kills the process just like the low-memory killer",
+        "Tap \"Force stop\" in Settings > Apps, then launch it again from the launcher",
+        "Rotate the device several times quickly"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`am kill` kills a backgrounded process the same way the low-memory killer does, so the task and its saved state are kept and the app is restored when you return. Swiping away from Recents or force-stopping is the user dismissing the app, which discards saved state. Rotating only triggers a configuration change."
+    },
+    {
+      "id": "d34q17",
+      "type": "mcq",
+      "topic": "nav graph scope",
+      "difficulty": "Hard",
+      "question": "A three-screen checkout flow lives in a nested navigation graph `Checkout`. All three screens must share one `CheckoutVm`, and it must be cleared once the user leaves the flow. How should you scope it?",
+      "code": "navigation<Checkout>(startDestination = Cart) {\n    composable<Cart> { entry -> /* ... */ }\n    composable<Address> { entry -> /* ... */ }\n    composable<Payment> { entry -> /* ... */ }\n}",
+      "options": [
+        "Pass the `Checkout` graph's `NavBackStackEntry` as the owner: `viewModel<CheckoutVm>(parentEntry)`",
+        "Call `viewModel<CheckoutVm>()` in each screen with no owner; Compose shares it per graph",
+        "Scope it to the Activity so all three destinations can reach the same instance",
+        "Make `CheckoutVm` a Kotlin `object` so there is only ever one instance"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "The nested graph's `NavBackStackEntry` (from `navController.getBackStackEntry<Checkout>()`, wrapped in `remember(entry)`) is a `ViewModelStoreOwner` that stays on the back stack while any of its destinations is there and is popped when the flow ends, which clears the ViewModel. With no owner, each screen gets its own instance. An Activity-scoped ViewModel or an `object` would keep the old checkout data after the user leaves the flow."
+    },
+    {
+      "id": "d34q18",
+      "type": "truefalse",
+      "topic": "user dismissal",
+      "difficulty": "Hard",
+      "question": "If the user swipes your app away from Recents, its `SavedStateHandle` and `rememberSaveable` values are restored the next time they launch it.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "Swiping away from Recents removes the task, and Android treats that as the user deliberately dismissing the app, so the saved instance state is thrown away and the next launch starts fresh. Saved state is restored only after a configuration change or when the system kills the process while the task is still in Recents."
+    },
+    {
+      "id": "d34q19",
+      "type": "mcq",
+      "topic": "bundle size",
+      "difficulty": "Hard",
+      "question": "A chat screen stores the whole list of 5,000 `Parcelable` messages in `SavedStateHandle`. The app crashes with `TransactionTooLargeException` whenever the user presses Home. What is the right fix?",
+      "options": [
+        "Keep only small ids (conversation id, scroll position) in saved state and reload messages from Room",
+        "Add `android:largeHeap=\"true\"` so the app has more memory available for the Bundle",
+        "Make the messages `Serializable` instead of `Parcelable`, since Serializable isn't size-limited",
+        "Move the list from `SavedStateHandle` into `rememberSaveable`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Saved state is sent to the system process over Binder, whose transaction buffer is about 1 MB and is shared by the whole process, so a large Bundle fails when the Activity saves its state on stop. Heap size doesn't affect that limit, `Serializable` is usually larger, and `rememberSaveable` writes into the same Bundle."
+    },
+    {
+      "id": "d34q20",
+      "type": "mcq",
+      "topic": "singleton after death",
+      "difficulty": "Hard",
+      "question": "`LoginActivity` sets `UserSession.current = user` (an in-memory `object`) and then opens `ProfileActivity`, which reads `UserSession.current!!`. Crash reports show an NPE in `ProfileActivity` when users return to the app hours later. What is the most likely cause?",
+      "code": "object UserSession {\n    var current: User? = null\n}\n\nclass ProfileActivity : ComponentActivity() {\n    override fun onCreate(savedInstanceState: Bundle?) {\n        super.onCreate(savedInstanceState)\n        val name = UserSession.current!!.name\n    }\n}",
+      "options": [
+        "The process was killed and Android restored `ProfileActivity` in a fresh process, so the `object` is empty",
+        "The garbage collector collected the `UserSession` object because nothing referenced it",
+        "`ProfileActivity` was rotated, and rotation resets every `object` to its initial values",
+        "`UserSession.current` was cleared when `LoginActivity`'s ViewModel's `onCleared()` ran after it finished"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "After process death, the system restores the top Activity of the task in a fresh process, and there every `object` starts from its initial state. The fix is to persist the session (for example in DataStore) and load it, or redirect to login when it is missing. A reachable `object` is never garbage-collected, and rotation doesn't reset static state."
+    }
+  ]
+}

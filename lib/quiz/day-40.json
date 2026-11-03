@@ -1,0 +1,352 @@
+{
+  "day": 40,
+  "topic": "Navigation: back stack, arguments & deep links",
+  "questions": [
+    {
+      "id": "d40q01",
+      "type": "mcq",
+      "topic": "type-safe routes",
+      "difficulty": "Easy",
+      "question": "In current Navigation Compose, which is the type-safe way to declare a Profile destination that needs a user id?",
+      "options": [
+        "`sealed class Screen(val route: String)` with `object Profile : Screen(\"profile/{id}\")`",
+        "`@Parcelize data class Profile(val id: String) : Parcelable`",
+        "`@Serializable data class Profile(val id: String)` with `composable<Profile> { }`",
+        "`const val PROFILE_ROUTE = \"profile/{id}\"` plus a `navArgument(\"id\")`"
+      ],
+      "answer": [
+        2
+      ],
+      "explanation": "Since Navigation 2.8 routes are `@Serializable` classes or objects: `composable<Profile>` registers the destination and `navigate(Profile(\"42\"))` passes the args, all checked by the compiler. String routes with `{id}` placeholders still work but are the old, error-prone style, and `@Parcelize` isn't what the route system uses."
+    },
+    {
+      "id": "d40q02",
+      "type": "truefalse",
+      "topic": "navigate pushes",
+      "difficulty": "Easy",
+      "question": "`navController.navigate(Profile(\"42\"))` pushes a new entry on top of the back stack, so pressing Back pops it and shows the previous screen again.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`navigate` always adds a new `NavBackStackEntry` on top unless you change that with options such as `popUpTo` or `launchSingleTop`. System Back (handled by `NavHost`) pops the top entry and the screen below it shows again with its state."
+    },
+    {
+      "id": "d40q03",
+      "type": "output",
+      "topic": "launchSingleTop",
+      "difficulty": "Easy",
+      "question": "This plain-Kotlin model mimics how `launchSingleTop` treats the back stack. What does it print?",
+      "code": "fun main() {\n    val stack = mutableListOf(\"Home\", \"Feed\")\n    fun navigate(dest: String, singleTop: Boolean = false) {\n        if (singleTop && stack.last() == dest) return\n        stack += dest\n    }\n    navigate(\"Feed\")\n    navigate(\"Feed\", singleTop = true)\n    navigate(\"Profile\", singleTop = true)\n    println(stack.joinToString(\" > \"))\n}",
+      "options": [
+        "Home > Feed > Feed > Profile",
+        "Home > Feed > Profile",
+        "Home > Feed > Feed > Feed > Profile",
+        "Home > Feed > Feed"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "The first `navigate(\"Feed\")` has no single-top flag, so a second `Feed` is pushed. The single-top call finds `Feed` already on top and does nothing, and `Profile` isn't on top, so it's pushed. `launchSingleTop` only avoids duplicating the *top* entry; it doesn't remove copies further down."
+    },
+    {
+      "id": "d40q04",
+      "type": "mcq",
+      "topic": "BackHandler",
+      "difficulty": "Easy",
+      "question": "An edit screen uses the code below. `hasUnsavedChanges` is `false` and the user presses Back. What happens?",
+      "code": "BackHandler(enabled = hasUnsavedChanges) {\n    showDiscardDialog = true\n}",
+      "options": [
+        "The discard dialog is shown anyway",
+        "Nothing happens; Back is swallowed",
+        "Normal back navigation pops the screen",
+        "The app exits even if there are screens below"
+      ],
+      "answer": [
+        2
+      ],
+      "explanation": "A disabled `BackHandler` doesn't take part in back handling, so the event falls through to the next callback, which is `NavHost` popping the screen. Only while `enabled` is `true` does it consume Back and show the dialog."
+    },
+    {
+      "id": "d40q05",
+      "type": "truefalse",
+      "topic": "navcontroller in composables",
+      "difficulty": "Easy",
+      "question": "The recommended pattern is to pass `navController` down into every screen and child composable so each one can call `navigate` itself.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "Screens should take event lambdas such as `onOpenProfile: (String) -> Unit` and only the `NavHost` setup touches `navController`. That keeps screens previewable and testable without a real NavHost, and keeps the navigation logic in one place."
+    },
+    {
+      "id": "d40q06",
+      "type": "mcq",
+      "topic": "safe args",
+      "difficulty": "Easy",
+      "question": "In a legacy Fragment app using the Navigation component, what does the Safe Args Gradle plugin give you?",
+      "options": [
+        "Generated `Directions` and `Args` classes for type-safe arguments, read with `by navArgs()`",
+        "Automatic encryption of Bundle arguments passed between fragments",
+        "A way to pass any object between fragments without a size limit",
+        "Automatic deep link handling with no `<nav-graph>` manifest entries"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Safe Args generates code from the navigation XML: `HomeFragmentDirections.actionHomeToProfile(id)` to navigate and `ProfileFragmentArgs` (via `by navArgs()`) to read. The arguments still travel in a Bundle, so size limits and deep-link manifest setup still apply."
+    },
+    {
+      "id": "d40q07",
+      "type": "truefalse",
+      "topic": "navigation 3",
+      "difficulty": "Easy",
+      "question": "In Navigation 3 the back stack is ordinary state your code owns (a list of keys): you navigate by adding to it and go back by removing from it, and `NavDisplay` renders it.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Navigation 3 flips the model: instead of asking a `NavController` to push and pop, you keep a back stack list (e.g. from `rememberNavBackStack`) and mutate it yourself. `NavDisplay` observes that list and shows the matching entries."
+    },
+    {
+      "id": "d40q08",
+      "type": "multi",
+      "topic": "pass ids not objects",
+      "difficulty": "Medium",
+      "question": "Why should you navigate with `Profile(userId)` rather than putting the whole `User` object (with avatar bytes and post list) into the route? Pick all that apply.",
+      "options": [
+        "Route arguments are saved in the saved-state Bundle, so big objects bloat it and can trigger `TransactionTooLargeException` when the app goes to the background",
+        "The destination should load the user from the repository, its single source of truth, so it never shows a stale copy",
+        "A small id fits naturally in a deep link URL like `/profile/42`, while a whole object can't",
+        "Navigation clears all arguments on rotation, so only ids survive",
+        "Type-safe routes can only contain `String` properties"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "Arguments are persisted with the back stack for process death, so they must stay small, and a copied object goes stale the moment the data changes elsewhere. Arguments do survive rotation, and routes support Int, Boolean, enums and more (plus custom `NavType`s), so those two are false."
+    },
+    {
+      "id": "d40q09",
+      "type": "mcq",
+      "topic": "login back stack",
+      "difficulty": "Medium",
+      "question": "The back stack is just `[Login]`. After a successful login you go to Home, and pressing Back on Home must exit the app instead of returning to Login. Which call do you use?",
+      "options": [
+        "`navController.navigate(Home) { popUpTo(Login) }`",
+        "`navController.navigate(Home) { launchSingleTop = true }`",
+        "`navController.navigate(Home) { restoreState = true }`",
+        "`navController.navigate(Home) { popUpTo(Login) { inclusive = true } }`"
+      ],
+      "answer": [
+        3
+      ],
+      "explanation": "`popUpTo(Login)` pops everything above Login, and `inclusive = true` pops Login itself too, so the stack ends up as just `[Home]`. Without `inclusive`, Login stays underneath and Back returns to it; `launchSingleTop` and `restoreState` don't remove anything."
+    },
+    {
+      "id": "d40q10",
+      "type": "output",
+      "topic": "popUpTo target",
+      "difficulty": "Medium",
+      "question": "This plain-Kotlin model mimics `navigate(dest) { popUpTo(x) { inclusive = ... } }`. What does it print?",
+      "code": "fun main() {\n    val stack = ArrayDeque(listOf(\"Splash\", \"Login\", \"Otp\"))\n    fun navigate(dest: String, popUpTo: String, inclusive: Boolean) {\n        while (stack.last() != popUpTo) stack.removeLast()\n        if (inclusive) stack.removeLast()\n        stack.addLast(dest)\n    }\n    navigate(\"Home\", popUpTo = \"Login\", inclusive = true)\n    println(stack)\n}",
+      "options": [
+        "[Splash, Home]",
+        "[Home]",
+        "[Splash, Login, Home]",
+        "[Splash, Login, Otp, Home]"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Entries above `Login` (`Otp`) are popped, `inclusive = true` pops `Login` too, then `Home` is pushed, leaving `Splash` underneath. A real app would `popUpTo` the start destination or the whole auth graph so Back from Home can't reach Splash either."
+    },
+    {
+      "id": "d40q11",
+      "type": "mcq",
+      "topic": "savedstatehandle args",
+      "difficulty": "Medium",
+      "question": "How should `ProfileViewModel` read the `id` from the `Profile` route it was opened with?",
+      "code": "@HiltViewModel\nclass ProfileViewModel @Inject constructor(\n    savedStateHandle: SavedStateHandle,\n    private val repo: UserRepository\n) : ViewModel() {\n    private val id: String = TODO()\n}",
+      "options": [
+        "`savedStateHandle.toRoute<Profile>().id`",
+        "Inject `NavController` and call `currentBackStackEntry!!.toRoute<Profile>().id`",
+        "`requireArguments().getString(\"id\")`",
+        "`savedStateHandle.get<Profile>(\"route\")!!.id`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "The destination's arguments are placed in the ViewModel's `SavedStateHandle`, and `toRoute<Profile>()` decodes them back into the route class. ViewModels must not hold a `NavController` (it's tied to the UI and would leak), `requireArguments()` is a Fragment API, and the route isn't stored as one object under a `\"route\"` key."
+    },
+    {
+      "id": "d40q12",
+      "type": "multi",
+      "topic": "deep link setup",
+      "difficulty": "Medium",
+      "question": "Tapping `https://example.com/profile/42` in another app should open your Profile screen. Which steps are needed? Pick all that apply.",
+      "options": [
+        "Add `deepLinks = listOf(navDeepLink<Profile>(basePath = \"https://example.com/profile\"))` to `composable<Profile>`",
+        "Add an `<intent-filter>` with the `VIEW` action, `DEFAULT` and `BROWSABLE` categories and the https scheme and host to the Activity hosting the `NavHost`",
+        "Apply the Safe Args Gradle plugin",
+        "Create a separate Activity for each deep-linked destination",
+        "Parse `intent.data` yourself in `onCreate` and call `navigate` with the parsed id"
+      ],
+      "answer": [
+        0,
+        1
+      ],
+      "explanation": "The manifest filter gets the Intent delivered to your Activity, and the `navDeepLink` tells the graph which destination matches and how to extract `id`. `NavController` handles the launch Intent automatically when the graph is set, so manual parsing, Safe Args or one Activity per screen aren't needed."
+    },
+    {
+      "id": "d40q13",
+      "type": "mcq",
+      "topic": "bottom nav state",
+      "difficulty": "Medium",
+      "question": "In a bottom-nav app the user scrolls the Feed tab, opens a post, switches to the Profile tab and then taps Feed again. They should land back on the post with the scroll position kept, and tabs shouldn't pile up on the back stack. Which options go inside `navController.navigate(tab) { }`?",
+      "options": [
+        "`popUpTo(navController.graph.findStartDestination().id) { inclusive = true }` and `launchSingleTop = true`",
+        "`launchSingleTop = true` and `restoreState = true`, with no `popUpTo`",
+        "`popUpTo(navController.graph.findStartDestination().id) { saveState = true }`, `launchSingleTop = true` and `restoreState = true`",
+        "No options; `NavHost` keeps each tab's stack automatically"
+      ],
+      "answer": [
+        2
+      ],
+      "explanation": "`popUpTo(start) { saveState = true }` pops the current tab's screens but saves their state, `restoreState = true` brings back the saved stack of the tab you return to, and `launchSingleTop` avoids duplicate copies when a tab is re-selected. Without `popUpTo` with `saveState`, nothing is saved for `restoreState` to restore and the stack keeps growing."
+    },
+    {
+      "id": "d40q14",
+      "type": "truefalse",
+      "topic": "app links verification",
+      "difficulty": "Medium",
+      "question": "For Android App Links, `android:autoVerify=\"true\"` makes the system fetch `https://<host>/.well-known/assetlinks.json`, which must list your package name and the SHA-256 fingerprint of the certificate the app is signed with.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Verification proves you own the domain: the site's `assetlinks.json` must name your package and signing-cert fingerprint. A common gotcha is that with Play App Signing the fingerprint must be Play's app signing key, not your local upload key, or verification fails for store installs."
+    },
+    {
+      "id": "d40q15",
+      "type": "mcq",
+      "topic": "returning a result",
+      "difficulty": "Medium",
+      "question": "`Editor` opens a `ColorPicker` screen, and the picked colour must come back to `Editor` when the picker closes. What is the recommended approach?",
+      "options": [
+        "`navController.navigate(Editor(color = hex))` from the picker",
+        "Set the result on `previousBackStackEntry?.savedStateHandle`, then `popBackStack()`",
+        "Launch the picker with `startActivityForResult` and read `onActivityResult`",
+        "Write the colour into a `companion object` field and read it in Editor's `onResume`"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "The previous entry's `SavedStateHandle` is a per-destination store that survives process death, and Editor collects its own entry's `savedStateHandle` with `getStateFlow(\"color\", ...)`. Navigating to `Editor` again would push a second Editor on top instead of returning, and a static field is lost on process death."
+    },
+    {
+      "id": "d40q16",
+      "type": "multi",
+      "topic": "predictive back",
+      "difficulty": "Medium",
+      "question": "Which statements about back handling in a Compose app with predictive back enabled are true? Pick all that apply.",
+      "options": [
+        "`NavHost` already pops the back stack on system Back, so a screen needs no `BackHandler` just to go back",
+        "Overriding `Activity.onBackPressed()` is deprecated and isn't called with predictive back; use `OnBackPressedDispatcher` callbacks or `BackHandler`",
+        "`PredictiveBackHandler` gives you a `Flow` of back-gesture progress so you can animate custom UI as the user swipes",
+        "An enabled `BackHandler` handles Back and `NavHost` still pops the screen as well",
+        "Predictive back only works with Fragment navigation, not Compose"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "Back events go to the most recently added enabled callback, so an enabled `BackHandler` consumes the event and `NavHost` doesn't also pop. Navigation Compose supports predictive back animations itself, so the Fragment-only claim is false."
+    },
+    {
+      "id": "d40q17",
+      "type": "mcq",
+      "topic": "app links fallback",
+      "difficulty": "Hard",
+      "question": "On Android 12+, your app has an `https` intent-filter for `example.com`, but `assetlinks.json` verification failed and the user never approved the domain in settings. They tap a `https://example.com/profile/42` link in a chat app. What happens?",
+      "options": [
+        "Your app opens directly on the Profile screen",
+        "A chooser dialog asks whether to open it in your app or the browser",
+        "The link opens in the user's default browser",
+        "Nothing happens because the intent can't be resolved"
+      ],
+      "answer": [
+        2
+      ],
+      "explanation": "Since Android 12, generic web intents only go to an app that is verified for that domain (or that the user approved by hand). Otherwise they open in the default browser. The chooser dialog is the pre-Android 12 behaviour, which is why it's the tempting answer. Custom-scheme links like `myapp://` aren't affected."
+    },
+    {
+      "id": "d40q18",
+      "type": "mcq",
+      "topic": "graph-scoped viewmodel",
+      "difficulty": "Hard",
+      "question": "Every screen in the checkout flow gets its ViewModel like this. When is the shared `CheckoutViewModel` cleared?",
+      "code": "navigation<Checkout>(startDestination = Cart) {\n    composable<Cart> { entry ->\n        val parent = remember(entry) {\n            navController.getBackStackEntry<Checkout>()\n        }\n        val vm: CheckoutViewModel = hiltViewModel(parent)\n        CartScreen(vm)\n    }\n    // Shipping and Payment do the same\n}",
+      "options": [
+        "When the `Cart` screen is popped, even if Shipping is still showing",
+        "When the whole `Checkout` graph is popped off the back stack",
+        "Only when the Activity finishes",
+        "On every configuration change"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "`hiltViewModel(parent)` scopes the ViewModel to the graph's back stack entry, so Cart, Shipping and Payment share one instance, and it's cleared when the `Checkout` graph entry leaves the back stack. Calling `hiltViewModel()` with no argument would scope it to each screen's own entry, so screens wouldn't share it."
+    },
+    {
+      "id": "d40q19",
+      "type": "mcq",
+      "topic": "deep link back stack",
+      "difficulty": "Hard",
+      "question": "The app isn't running. The user taps a notification whose PendingIntent opens the deep link `https://example.com/profile/42` in a new task (built with `TaskStackBuilder`). The graph's start destination is `Home`. Profile opens. What does Back do?",
+      "options": [
+        "Exits to the launcher, since Profile is the only screen",
+        "Returns to the notification shade",
+        "Crashes, because `Home` was never composed",
+        "Shows `Home`, from a synthetic back stack built from the start destination"
+      ],
+      "answer": [
+        3
+      ],
+      "explanation": "When a deep link starts a new task, Navigation clears the task and builds the back stack from the start destination of each graph level down to the target, so Back from Profile goes to Home as if the user had got there normally. `Home` is created on demand when it's shown, so nothing crashes."
+    },
+    {
+      "id": "d40q20",
+      "type": "mcq",
+      "topic": "navDeepLink pattern",
+      "difficulty": "Hard",
+      "question": "Which URL pattern does this `navDeepLink` match?",
+      "code": "@Serializable\ndata class Search(val query: String, val page: Int = 1)\n\ncomposable<Search>(\n    deepLinks = listOf(\n        navDeepLink<Search>(basePath = \"https://example.com/search\")\n    )\n) { /* ... */ }",
+      "options": [
+        "`https://example.com/search?query={query}&page={page}`",
+        "`https://example.com/search/{query}?page={page}`",
+        "`https://example.com/search/{query}/{page}`",
+        "Only `https://example.com/search`; arguments have to be added by hand"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "`navDeepLink<T>(basePath)` derives the pattern from the route class: properties without defaults become path segments and properties with defaults become query parameters. So `/search/kotlin` matches with `page = 1`, and `?page=3` is optional."
+    }
+  ]
+}

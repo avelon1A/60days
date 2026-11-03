@@ -1,0 +1,360 @@
+{
+  "day": 14,
+  "topic": "Sequences vs collections & lazy evaluation",
+  "questions": [
+    {
+      "id": "d14q01",
+      "type": "output",
+      "topic": "eager evaluation",
+      "difficulty": "Easy",
+      "question": "What does this print?",
+      "code": "fun main() {\n    listOf(1, 2, 3)\n        .map { print(\"m$it \"); it * 10 }\n        .filter { print(\"f$it \"); it > 10 }\n}",
+      "options": [
+        "m1 m2 m3 f10 f20 f30",
+        "m1 f10 m2 f20 m3 f30",
+        "m1 m2 m3",
+        "f10 f20 f30"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "List operations are eager: `map` runs over every element and builds a whole new list before `filter` even starts. That is horizontal (stage-by-stage) evaluation, so the interleaved order would only happen with a `Sequence`."
+    },
+    {
+      "id": "d14q02",
+      "type": "mcq",
+      "topic": "intermediate lists",
+      "difficulty": "Easy",
+      "question": "`users` is a `List<User>`. How many new `List` objects does this line allocate?",
+      "code": "val names = users.filter { it.isActive }.map { it.name }",
+      "options": [
+        "2",
+        "1",
+        "0",
+        "3"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Each eager collection operation returns a fresh list: `filter` builds one list of active users, then `map` builds another of names. The filtered list is an intermediate result that is thrown away right after, which is exactly the overhead sequences avoid."
+    },
+    {
+      "id": "d14q03",
+      "type": "truefalse",
+      "topic": "terminal operation",
+      "difficulty": "Easy",
+      "question": "Executing only this line (nothing else uses `s`) logs every contact's name.",
+      "code": "val s = contacts.asSequence().map { Log.d(\"Contacts\", it.name); it }",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "`asSequence().map { }` only builds a lazy pipeline description. No element is processed until a terminal operation such as `toList()`, `first()`, `count()` or `sum()` pulls values through it, so nothing is logged."
+    },
+    {
+      "id": "d14q04",
+      "type": "output",
+      "topic": "lazy evaluation order",
+      "difficulty": "Easy",
+      "question": "What does this print?",
+      "code": "fun main() {\n    (1..4).asSequence()\n        .filter { print(\"f$it \"); it % 2 == 0 }\n        .map { print(\"m$it \"); it }\n        .toList()\n}",
+      "options": [
+        "f1 f2 m2 f3 f4 m4",
+        "f1 f2 f3 f4 m2 m4",
+        "f1 m1 f2 m2 f3 m3 f4 m4",
+        "m2 m4"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A sequence evaluates vertically: each element goes through `filter` and, if it passes, straight on to `map` before the next element is touched. Odd numbers are rejected by `filter`, so `map` never sees them. The stage-by-stage order `f1 f2 f3 f4 m2 m4` is what a `List` would print."
+    },
+    {
+      "id": "d14q05",
+      "type": "mcq",
+      "topic": "asSequence",
+      "difficulty": "Easy",
+      "question": "A ViewModel holds `val contacts: List<Contact>`. Which call gives you a lazy `Sequence<Contact>` over that list?",
+      "options": [
+        "`contacts.asSequence()`",
+        "`sequenceOf(contacts)`",
+        "`contacts.toSequence()`",
+        "`contacts.stream()`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`asSequence()` wraps the existing list in a `Sequence` without copying it. `sequenceOf(contacts)` creates a one-element `Sequence<List<Contact>>`, there is no stdlib `toSequence()`, and `stream()` returns a Java `Stream`, not a Kotlin `Sequence`."
+    },
+    {
+      "id": "d14q06",
+      "type": "output",
+      "topic": "short-circuiting",
+      "difficulty": "Medium",
+      "question": "What does this print?",
+      "code": "fun main() {\n    val r = (1..5).asSequence()\n        .map { print(\"m$it \"); it * it }\n        .first { it > 3 }\n    println(r)\n}",
+      "options": [
+        "m1 m2 4",
+        "m1 m2 m3 m4 m5 4",
+        "4",
+        "m1 m2 m3 4"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`first { }` is a short-circuiting terminal operation: it pulls elements one at a time and stops as soon as one matches. `1*1` fails, `2*2 = 4` passes, so `map` runs only for 1 and 2. On a `List`, `map` would have squared all five first."
+    },
+    {
+      "id": "d14q07",
+      "type": "multi",
+      "topic": "terminal operations",
+      "difficulty": "Easy",
+      "question": "On a `Sequence<Int>`, which of these are terminal operations (they actually run the pipeline)?",
+      "options": [
+        "`count()`",
+        "`sum()`",
+        "`first()`",
+        "`take(3)`",
+        "`sorted()`",
+        "`filter { it > 0 }`"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "Terminal operations return something other than a `Sequence` (a number, an element, a collection), so they must pull elements. `take`, `sorted` and `filter` all return a new `Sequence` and are intermediate. `sorted` is stateful, but it still only runs when a terminal operation asks for elements."
+    },
+    {
+      "id": "d14q08",
+      "type": "output",
+      "topic": "generateSequence",
+      "difficulty": "Medium",
+      "question": "What does this print?",
+      "code": "fun main() {\n    val s = generateSequence(10) { if (it > 0) it - 3 else null }\n    println(s.toList())\n}",
+      "options": [
+        "[10, 7, 4, 1, -2]",
+        "[10, 7, 4, 1]",
+        "[7, 4, 1, -2]",
+        "[7, 4, 1]"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`generateSequence(seed) { next }` emits the seed first, then keeps calling the function on the previous value until it returns `null`. `-2` is still produced from `1` (because `1 > 0`), and only the call on `-2` returns `null`, ending the sequence."
+    },
+    {
+      "id": "d14q09",
+      "type": "mcq",
+      "topic": "stateful operations",
+      "difficulty": "Medium",
+      "question": "`expensive()` is a pure function. In this pipeline over 1,000 numbers, how many times is `expensive` called?",
+      "code": "(1..1000).asSequence()\n    .map { expensive(it) }\n    .sorted()\n    .first()",
+      "options": [
+        "1,000",
+        "1",
+        "0, because `first()` short-circuits before `sorted()` runs",
+        "It depends on where the smallest value is"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`sorted()` is a stateful intermediate operation: it cannot emit its first element until it has seen every element, so it pulls all 1,000 values through `map`. Short-circuiting with `first()` only helps for stateless stages such as `map`, `filter` and `take`."
+    },
+    {
+      "id": "d14q10",
+      "type": "truefalse",
+      "topic": "re-iteration",
+      "difficulty": "Medium",
+      "question": "After this code runs, the `map` lambda has executed 6 times.",
+      "code": "val s = listOf(1, 2, 3).asSequence()\n    .map { println(\"map $it\"); it * 2 }\nval a = s.toList()\nval b = s.toList()",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A sequence built from a list doesn't cache results. Each terminal operation asks for a new iterator and runs the whole pipeline again, so the two `toList()` calls each run `map` 3 times. If the work is expensive, store the result of `toList()` instead."
+    },
+    {
+      "id": "d14q11",
+      "type": "output",
+      "topic": "yieldAll",
+      "difficulty": "Medium",
+      "question": "What does this print?",
+      "code": "fun main() {\n    val s = sequence {\n        yield(0)\n        yieldAll(1..3)\n        yieldAll(generateSequence(10) { it + 10 })\n    }\n    println(s.take(6).toList())\n}",
+      "options": [
+        "[0, 1, 2, 3, 10, 20]",
+        "[0, 1, 2, 3, 20, 30]",
+        "[0, 1, 2, 3, 10]",
+        "Nothing: the program hangs on the infinite `yieldAll`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`yieldAll` emits the elements of an `Iterable` or `Sequence` one by one, lazily. It produces 0, then 1, 2, 3, then 10, 20 from the infinite `generateSequence`. `take(6)` stops pulling after six values, so the infinite part never hangs."
+    },
+    {
+      "id": "d14q12",
+      "type": "mcq",
+      "topic": "sequence overhead",
+      "difficulty": "Medium",
+      "question": "In which case is a plain `List` pipeline usually a better choice than a `Sequence`?",
+      "options": [
+        "A 20-item list with a single `map` followed by `toList()`",
+        "A 1,000,000-item list where you only need the first 5 matches",
+        "An infinite stream of IDs generated on demand",
+        "A long `filter`/`map` chain over a large list ending in `take(10)`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Sequences add per-element overhead (iterator objects, non-inlined lambdas) to save intermediate collections and allow short-circuiting. With a small list and one operation there is nothing to save, and inlined `List.map` is faster. The other cases are where sequences pay off."
+    },
+    {
+      "id": "d14q13",
+      "type": "output",
+      "topic": "sequence builder",
+      "difficulty": "Hard",
+      "question": "What does this print?",
+      "code": "fun main() {\n    val s = sequence {\n        println(\"start\")\n        yield(1)\n        println(\"after 1\")\n        yield(2)\n        println(\"after 2\")\n    }\n    println(s.take(1).toList())\n}",
+      "options": [
+        "start\n[1]",
+        "start\nafter 1\n[1]",
+        "start\nafter 1\nafter 2\n[1]",
+        "[1]\nstart"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A `sequence { }` builder is suspended at each `yield` and resumes only when the next element is requested. Once `take(1)` has handed out one element, its `hasNext()` returns false without asking the builder again, so the code after `yield(1)` never runs."
+    },
+    {
+      "id": "d14q14",
+      "type": "mcq",
+      "topic": "sequence api",
+      "difficulty": "Medium",
+      "question": "Given `val s: Sequence<Int> = sequenceOf(1, 2, 3)`, which expression does NOT compile?",
+      "options": [
+        "`s[0]`",
+        "`s.elementAt(0)`",
+        "`s.count()`",
+        "`s.last()`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`Sequence` only promises an `iterator()`, so it has no `get` operator, `size` or `indices`. `elementAt`, `count` and `last` exist, but they are terminal operations that walk the sequence (O(n)), unlike indexed access on a `List`."
+    },
+    {
+      "id": "d14q15",
+      "type": "truefalse",
+      "topic": "sequence vs iterable",
+      "difficulty": "Easy",
+      "question": "`Sequence<T>` is a subtype of `Iterable<T>`, so a sequence can be passed directly to a function that takes an `Iterable<T>`.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "`Sequence` and `Iterable` are unrelated interfaces that both happen to declare `iterator()`. Keeping them separate is what makes `Iterable` extensions eager and `Sequence` extensions lazy. To convert, call `asIterable()` or `asSequence()`."
+    },
+    {
+      "id": "d14q16",
+      "type": "output",
+      "topic": "distinct",
+      "difficulty": "Hard",
+      "question": "What does this print?",
+      "code": "fun main() {\n    val r = sequenceOf(1, 2, 1, 3)\n        .map { print(\"m$it \"); it }\n        .distinct()\n        .map { print(\"d$it \"); it }\n        .toList()\n    println(r)\n}",
+      "options": [
+        "m1 d1 m2 d2 m1 m3 d3 [1, 2, 3]",
+        "m1 m2 m1 m3 d1 d2 d3 [1, 2, 3]",
+        "m1 d1 m2 d2 m1 d1 m3 d3 [1, 2, 3]",
+        "m1 d1 m2 d2 m3 d3 [1, 2, 3]"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`distinct()` is stateful (it remembers the keys it has seen), but unlike `sorted()` it doesn't need the whole input first. Each new element passes straight through, and the repeated `1` is still mapped (`m1`) but then dropped, so `d1` doesn't print again."
+    },
+    {
+      "id": "d14q17",
+      "type": "mcq",
+      "topic": "constrainOnce",
+      "difficulty": "Medium",
+      "question": "What does `constrainOnce()` do to a sequence?",
+      "options": [
+        "Returns a wrapper that throws `IllegalStateException` on a second iteration",
+        "Caches the elements on the first iteration so later iterations don't recompute them",
+        "Removes duplicates so each element passes through the pipeline only once",
+        "Makes the sequence stop after its first element"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`constrainOnce()` doesn't cache anything. It just enforces single use, which is useful when the source can't be replayed (a cursor, a network reader). If you want to reuse results, call `toList()` once and keep the list."
+    },
+    {
+      "id": "d14q18",
+      "type": "multi",
+      "topic": "large lists",
+      "difficulty": "Hard",
+      "question": "Your Android screen shows the first 20 contacts with a phone number from a 50,000-item list, using the sequence version below. Which statements are true?",
+      "code": "val first20 = contacts.asSequence()\n    .filter { it.phone != null }\n    .map { it.displayName }\n    .take(20)\n    .toList()",
+      "options": [
+        "The sequence stops pulling contacts once 20 names have been collected",
+        "The eager version `contacts.filter { }.map { }.take(20)` runs `filter` on all 50,000 contacts",
+        "The sequence version never builds a list of every matching contact",
+        "Adding `.sortedBy { it.displayName }` before `take(20)` keeps the sequence short-circuiting",
+        "`asSequence()` moves the processing onto a background thread"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "Lazily, each contact goes through `filter` and `map` only until `take(20)` is satisfied, and only the final 20-item list is allocated. `sortedBy` is a barrier that has to consume all 50,000 contacts first. Sequences are synchronous and run on the calling thread, so heavy work still belongs off the main thread."
+    },
+    {
+      "id": "d14q19",
+      "type": "output",
+      "topic": "single-use sequence",
+      "difficulty": "Hard",
+      "question": "What does this print?",
+      "code": "fun main() {\n    var n = 0\n    val s = generateSequence { if (n < 3) n++ else null }\n    println(s.toList())\n    try {\n        println(s.toList())\n    } catch (e: IllegalStateException) {\n        println(\"once\")\n    }\n}",
+      "options": [
+        "[0, 1, 2]\nonce",
+        "[0, 1, 2]\n[]",
+        "[0, 1, 2]\n[0, 1, 2]",
+        "[1, 2, 3]\nonce"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`generateSequence` without a seed depends on outside state that can't be rewound, so the stdlib wraps it in `constrainOnce()`. The second `toList()` throws `IllegalStateException` instead of quietly returning `[]`. `n++` returns the old value, so the elements are 0, 1, 2."
+    },
+    {
+      "id": "d14q20",
+      "type": "mcq",
+      "topic": "java streams",
+      "difficulty": "Medium",
+      "question": "Which statement correctly compares Kotlin `Sequence` with Java `Stream`?",
+      "options": [
+        "A `Stream` is single-use and supports `parallel()`; a `Sequence` is sequential and usually re-iterable",
+        "A `Sequence` is eager, while a `Stream` is lazy",
+        "A `Stream` evaluates stage by stage like a collection, while a `Sequence` evaluates element by element",
+        "A `Sequence` only works on the JVM, while a `Stream` works on every Kotlin platform, including Kotlin/Native"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Both are lazy and both pass each element through the whole pipeline (vertical evaluation). The real differences: a `Stream` throws on reuse and can run in parallel, while a `Sequence` is single-threaded and is pure Kotlin stdlib, so it works on every Kotlin platform and every Android API level."
+    }
+  ]
+}

@@ -1,0 +1,353 @@
+{
+  "day": 41,
+  "topic": "Room: entities, DAOs, Flow & migrations",
+  "questions": [
+    {
+      "id": "d41q01",
+      "type": "mcq",
+      "topic": "columninfo",
+      "difficulty": "Easy",
+      "question": "What does `@ColumnInfo(name = \"first_name\")` do in this entity?",
+      "code": "@Entity(tableName = \"users\")\ndata class User(\n    @PrimaryKey val id: Long,\n    @ColumnInfo(name = \"first_name\") val firstName: String\n)",
+      "options": [
+        "The table column is `first_name`; the Kotlin property stays `firstName`",
+        "It renames the Kotlin property to `first_name` in generated code",
+        "It creates an index on `first_name`",
+        "It makes `first_name` nullable in the table"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`@ColumnInfo(name = ...)` only changes the column name in the table, so queries must use `first_name` while Kotlin code keeps `firstName`. Indices are declared with `indices` on `@Entity`, and nullability comes from the Kotlin type."
+    },
+    {
+      "id": "d41q02",
+      "type": "truefalse",
+      "topic": "main thread",
+      "difficulty": "Easy",
+      "question": "Calling a plain (non-suspend, non-`Flow`) DAO query from the main thread throws `IllegalStateException` unless the database was built with `allowMainThreadQueries()`.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Room checks the thread for blocking DAO calls and throws \"Cannot access database on the main thread\". `allowMainThreadQueries()` turns the check off, but that's only acceptable in tests, because the query would block the UI."
+    },
+    {
+      "id": "d41q03",
+      "type": "multi",
+      "topic": "entity",
+      "difficulty": "Medium",
+      "question": "Which statements about this entity are true?",
+      "code": "@Entity(indices = [Index(value = [\"email\"], unique = true)])\ndata class User(\n    @PrimaryKey(autoGenerate = true) val id: Long = 0,\n    val email: String,\n    @Ignore val isSelected: Boolean = false\n)",
+      "options": [
+        "Inserting a `User` with `id = 0` lets SQLite assign a new id",
+        "No column is created for `isSelected`",
+        "A plain `@Insert` of a second user with an existing email fails with a constraint exception",
+        "The table is named `users` because Room pluralises the class name",
+        "`autoGenerate` makes Room ignore any non-zero id you pass in"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "With `autoGenerate = true`, an id of 0 counts as not set and SQLite assigns one, but a non-zero id you pass is used as is. `@Ignore` keeps a property out of the table, and the unique index makes the default ABORT strategy throw on a duplicate email. The table name defaults to the class name (`User`), with no pluralising."
+    },
+    {
+      "id": "d41q04",
+      "type": "mcq",
+      "topic": "suspend dao",
+      "difficulty": "Easy",
+      "question": "A ViewModel calls `viewModelScope.launch { userDao.insert(user) }`, where `insert` is a `suspend` DAO function. Is this safe to run from `Dispatchers.Main`?",
+      "options": [
+        "Yes, Room runs suspend DAO functions on its own background executor",
+        "No, you must wrap it in `withContext(Dispatchers.IO)` or Room throws",
+        "Only if the database was built with `allowMainThreadQueries()`",
+        "No, suspend DAO functions block the calling thread until the write finishes"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Room's generated code moves suspend DAO calls onto its query or transaction executor, so calling them from the main dispatcher is safe. Wrapping them in `withContext(Dispatchers.IO)` does no harm but isn't needed. The main-thread check only applies to blocking DAO methods."
+    },
+    {
+      "id": "d41q05",
+      "type": "output",
+      "topic": "typeconverter",
+      "difficulty": "Medium",
+      "question": "A naive TypeConverter stores a `List<String>` as comma-separated text. What does this round trip print?",
+      "code": "fun fromList(list: List<String>): String = list.joinToString(\",\")\nfun toList(value: String): List<String> = value.split(\",\")\n\nfun main() {\n    val tags = listOf(\"kotlin\", \"a,b\")\n    println(toList(fromList(tags)).size)\n    println(toList(fromList(emptyList())).size)\n}",
+      "options": [
+        "2\n0",
+        "3\n0",
+        "2\n1",
+        "3\n1"
+      ],
+      "answer": [
+        3
+      ],
+      "explanation": "The comma inside `\"a,b\"` turns into a separator, so the list comes back with 3 items. An empty list becomes `\"\"`, and `\"\".split(\",\")` returns `[\"\"]` (size 1), not an empty list. Hand-rolled converters break in these edge cases, so use a proper JSON serializer or a separate table."
+    },
+    {
+      "id": "d41q06",
+      "type": "mcq",
+      "topic": "flow invalidation",
+      "difficulty": "Medium",
+      "question": "A screen collects `dao.observeUser(5)`, declared as `@Query(\"SELECT * FROM users WHERE id = :id\") fun observeUser(id: Long): Flow<User?>`. A background sync updates user 42. What happens to the screen's flow?",
+      "options": [
+        "It re-emits user 5 unchanged, because Room invalidates by table, not by row",
+        "Nothing, because Room only re-runs the query when a row matching `id = 5` changes",
+        "It completes, because the query result didn't change",
+        "It emits `null` once and then user 5 again"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Room's InvalidationTracker works per table: any write to `users` re-runs every observing query on that table, and the flow emits the result again even when it's identical. `distinctUntilChanged()` drops those duplicates so the UI doesn't do extra work."
+    },
+    {
+      "id": "d41q07",
+      "type": "truefalse",
+      "topic": "single source of truth",
+      "difficulty": "Easy",
+      "question": "In an offline-first app that uses Room as the single source of truth, the UI observes a Room `Flow`, and a network refresh writes its results into the database instead of passing them straight to the UI.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "The database is the only thing the UI reads. The network just updates it, and the `Flow` delivers the new rows. This way cached data shows up offline and the screen can't get out of sync with what's stored."
+    },
+    {
+      "id": "d41q08",
+      "type": "mcq",
+      "topic": "singleton",
+      "difficulty": "Easy",
+      "question": "Why should an app create only one instance of its `RoomDatabase`, for example as a Hilt `@Singleton`?",
+      "options": [
+        "Each instance has its own invalidation tracker, so a `Flow` on one can miss writes made via another",
+        "Room throws `IllegalStateException` if `Room.databaseBuilder` is called twice in one process",
+        "A second instance deletes the database file and recreates it",
+        "DAOs can only be generated for the first instance"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Building a database is expensive, and each instance keeps its own connection pool and change tracking. By default, writes made through instance A don't invalidate queries observed on instance B, so the UI goes stale. Room doesn't throw on a second build, which is why this bug is easy to miss."
+    },
+    {
+      "id": "d41q09",
+      "type": "multi",
+      "topic": "foreign keys",
+      "difficulty": "Medium",
+      "question": "`Playlist` declares `ForeignKey(entity = User::class, parentColumns = [\"id\"], childColumns = [\"userId\"], onDelete = ForeignKey.CASCADE)`. Which statements are true?",
+      "options": [
+        "Deleting a user also deletes that user's playlists",
+        "Room warns at compile time if `userId` isn't covered by an index",
+        "Declaring the foreign key creates an index on `userId` automatically",
+        "Deleting a user's last playlist also deletes the user"
+      ],
+      "answer": [
+        0,
+        1
+      ],
+      "explanation": "CASCADE goes from parent to child only: deleting the parent removes its children, never the other way round. Room doesn't add an index for you. It warns that an unindexed foreign key column causes full table scans, so add `Index(\"userId\")` yourself."
+    },
+    {
+      "id": "d41q10",
+      "type": "mcq",
+      "topic": "missing migration",
+      "difficulty": "Medium",
+      "question": "You add a column to an entity, bump the database `version` from 1 to 2, and ship without adding a `Migration` or any fallback. What happens on a device that has version 1 installed?",
+      "options": [
+        "The app crashes with `IllegalStateException` when the database is first opened",
+        "Room silently drops and recreates the tables",
+        "Room adds the new column automatically, since adding columns needs no migration",
+        "The build fails because the migration is missing"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Without a migration path, Room refuses to open the old database and throws (\"A migration from 1 to 2 was required but not found\"). Tables are only dropped if you opt in with `fallbackToDestructiveMigration(...)`, and columns are only added automatically if you declare an `AutoMigration`. The compiler can't know which versions are installed on devices, so the build still succeeds."
+    },
+    {
+      "id": "d41q11",
+      "type": "truefalse",
+      "topic": "query verification",
+      "difficulty": "Medium",
+      "question": "If a DAO has `@Query(\"SELECT * FROM users WHERE nmae = :name\")` (a typo in the column name), the error shows up only at runtime when the query first runs.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "Room's annotation processor checks every `@Query` against the entity schema, so an unknown column fails the build (\"no such column: nmae\"). Catching SQL mistakes at compile time is one of Room's main advantages over raw `SQLiteOpenHelper`."
+    },
+    {
+      "id": "d41q12",
+      "type": "mcq",
+      "topic": "migration sql",
+      "difficulty": "Medium",
+      "question": "In `Migration(1, 2)` you need to add a non-null `age: Int` column to the `users` table, which already has rows. Which SQL works?",
+      "options": [
+        "`ALTER TABLE users ADD COLUMN age INTEGER NOT NULL DEFAULT 0`",
+        "`ALTER TABLE users ADD COLUMN age INTEGER NOT NULL`",
+        "`ALTER TABLE users ADD COLUMN age INTEGER` (Room fills in the NOT NULL)",
+        "`UPDATE users SET age = 0`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "SQLite won't add a NOT NULL column without a non-null default, because existing rows would have no value. Leaving out NOT NULL gives a schema that doesn't match the entity, so Room's post-migration check fails. `UPDATE` can't create a column."
+    },
+    {
+      "id": "d41q13",
+      "type": "mcq",
+      "topic": "replace vs upsert",
+      "difficulty": "Hard",
+      "question": "Playlists have a foreign key to `User` with `onDelete = CASCADE`. Saving an edited profile with `@Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun save(user: User)` makes all of that user's playlists disappear. Why?",
+      "options": [
+        "REPLACE deletes the old row before inserting, and that delete triggers the CASCADE",
+        "REPLACE overwrites the whole database file for that table",
+        "The playlists are still there, but the `Flow` stopped emitting after the conflict",
+        "REPLACE assigns the user a new primary key, which leaves the playlists orphaned"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "SQLite's REPLACE resolves a primary-key conflict by deleting the old row before inserting the new one, and that delete runs the foreign key's CASCADE. `@Upsert` tries an insert and, on conflict, updates the existing row in place, so child rows survive. The primary key stays the same, so the playlists aren't orphaned. They're actually deleted."
+    },
+    {
+      "id": "d41q14",
+      "type": "multi",
+      "topic": "schema export",
+      "difficulty": "Medium",
+      "question": "You set `exportSchema = true` and configure a schema directory (for example with the Room Gradle plugin). What does that give you?",
+      "options": [
+        "A JSON file describing the schema of each version, which you commit to version control",
+        "The old and new schemas that `AutoMigration` needs to generate migrations",
+        "Lets `MigrationTestHelper` create a database at an old version in tests",
+        "Room writes migrations for any schema change without your declaring them",
+        "You no longer need to bump `version` when the schema changes"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "Exported schemas record each version's tables. AutoMigrations are generated from the old and new schemas, and `MigrationTestHelper` uses them to build an old database, run your migration, and validate the result. You still declare each migration and bump `version` yourself."
+    },
+    {
+      "id": "d41q15",
+      "type": "mcq",
+      "topic": "ksp",
+      "difficulty": "Easy",
+      "question": "In a new Kotlin project, how should you set up Room's annotation processor?",
+      "options": [
+        "Add `room-compiler` with `ksp(...)`, since KSP is faster than kapt",
+        "Add `room-compiler` with `kapt(...)`, since Room doesn't support KSP",
+        "Use `annotationProcessor(...)`, since Room is a Java library",
+        "No processor is needed, because Room uses reflection at runtime"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Room fully supports KSP, which reads Kotlin directly instead of generating Java stubs the way kapt does, so builds are faster. kapt is in maintenance mode. Room generates its DAO and database implementations at compile time and doesn't use reflection for queries."
+    },
+    {
+      "id": "d41q16",
+      "type": "truefalse",
+      "topic": "destructive migration",
+      "difficulty": "Easy",
+      "question": "Room's destructive fallback (`fallbackToDestructiveMigration(...)`) keeps users' existing rows when a migration is missing and only drops the columns that are no longer in the entities.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "When no migration path exists, the destructive fallback drops the tables and recreates them, so the local data is lost. It's acceptable for pure caches you can download again, never for data only the user has, such as drafts or offline edits."
+    },
+    {
+      "id": "d41q17",
+      "type": "mcq",
+      "topic": "embedded",
+      "difficulty": "Medium",
+      "question": "Which columns does the `User` table get?",
+      "code": "data class Address(val street: String, val city: String)\n\n@Entity\ndata class User(\n    @PrimaryKey val id: Long,\n    val name: String,\n    @Embedded(prefix = \"home_\") val address: Address\n)",
+      "options": [
+        "`id`, `name`, `home_street`, `home_city`",
+        "`id`, `name`, `home_address` (stored as one serialized value)",
+        "`id`, `name`, plus a separate `Address` table joined by `home_id`",
+        "`id`, `name`, `street`, `city`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`@Embedded` flattens the nested object's fields into the parent table, and `prefix` is added to each column name, which avoids clashes if you embed two addresses. It doesn't create a separate table (that's what `@Relation` is for) and doesn't need a TypeConverter."
+    },
+    {
+      "id": "d41q18",
+      "type": "mcq",
+      "topic": "automigration",
+      "difficulty": "Hard",
+      "question": "You rename an entity column from `name` to `fullName`, bump the version and declare `AutoMigration(from = 1, to = 2)`. What happens?",
+      "options": [
+        "The build fails until you add a `spec` with `@RenameColumn`",
+        "Room detects the rename and copies the data automatically",
+        "Room drops `name` and adds an empty `fullName`, and existing names are lost",
+        "Room keeps both columns and fills `fullName` from `name`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A rename looks the same as deleting one column and adding another, so Room won't guess. It fails at compile time and asks for an `AutoMigrationSpec` annotated with `@RenameColumn` (or `@DeleteColumn` if you really meant to remove it). This way data isn't lost by accident."
+    },
+    {
+      "id": "d41q19",
+      "type": "multi",
+      "topic": "converter downsides",
+      "difficulty": "Hard",
+      "question": "An entity stores `tags: List<String>` as one JSON text column through a TypeConverter. What are the real downsides compared with a separate `Tag` table?",
+      "options": [
+        "You can't efficiently filter or index by a single tag in SQL",
+        "Adding or removing one tag rewrites the whole column",
+        "The database can't enforce integrity on the items, for example with foreign keys or unique tags",
+        "Room can't return this entity from a `Flow` query",
+        "Room rejects TypeConverters that return `String`"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "SQL treats the JSON blob as opaque text, so queries by tag need `LIKE` scans, every change rewrites the whole value, and no constraints apply to the items. Converted columns work fine with `Flow`, and converting to `String` is the most common converter there is."
+    },
+    {
+      "id": "d41q20",
+      "type": "mcq",
+      "topic": "transaction relation",
+      "difficulty": "Hard",
+      "question": "Why should this DAO method be annotated with `@Transaction`?",
+      "code": "data class UserWithPlaylists(\n    @Embedded val user: User,\n    @Relation(parentColumn = \"id\", entityColumn = \"userId\")\n    val playlists: List<Playlist>\n)\n\n@Transaction\n@Query(\"SELECT * FROM User\")\nfun observeUsersWithPlaylists(): Flow<List<UserWithPlaylists>>",
+      "options": [
+        "Room loads users and playlists in separate queries, and this keeps them consistent",
+        "Without it, Room can't run the two `@Relation` queries on a background thread",
+        "`@Transaction` makes Room use a single SQL JOIN instead of two queries",
+        "It's required for every query that returns a `Flow`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`@Relation` is filled in by a second query for the child rows. Without a transaction, a write between the two queries could pair users with playlists that don't match, so Room warns when this annotation is missing. It still runs two queries, not a JOIN, and plain `Flow` queries don't need it."
+    }
+  ]
+}

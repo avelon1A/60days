@@ -1,0 +1,358 @@
+{
+  "day": 23,
+  "topic": "Scopes & structured concurrency: Job & SupervisorJob",
+  "questions": [
+    {
+      "id": "d23q01",
+      "type": "output",
+      "topic": "parent waits for children",
+      "difficulty": "Easy",
+      "question": "What does this print?",
+      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking {\n    val job = launch {\n        launch {\n            delay(100)\n            println(\"child\")\n        }\n        println(\"parent body done\")\n    }\n    job.join()\n    println(\"joined\")\n}",
+      "options": [
+        "parent body done\nchild\njoined",
+        "parent body done\njoined\nchild",
+        "parent body done\njoined",
+        "child\nparent body done\njoined"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A parent job is not complete until all its children complete, even after its own body has finished. So `job.join()` waits for the inner `launch`, and \"joined\" comes last."
+    },
+    {
+      "id": "d23q02",
+      "type": "mcq",
+      "topic": "structured concurrency",
+      "difficulty": "Easy",
+      "question": "Which statement best describes what structured concurrency guarantees?",
+      "options": [
+        "Each coroutine lives in a scope that waits for its children and gets their failures",
+        "Coroutines in the same scope always run sequentially in the order they were launched",
+        "Coroutines launched in a scope always run on the same thread as the scope's creator",
+        "A coroutine that throws is silently restarted by its parent scope"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Structured concurrency ties a coroutine's lifetime to its scope: no coroutine is leaked, the parent waits for its children, and errors are not lost because they propagate up. It says nothing about ordering or threads, and nothing is retried automatically."
+    },
+    {
+      "id": "d23q03",
+      "type": "multi",
+      "topic": "context elements",
+      "difficulty": "Easy",
+      "question": "Which of these are `CoroutineContext` elements that can be combined with `+`? Select all that apply.",
+      "options": [
+        "`Job()`",
+        "`Dispatchers.IO`",
+        "`CoroutineName(\"sync\")`",
+        "`CoroutineStart.LAZY`",
+        "`CoroutineScope(Dispatchers.IO)`"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "`Job`, `CoroutineDispatcher` and `CoroutineName` all implement `CoroutineContext.Element`. `CoroutineStart.LAZY` is a separate `start` parameter of `launch`/`async`, and a `CoroutineScope` is not an element. It only wraps a context."
+    },
+    {
+      "id": "d23q04",
+      "type": "mcq",
+      "topic": "cancel parent",
+      "difficulty": "Easy",
+      "question": "A coroutine launched with `scope.launch { }` has started three child coroutines with `launch`, and all of them are suspended in `delay`. What happens when you call `cancel()` on the parent job?",
+      "options": [
+        "The parent and all three children are cancelled",
+        "Only the parent is cancelled, and the children keep running until they finish",
+        "The parent waits for the children to finish normally and then cancels itself",
+        "Nothing happens until the children call `cancel()` themselves"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Cancellation flows down the Job hierarchy: cancelling a parent cancels every child (and their children). That is why cancelling a scope in `onCleared`/`onDestroy` stops all the work started from it."
+    },
+    {
+      "id": "d23q05",
+      "type": "output",
+      "topic": "context inheritance",
+      "difficulty": "Easy",
+      "question": "What does this print?",
+      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking(CoroutineName(\"root\")) {\n    launch {\n        println(coroutineContext[CoroutineName]?.name)\n    }.join()\n    launch(CoroutineName(\"a\") + CoroutineName(\"b\")) {\n        println(coroutineContext[CoroutineName]?.name)\n    }.join()\n}",
+      "options": [
+        "root\nb",
+        "root\na",
+        "null\nb",
+        "root\nroot"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A child inherits its parent's context, so the first `launch` sees \"root\". In `a + b`, both elements have the same key `CoroutineName`, so the right-hand one replaces the left, and the element passed to `launch` overrides the inherited one."
+    },
+    {
+      "id": "d23q06",
+      "type": "truefalse",
+      "topic": "cancel child",
+      "difficulty": "Easy",
+      "question": "Calling `cancel()` on a child job also cancels its parent and its siblings.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "False. Cancelling a child (a `CancellationException`) is treated as normal and is not propagated up, so the parent and siblings keep running. Only a failure with a real exception cancels the parent in a regular Job hierarchy."
+    },
+    {
+      "id": "d23q07",
+      "type": "mcq",
+      "topic": "CoroutineScope factory",
+      "difficulty": "Medium",
+      "question": "A repository creates `val scope = CoroutineScope(Dispatchers.IO)` without passing any `Job`. What happens?",
+      "options": [
+        "`CoroutineScope()` adds a `Job()` automatically, so `scope.cancel()` cancels its coroutines",
+        "The scope has no Job, so `scope.cancel()` throws `IllegalStateException`",
+        "Each `launch` in this scope becomes a top-level coroutine that can't be cancelled through the scope",
+        "The scope uses a `SupervisorJob()` by default"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`CoroutineScope(context)` adds a plain `Job()` when the context has none, so the scope can be cancelled and acts as the parent of its coroutines. It is a regular `Job`, not a `SupervisorJob`. Among the scope factories, `MainScope()` is the one that uses a `SupervisorJob()`."
+    },
+    {
+      "id": "d23q08",
+      "type": "output",
+      "topic": "coroutineScope waits",
+      "difficulty": "Easy",
+      "question": "What does this print?",
+      "code": "import kotlinx.coroutines.*\n\nsuspend fun work() = coroutineScope {\n    launch { delay(50); println(\"A\") }\n    launch { delay(10); println(\"B\") }\n    println(\"C\")\n}\n\nfun main() = runBlocking {\n    work()\n    println(\"D\")\n}",
+      "options": [
+        "C\nB\nA\nD",
+        "C\nD\nB\nA",
+        "A\nB\nC\nD",
+        "C\nA\nB\nD"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`coroutineScope` suspends until its body and all its children complete. \"C\" prints first, then B (10 ms), then A (50 ms), and only after that does `work()` return so \"D\" prints."
+    },
+    {
+      "id": "d23q09",
+      "type": "mcq",
+      "topic": "custom scope lifecycle",
+      "difficulty": "Medium",
+      "question": "A custom view presenter has `private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)` and starts a polling loop in it, but never calls `scope.cancel()`. The user leaves the screen. What happens?",
+      "code": "class PricePresenter(private val view: PriceView) {\n    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)\n\n    fun start() {\n        scope.launch {\n            while (true) { view.show(api.price()); delay(5_000) }\n        }\n    }\n}",
+      "options": [
+        "The loop keeps running and holds the view, leaking it until the process dies",
+        "The loop stops automatically because `Dispatchers.Main` is tied to the Activity lifecycle",
+        "The `SupervisorJob` cancels the loop when the view is detached",
+        "The loop is garbage-collected together with the presenter as soon as the screen closes"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A hand-made scope knows nothing about lifecycles. Neither `Dispatchers.Main` nor `SupervisorJob` cancels anything on its own, and a running coroutine is reachable from the dispatcher, so it isn't collected. Call `scope.cancel()` in `onDestroy`/`onCleared` (or the presenter's detach) to end the work."
+    },
+    {
+      "id": "d23q10",
+      "type": "output",
+      "topic": "job states",
+      "difficulty": "Medium",
+      "question": "What does this print?",
+      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking {\n    val job = launch { delay(100) }\n    println(\"${job.isActive} ${job.isCompleted}\")\n    job.cancel()\n    println(\"${job.isActive} ${job.isCancelled}\")\n    job.join()\n    println(\"${job.isCancelled} ${job.isCompleted}\")\n}",
+      "options": [
+        "true false\nfalse true\ntrue true",
+        "true false\nfalse true\nfalse true",
+        "false false\nfalse true\ntrue true",
+        "true false\ntrue true\ntrue true"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A launched job is active right away. After `cancel()` it is no longer active and `isCancelled` is true. Once it has finished, `isCompleted` is also true, and `isCancelled` stays true because a cancelled job counts as completed but stays marked as cancelled."
+    },
+    {
+      "id": "d23q11",
+      "type": "truefalse",
+      "topic": "dispatcher keeps parent",
+      "difficulty": "Medium",
+      "question": "In a ViewModel, `viewModelScope.launch(Dispatchers.Default) { ... }` is still a child of `viewModelScope` and is cancelled when the ViewModel is cleared.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "True. The context you pass is merged with the scope's context. Only the dispatcher is replaced, and the scope's Job is still the parent. Only passing a `Job` (such as `Job()` or `SupervisorJob()`) replaces the parent and breaks the link."
+    },
+    {
+      "id": "d23q12",
+      "type": "mcq",
+      "topic": "job.children",
+      "difficulty": "Medium",
+      "question": "`parent` launched two coroutines, and each of them launched one more coroutine. All are still running. What does `parent.children.count()` return?",
+      "options": [
+        "2, because `children` holds only direct children",
+        "4, because `children` includes every descendant",
+        "0, because `children` is filled in only once the jobs complete",
+        "1, because `children` returns the most recent child only"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`Job.children` is a `Sequence<Job>` of the job's direct children. Grandchildren are children of those children, so you'd have to walk the tree to reach them."
+    },
+    {
+      "id": "d23q13",
+      "type": "output",
+      "topic": "supervisorScope",
+      "difficulty": "Medium",
+      "question": "What does this print to stdout? (Assume any uncaught exception only goes to stderr.)",
+      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking {\n    supervisorScope {\n        launch {\n            delay(10)\n            throw IllegalStateException(\"boom\")\n        }\n        launch {\n            delay(50)\n            println(\"sibling done\")\n        }\n    }\n    println(\"after scope\")\n}",
+      "options": [
+        "sibling done\nafter scope",
+        "after scope",
+        "after scope\nsibling done",
+        "sibling done"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "In `supervisorScope` a failing child does not cancel its siblings or the scope, so the second child still prints. The scope still waits for all its children, so \"after scope\" comes last."
+    },
+    {
+      "id": "d23q14",
+      "type": "multi",
+      "topic": "child failure",
+      "difficulty": "Medium",
+      "question": "Inside `coroutineScope { }`, one child `launch` throws an `IOException` while two siblings are still running. Which statements are true? Select all that apply.",
+      "options": [
+        "The running siblings are cancelled",
+        "The `coroutineScope` call rethrows the `IOException` to its caller",
+        "The scope waits for the cancelled siblings to finish before it rethrows",
+        "The siblings keep running and the exception is reported only after they finish",
+        "The `coroutineScope` call returns normally because the child failed, not the scope"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "In a regular Job hierarchy a failing child cancels its parent, which cancels the other children. The scope completes only after all children have finished (including their cancellation), and then `coroutineScope` rethrows the original exception."
+    },
+    {
+      "id": "d23q15",
+      "type": "mcq",
+      "topic": "viewModelScope SupervisorJob",
+      "difficulty": "Medium",
+      "question": "Why is `viewModelScope` built on a `SupervisorJob` rather than a plain `Job`?",
+      "options": [
+        "So that one failed child doesn't cancel the scope and all the other jobs in it",
+        "So that coroutines survive `onCleared()` and keep running after the ViewModel is destroyed",
+        "So that exceptions thrown in child coroutines are swallowed and never crash the app",
+        "So that coroutines run on `Dispatchers.Main` by default"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "With a plain `Job`, one failing `launch` would cancel the scope, and every later `launch` in that ViewModel would be cancelled immediately. A `SupervisorJob` isolates failures between children, but an uncaught exception still reaches the exception handler and can crash the app. The Main dispatcher comes from a separate element."
+    },
+    {
+      "id": "d23q16",
+      "type": "output",
+      "topic": "coroutineScope failure",
+      "difficulty": "Medium",
+      "question": "What does this print?",
+      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking {\n    try {\n        coroutineScope {\n            launch { delay(10); throw IllegalStateException(\"boom\") }\n            launch { delay(100); println(\"sibling done\") }\n        }\n    } catch (e: IllegalStateException) {\n        println(\"caught ${e.message}\")\n    }\n    println(\"end\")\n}",
+      "options": [
+        "caught boom\nend",
+        "sibling done\ncaught boom\nend",
+        "caught boom\nsibling done\nend",
+        "end"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "The failing child cancels the `coroutineScope`, which cancels the sibling before its `delay` ends, so \"sibling done\" never prints. `coroutineScope` then rethrows the exception, and the surrounding `try/catch` catches it."
+    },
+    {
+      "id": "d23q17",
+      "type": "truefalse",
+      "topic": "supervision depth",
+      "difficulty": "Hard",
+      "question": "Inside `supervisorScope`, a child does `launch { launch { throw Exception() }; launch { delay(1000) } }`. Because of the supervisor, the failing grandchild does not cancel its sibling.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "False. Only the direct children of a supervisor are supervised. The grandchildren's parent is a regular child Job, so the failure cancels that child and its other children. The supervisor only stops the failure from going any higher."
+    },
+    {
+      "id": "d23q18",
+      "type": "multi",
+      "topic": "breaking the parent link",
+      "difficulty": "Hard",
+      "question": "`scope` is a normal `CoroutineScope` with a Job. Which of these coroutines are NOT cancelled when `scope.cancel()` is called? Select all that apply.",
+      "options": [
+        "`scope.launch(Job()) { delay(10_000) }`",
+        "`scope.launch(SupervisorJob()) { delay(10_000) }`",
+        "`scope.launch(Dispatchers.IO) { delay(10_000) }`",
+        "`scope.launch(CoroutineName(\"x\")) { delay(10_000) }`",
+        "`GlobalScope.launch { delay(10_000) }`"
+      ],
+      "answer": [
+        0,
+        1,
+        4
+      ],
+      "explanation": "Passing a `Job()` or `SupervisorJob()` to `launch` makes that new job the coroutine's parent, so it is no longer a child of `scope`. `GlobalScope` has no Job at all. A dispatcher or a name only replaces that element, and the scope's Job stays the parent."
+    },
+    {
+      "id": "d23q19",
+      "type": "output",
+      "topic": "launch(SupervisorJob())",
+      "difficulty": "Hard",
+      "question": "A developer wants the two inner coroutines to fail independently. What does this print to stdout? (Assume any uncaught exception only goes to stderr.)",
+      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking {\n    val job = launch(SupervisorJob()) {\n        launch { delay(10); throw RuntimeException(\"boom\") }\n        launch { delay(50); println(\"B done\") }\n    }\n    job.join()\n    println(\"end\")\n}",
+      "options": [
+        "end",
+        "B done\nend",
+        "end\nB done",
+        "B done"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "The `SupervisorJob()` becomes the parent of the outer `launch`, but the inner coroutines are children of that outer coroutine's own regular Job. So the failure cancels the outer coroutine and \"B done\" never prints. The usual fix is `supervisorScope { }` or a scope that is built on a `SupervisorJob`."
+    },
+    {
+      "id": "d23q20",
+      "type": "mcq",
+      "topic": "cancelled scope reuse",
+      "difficulty": "Hard",
+      "question": "A screen-level helper calls `scope.cancel()` in `onStop()` and then `scope.launch { refresh() }` again in `onStart()`. What happens when the user comes back to the screen?",
+      "code": "class Refresher {\n    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)\n    fun onStart() { scope.launch { refresh() } }\n    fun onStop() { scope.cancel() }\n}",
+      "options": [
+        "`refresh()` never runs again, because a cancelled scope stays cancelled",
+        "`refresh()` runs normally, because `launch` reactivates the scope's Job",
+        "`scope.launch` throws `IllegalStateException` because the scope is cancelled",
+        "`refresh()` runs, because a `SupervisorJob` ignores `cancel()` calls"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A cancelled Job is final. Coroutines launched into it are cancelled right away, and no error is reported, so the bug fails silently. To pause and resume work, use `scope.coroutineContext.cancelChildren()` or create a new scope for each start."
+    }
+  ]
+}

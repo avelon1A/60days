@@ -1,0 +1,359 @@
+{
+  "day": 26,
+  "topic": "Coroutine exceptions: handlers & supervisorScope",
+  "questions": [
+    {
+      "id": "d26q01",
+      "type": "output",
+      "topic": "try/catch inside",
+      "difficulty": "Easy",
+      "question": "What does this print?",
+      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking {\n    launch {\n        try {\n            throw IllegalStateException(\"boom\")\n        } catch (e: IllegalStateException) {\n            println(\"caught ${e.message}\")\n        }\n        println(\"child ends\")\n    }.join()\n    println(\"done\")\n}",
+      "options": [
+        "caught boom\nchild ends\ndone",
+        "caught boom\ndone",
+        "done",
+        "caught boom"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "The exception is thrown and caught inside the coroutine body, so the coroutine never fails and simply carries on. Nothing reaches the parent Job, so `runBlocking` continues normally."
+    },
+    {
+      "id": "d26q02",
+      "type": "mcq",
+      "topic": "try/catch outside launch",
+      "difficulty": "Easy",
+      "question": "In a ViewModel, what happens when `api.load()` throws an `IOException`?",
+      "code": "fun refresh() {\n    try {\n        viewModelScope.launch {\n            _state.value = api.load()\n        }\n    } catch (e: IOException) {\n        _state.value = UiState.Error\n    }\n}",
+      "options": [
+        "The catch block never runs: the exception is thrown later inside the coroutine, so the app crashes",
+        "The catch block runs and the state becomes `UiState.Error`",
+        "The exception is silently swallowed, because `viewModelScope` uses a `SupervisorJob` for its children",
+        "It doesn't compile, because try/catch isn't allowed around a coroutine builder"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`launch` only starts the coroutine and returns a `Job`, so the try block has already finished when `load()` throws. The failure goes through the coroutine's Job instead. With no handler it reaches the thread's uncaught exception handler and the app crashes. The try/catch has to go inside the `launch` block."
+    },
+    {
+      "id": "d26q03",
+      "type": "truefalse",
+      "topic": "withContext rethrows",
+      "difficulty": "Easy",
+      "question": "If code inside `withContext(Dispatchers.IO) { ... }` throws, wrapping the `withContext` call in try/catch catches the exception in the calling coroutine.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`withContext` is a suspending scope function. It waits for its block and rethrows any failure to its caller, the same way `coroutineScope` does. Unlike `launch`, a try/catch around it works."
+    },
+    {
+      "id": "d26q04",
+      "type": "output",
+      "topic": "root handler",
+      "difficulty": "Easy",
+      "question": "What does this print?",
+      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking {\n    val handler = CoroutineExceptionHandler { _, e ->\n        println(\"handler: ${e.message}\")\n    }\n    val scope = CoroutineScope(Job() + handler)\n    val job = scope.launch {\n        throw RuntimeException(\"A\")\n    }\n    job.join()\n    println(\"after\")\n}",
+      "options": [
+        "handler: A\nafter",
+        "after",
+        "after\nhandler: A",
+        "handler: A"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "The `launch` is a root coroutine of `scope`, so it picks up the handler from the scope's context. The handler runs before the job counts as complete, which means it prints before `join()` returns. `runBlocking` isn't the parent here, so it isn't affected and goes on to print `after`."
+    },
+    {
+      "id": "d26q05",
+      "type": "mcq",
+      "topic": "viewModelScope crash",
+      "difficulty": "Easy",
+      "question": "`viewModelScope` is built on a `SupervisorJob`. Why does an uncaught exception in `viewModelScope.launch { }` still crash the app?",
+      "options": [
+        "Supervision only protects the scope; the unhandled exception still reaches the thread's uncaught handler",
+        "`viewModelScope` deliberately rethrows every exception on the main thread from `onCleared()`",
+        "`SupervisorJob` turns every child exception into a `CancellationException`, which the main looper rethrows",
+        "It doesn't crash: exceptions in `viewModelScope` are only logged to Logcat"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Supervision controls whether a failure spreads to the parent and siblings, not whether it gets reported. A coroutine that fails directly under a supervisor has to handle the exception itself, using the `CoroutineExceptionHandler` in its context. Without one, the exception goes to `Thread.uncaughtExceptionHandler`, which on Android crashes the app."
+    },
+    {
+      "id": "d26q06",
+      "type": "truefalse",
+      "topic": "handler is last resort",
+      "difficulty": "Easy",
+      "question": "A `CoroutineExceptionHandler` can recover from an exception so the failed coroutine continues from the point where it threw.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "When the handler runs, the coroutine has already completed with the exception. The handler is a last resort for logging, reporting or showing an error. To recover and carry on, use try/catch inside the coroutine."
+    },
+    {
+      "id": "d26q07",
+      "type": "multi",
+      "topic": "preventing crashes",
+      "difficulty": "Easy",
+      "question": "`api.sync()` may throw. Which of these stop the exception from crashing the app? Select all that apply.",
+      "code": "class SyncViewModel(private val api: Api) : ViewModel() {\n    fun sync() {\n        viewModelScope.launch {\n            api.sync()\n        }\n    }\n}",
+      "options": [
+        "Wrap `api.sync()` in try/catch inside the `launch` block",
+        "Pass a `CoroutineExceptionHandler` to this `viewModelScope.launch(handler) { }`",
+        "Wrap the whole `viewModelScope.launch { }` call in try/catch",
+        "Move `api.sync()` into a nested `launch(handler) { }` inside the outer `launch`, and put the handler there"
+      ],
+      "answer": [
+        0,
+        1
+      ],
+      "explanation": "A try/catch inside the coroutine handles the error where it happens. The outer `launch` is a direct child of `viewModelScope`'s `SupervisorJob`, so a handler passed to it is used. A try/catch around `launch` finishes before the coroutine fails. A handler on a nested child is ignored, because the child passes the exception up to its parent."
+    },
+    {
+      "id": "d26q08",
+      "type": "output",
+      "topic": "supervisorScope",
+      "difficulty": "Medium",
+      "question": "What does this print?",
+      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking {\n    val handler = CoroutineExceptionHandler { _, e ->\n        println(\"logged ${e.message}\")\n    }\n    supervisorScope {\n        launch(handler) { throw RuntimeException(\"A\") }\n        launch {\n            delay(100)\n            println(\"B done\")\n        }\n    }\n    println(\"end\")\n}",
+      "options": [
+        "logged A\nB done\nend",
+        "logged A\nend",
+        "B done\nend",
+        "logged A"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "In `supervisorScope`, a failing child doesn't cancel the scope or its siblings, so B still finishes. The failed child is a direct child of the supervisor, so it uses its own handler. `supervisorScope` waits for B and then returns normally."
+    },
+    {
+      "id": "d26q09",
+      "type": "mcq",
+      "topic": "join on failed job",
+      "difficulty": "Medium",
+      "question": "`scope` is `CoroutineScope(SupervisorJob() + handler)` and its `launch` throws `IllegalStateException`. What happens at `job.join()`, called from an unrelated coroutine?",
+      "code": "val job = scope.launch { throw IllegalStateException(\"x\") }\njob.join()\nprintln(job.isCancelled)",
+      "options": [
+        "`join()` returns normally and `true` is printed",
+        "`join()` rethrows the `IllegalStateException`",
+        "`join()` returns normally and `false` is printed, since the job failed rather than being cancelled",
+        "`join()` throws a `CancellationException` that wraps the original exception"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`join()` only waits for completion. It never rethrows the job's failure, unlike `await()`. A job that failed with an exception counts as cancelled, so `isCancelled` is `true`."
+    },
+    {
+      "id": "d26q10",
+      "type": "multi",
+      "topic": "async exceptions",
+      "difficulty": "Medium",
+      "question": "Which statements about exceptions in `async` are correct? Select all that apply.",
+      "options": [
+        "Inside `supervisorScope`, a failing `async` stores the exception in its `Deferred`, and it is thrown only when you call `await()`",
+        "As a child of a regular `Job`, a failing `async` cancels its parent even if `await()` is never called",
+        "Calling `await()` on a failed `Deferred` rethrows the exception that failed it",
+        "Wrapping the `async { }` call itself (not `await()`) in try/catch catches the exception",
+        "Calling `await()` a second time on the same failed `Deferred` returns `null` instead of throwing"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "`async` stores its result or failure in the `Deferred`, and every `await()` rethrows the failure, not just the first. Under a regular `Job`, a failed child still cancels its parent straight away, so awaiting it is not what triggers that. The `async` call returns immediately, so a try/catch around it catches nothing."
+    },
+    {
+      "id": "d26q11",
+      "type": "mcq",
+      "topic": "nested handler ignored",
+      "difficulty": "Medium",
+      "question": "The inner child throws. Which handler logs the exception?",
+      "code": "val scope = CoroutineScope(Job() + rootHandler)\nscope.launch {\n    launch(innerHandler) {\n        throw RuntimeException(\"n\")\n    }\n}",
+      "options": [
+        "Only `rootHandler`",
+        "Only `innerHandler`",
+        "Both, `innerHandler` first",
+        "Neither: the exception goes straight to the thread's uncaught exception handler"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A child of a regular Job doesn't handle its own exception. It passes it up to its parent until it reaches the root coroutine. The root `launch` gets `rootHandler` from the scope and handles the exception, so the handler on the nested child is never used."
+    },
+    {
+      "id": "d26q12",
+      "type": "output",
+      "topic": "cancellation ignored",
+      "difficulty": "Medium",
+      "question": "What does this print?",
+      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking {\n    val handler = CoroutineExceptionHandler { _, e ->\n        println(\"handler: ${e.message}\")\n    }\n    val scope = CoroutineScope(Job() + handler)\n    val job = scope.launch {\n        throw CancellationException(\"stop\")\n    }\n    job.join()\n    println(\"cancelled=${job.isCancelled}\")\n}",
+      "options": [
+        "cancelled=true",
+        "handler: stop\ncancelled=true",
+        "handler: stop\ncancelled=false",
+        "cancelled=false"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Coroutines treat a `CancellationException` as normal cancellation, not as a failure. It is never passed to a `CoroutineExceptionHandler` and doesn't cancel the parent. The job still ends up cancelled, so `isCancelled` is `true`."
+    },
+    {
+      "id": "d26q13",
+      "type": "mcq",
+      "topic": "async ignores handler",
+      "difficulty": "Medium",
+      "question": "`scope` is `CoroutineScope(SupervisorJob())`. `scope.async(handler) { throw RuntimeException() }` runs, and nobody ever calls `await()`. What happens?",
+      "options": [
+        "Nothing is reported: the exception stays in the `Deferred`",
+        "`handler` is called with the `RuntimeException`",
+        "The exception goes to the thread's uncaught exception handler and crashes the process",
+        "`scope` is cancelled, and all its other coroutines are cancelled with it"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A root `async` expects its caller to handle the exception through `await()`, so a `CoroutineExceptionHandler` has no effect on it. Under a `SupervisorJob` the failure doesn't cancel the scope either. If nobody awaits, the exception is silently lost."
+    },
+    {
+      "id": "d26q14",
+      "type": "truefalse",
+      "topic": "supervisorScope body",
+      "difficulty": "Medium",
+      "question": "If the body of `supervisorScope { }` throws (not a child coroutine), the scope cancels its children and rethrows the exception to the caller.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Supervision only protects the scope from failures in its children. If the scope's own body throws, the scope fails like any other: it cancels its running children and rethrows, so a try/catch around `supervisorScope` catches it."
+    },
+    {
+      "id": "d26q15",
+      "type": "output",
+      "topic": "coroutineScope rethrows",
+      "difficulty": "Medium",
+      "question": "What does this print?",
+      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking<Unit> {\n    try {\n        coroutineScope {\n            launch {\n                try { delay(1000); println(\"B done\") }\n                finally { println(\"B cancelled\") }\n            }\n            launch { delay(10); throw IllegalStateException(\"A\") }\n        }\n    } catch (e: IllegalStateException) {\n        println(\"caught ${e.message}\")\n    }\n}",
+      "options": [
+        "B cancelled\ncaught A",
+        "caught A\nB cancelled",
+        "B done\nB cancelled\ncaught A",
+        "caught A"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Child A's failure cancels the `coroutineScope`, which cancels B. B's `finally` runs as it finishes. `coroutineScope` waits for every child to complete and only then rethrows `A` to the caller, so `B cancelled` prints before `caught A`."
+    },
+    {
+      "id": "d26q16",
+      "type": "multi",
+      "topic": "CancellationException",
+      "difficulty": "Medium",
+      "question": "Which statements about `CancellationException` in coroutines are correct? Select all that apply.",
+      "options": [
+        "A child that throws `CancellationException` does not cancel its parent",
+        "Under a regular `Job`, when a child fails with a regular exception, its running siblings get cancelled with a `CancellationException`",
+        "An uncaught `CancellationException` is passed to the thread's uncaught exception handler",
+        "A child that throws `CancellationException` inside `coroutineScope` makes `coroutineScope` rethrow it as a failure",
+        "A child that throws `CancellationException` cancels all of its siblings"
+      ],
+      "answer": [
+        0,
+        1
+      ],
+      "explanation": "`CancellationException` means \"this coroutine was cancelled\", so it is not treated as a failure. It isn't reported to any handler, doesn't spread to the parent, and doesn't affect siblings. A regular failure does cancel the parent, and the parent then cancels the remaining children with a `CancellationException`."
+    },
+    {
+      "id": "d26q17",
+      "type": "mcq",
+      "topic": "unhandled in supervisor",
+      "difficulty": "Hard",
+      "question": "This runs on the JVM, with no `CoroutineExceptionHandler` anywhere. Child A throws `IOException`. What happens?",
+      "code": "suspend fun loadAll() = supervisorScope {\n    launch { throw IOException(\"A\") }\n    launch { delay(100); println(\"B done\") }\n}\n\n// caller\ntry { loadAll() } catch (e: IOException) { println(\"caught\") }",
+      "options": [
+        "It goes to the thread's uncaught exception handler, B prints `B done`, and `caught` is never printed",
+        "`supervisorScope` waits for B, then rethrows the `IOException`, so `B done` and then `caught` are printed",
+        "B is cancelled, and `caught` is printed",
+        "The exception is silently dropped and only `B done` is printed"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`supervisorScope` never rethrows a child's failure. It doesn't treat the failure as its own, so the caller's try/catch sees nothing. Each failed child has to handle its own exception, and with no handler that means the thread's uncaught exception handler. On Android, that crashes the app."
+    },
+    {
+      "id": "d26q18",
+      "type": "output",
+      "topic": "suppressed exceptions",
+      "difficulty": "Hard",
+      "question": "What does this print?",
+      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking {\n    val handler = CoroutineExceptionHandler { _, e ->\n        println(\"${e.message} ${e.suppressed.map { it.message }}\")\n    }\n    val job = CoroutineScope(Job() + handler).launch {\n        launch {\n            try { delay(Long.MAX_VALUE) }\n            finally { throw ArithmeticException(\"second\") }\n        }\n        launch { delay(10); throw IllegalStateException(\"first\") }\n    }\n    job.join()\n}",
+      "options": [
+        "first [second]",
+        "second [first]",
+        "first []",
+        "first [second]\nsecond []"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "When several children fail, the first exception wins and is the one handled. Exceptions that happen during the cancellation that follows are attached to it as suppressed exceptions. The handler runs only once, for the root coroutine."
+    },
+    {
+      "id": "d26q19",
+      "type": "mcq",
+      "topic": "runCatching pitfall",
+      "difficulty": "Hard",
+      "question": "What's the main coroutine problem with this repository code?",
+      "code": "suspend fun loadUser(id: String): User? =\n    runCatching { api.getUser(id) }\n        .getOrNull()",
+      "options": [
+        "`runCatching` also catches `CancellationException`, so a cancelled caller gets `null` and keeps running",
+        "`runCatching` can't be called from a suspend function, because its lambda isn't a suspend lambda",
+        "`runCatching` rethrows every exception, so `getOrNull()` never returns `null`",
+        "`runCatching` starts a new coroutine, so `getUser` runs outside the caller's scope and can't be cancelled"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`runCatching` catches every `Throwable`, including the `CancellationException` that suspend functions throw on cancellation. The caller then gets `null` and keeps going as if nothing happened. Rethrow it with `onFailure { if (it is CancellationException) throw it }`. `runCatching` is inline, so suspend calls inside it are allowed."
+    },
+    {
+      "id": "d26q20",
+      "type": "output",
+      "topic": "unawaited async",
+      "difficulty": "Hard",
+      "question": "The `Deferred` is never awaited. What does this print?",
+      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking {\n    try {\n        coroutineScope {\n            async<Int> { throw IllegalStateException(\"x\") }\n            delay(100)\n            println(\"still here\")\n        }\n    } catch (e: IllegalStateException) {\n        println(\"caught ${e.message}\")\n    }\n}",
+      "options": [
+        "caught x",
+        "still here",
+        "still here\ncaught x",
+        "Nothing is printed"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`async` keeps the exception for `await()`, but as a child of the regular Job of `coroutineScope` it also cancels its parent straight away. The `delay(100)` is cut short by cancellation, so `still here` never prints, and `coroutineScope` rethrows `x`."
+    }
+  ]
+}

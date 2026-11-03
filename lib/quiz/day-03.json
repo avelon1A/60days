@@ -1,0 +1,370 @@
+{
+  "day": 3,
+  "topic": "Null safety II: smart casts, is & as",
+  "questions": [
+    {
+      "id": "d03q01",
+      "type": "output",
+      "topic": "is check",
+      "difficulty": "Easy",
+      "question": "What does this print?",
+      "code": "fun describe(x: Any) =\n    if (x is String) x.uppercase() else \"not a string\"\n\nfun main() {\n    println(describe(\"kt\"))\n    println(describe(42))\n}",
+      "options": [
+        "KT\nnot a string",
+        "kt\nnot a string",
+        "KT\n42",
+        "Compile error"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "After `x is String` succeeds, `x` is smart cast to `String` inside that branch, so `uppercase()` is available without an explicit cast. `42` fails the check and takes the `else` branch."
+    },
+    {
+      "id": "d03q02",
+      "type": "mcq",
+      "topic": "as",
+      "difficulty": "Easy",
+      "question": "What happens when this code runs?",
+      "code": "val x: Any = \"42\"\nval n = x as Int\nprintln(n + 1)",
+      "options": [
+        "Throws ClassCastException",
+        "Prints 43",
+        "Throws NumberFormatException",
+        "Prints null"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`as` is an unsafe cast. It never converts a value, it only checks the runtime type. `x` holds a `String`, so the cast to `Int` throws `ClassCastException`. To parse the text you need `toInt()`, which is the only thing that would throw `NumberFormatException`."
+    },
+    {
+      "id": "d03q03",
+      "type": "output",
+      "topic": "as? elvis",
+      "difficulty": "Easy",
+      "question": "What does this print?",
+      "code": "fun main() {\n    val a: Any = 42\n    println(a as? String ?: \"none\")\n}",
+      "options": [
+        "none",
+        "42",
+        "null",
+        "Throws ClassCastException"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`as?` is the safe cast: when the type doesn't match it returns `null` instead of throwing. The elvis operator then replaces that `null` with \"none\"."
+    },
+    {
+      "id": "d03q04",
+      "type": "truefalse",
+      "topic": "type erasure",
+      "difficulty": "Medium",
+      "question": "This code compiles.",
+      "code": "fun main() {\n    val x: Any = listOf(\"a\", \"b\")\n    if (x is List<String>) println(x.size)\n}",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "compiles": false,
+      "explanation": "Generic type arguments are erased at runtime, so the JVM can't check `List<String>`. The compiler reports \"cannot check for instance of erased type\". Use `x is List<*>` instead, or a `reified` type parameter in an inline function."
+    },
+    {
+      "id": "d03q05",
+      "type": "mcq",
+      "topic": "nothing type",
+      "difficulty": "Easy",
+      "question": "Inside an Activity's `onCreate`, what is the type of `id`?",
+      "code": "val id = intent.getStringExtra(\"user_id\") ?: return",
+      "options": [
+        "String",
+        "String?",
+        "Nothing",
+        "Unit"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`return` is an expression of type `Nothing`, which is a subtype of every type. The common type of `String?`'s non-null part and `Nothing` is `String`, so `id` is non-null for the rest of the function. `Nothing` is only the type of the right-hand side, not of the whole expression."
+    },
+    {
+      "id": "d03q06",
+      "type": "output",
+      "topic": "!is early return",
+      "difficulty": "Easy",
+      "question": "What does this print?",
+      "code": "fun f(x: Any): Int {\n    if (x !is String) return -1\n    return x.length\n}\n\nfun main() {\n    println(f(\"hey\"))\n    println(f(3))\n}",
+      "options": [
+        "3\n-1",
+        "3\n1",
+        "-1\n-1",
+        "Compile error"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Because the `!is` branch returns, the compiler knows that `x` must be a `String` on the lines after it, so `x.length` compiles. `3` is not a `String`, so it returns -1. Its digit count is never computed."
+    },
+    {
+      "id": "d03q07",
+      "type": "mcq",
+      "topic": "mutable property",
+      "difficulty": "Medium",
+      "question": "Why doesn't this compile?",
+      "code": "class Box {\n    var s: String? = \"hi\"\n}\n\nfun main() {\n    val b = Box()\n    if (b.s != null) println(b.s.length)\n}",
+      "options": [
+        "`s` is a `var` member, so it could change between the check and the use",
+        "Smart casts never work on class properties, only on local variables, even for a `val`",
+        "`!= null` checks can't produce smart casts. You need `is String`",
+        "`Box` must be a data class for its properties to be smart cast"
+      ],
+      "answer": [
+        0
+      ],
+      "compiles": false,
+      "explanation": "The compiler can't guarantee that a `var` member property keeps its value between the check and the use. Smart casts do work on stable `val` properties in the same module. Fix it by copying to a local (`val s = b.s`) or by using `b.s?.length`."
+    },
+    {
+      "id": "d03q08",
+      "type": "output",
+      "topic": "|| short-circuit",
+      "difficulty": "Easy",
+      "question": "What does this print?",
+      "code": "fun label(s: String?) =\n    if (s == null || s.length < 3) \"short\" else s.uppercase()\n\nfun main() {\n    println(label(null))\n    println(label(\"ab\"))\n    println(label(\"kotlin\"))\n}",
+      "options": [
+        "short\nshort\nKOTLIN",
+        "short\nAB\nKOTLIN",
+        "null\nshort\nKOTLIN",
+        "short\nshort\nkotlin"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`||` only evaluates its right side when `s == null` is false, so `s` is smart cast to `String` there. The `else` branch runs only when both conditions are false, which means `s` is non-null there too."
+    },
+    {
+      "id": "d03q09",
+      "type": "multi",
+      "topic": "smart cast limits",
+      "difficulty": "Medium",
+      "question": "After `if (obj.prop != null)`, in which cases is a smart cast of `obj.prop` to non-null IMPOSSIBLE? Select all that apply.",
+      "options": [
+        "`prop` is a `var` member property",
+        "`prop` is an `open val`",
+        "`prop` is a `val` with a custom getter",
+        "`prop` is a public `val` declared in a different module (e.g. a library)",
+        "`prop` is a plain `val` with no custom getter, declared in the same module",
+        "`prop` is a `private val` of the same class"
+      ],
+      "answer": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "explanation": "A smart cast needs a stable value. A `var` can change, an `open` or custom getter may return something different on each call, and a library could later change a property from another module. A final `val` with a backing field in the same module is stable, so it can be smart cast."
+    },
+    {
+      "id": "d03q10",
+      "type": "output",
+      "topic": "as? numeric",
+      "difficulty": "Medium",
+      "question": "What does this print?",
+      "code": "fun main() {\n    val x: Any = 5L\n    println((x as? Int) ?: -1)\n}",
+      "options": [
+        "-1",
+        "5",
+        "null",
+        "Throws ClassCastException"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`x` holds a boxed `Long`, and a `Long` is not an `Int`. Casts never convert numbers, so `as?` returns `null` and the elvis operator produces -1. Use `(x as? Number)?.toInt()` to convert."
+    },
+    {
+      "id": "d03q11",
+      "type": "mcq",
+      "topic": "getSystemService",
+      "difficulty": "Easy",
+      "question": "`context.getSystemService(Context.CONNECTIVITY_SERVICE)` returns `Any!` (Java `Object`). Which line gives you a `ConnectivityManager?` without ever throwing?",
+      "options": [
+        "`val cm = context.getSystemService(name) as? ConnectivityManager`",
+        "`val cm = context.getSystemService(name) as ConnectivityManager`",
+        "`val cm = context.getSystemService(name) as ConnectivityManager?`",
+        "`val cm = context.getSystemService(name)!! as ConnectivityManager`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Only `as?` yields `null` when the type is wrong or the value is null. `as ConnectivityManager?` allows null but still throws `ClassCastException` on a wrong type, and the other two throw on null. With core-ktx you can write `context.getSystemService<ConnectivityManager>()`."
+    },
+    {
+      "id": "d03q12",
+      "type": "truefalse",
+      "topic": "captured var",
+      "difficulty": "Medium",
+      "question": "This code compiles, because `name` is a local variable checked right before use.",
+      "code": "fun main() {\n    var name: String? = \"Kotlin\"\n    val reset = { name = null }\n    if (name != null) println(name.length)\n    reset()\n}",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "compiles": false,
+      "explanation": "Normally a local `var` can be smart cast. Here, though, it is assigned inside a lambda, and the lambda could run at any time, even on another thread. The compiler reports that `name` \"is mutated in a capturing closure\". A lambda that only reads `name` would not block the smart cast."
+    },
+    {
+      "id": "d03q13",
+      "type": "output",
+      "topic": "as nullable type",
+      "difficulty": "Medium",
+      "question": "What does this print?",
+      "code": "fun main() {\n    val n: Any? = null\n    val s = n as String?\n    println(s)\n}",
+      "options": [
+        "null",
+        "Throws NullPointerException",
+        "Throws ClassCastException",
+        "Compile error"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`null` is a valid value of the nullable type `String?`, so the cast succeeds and `s` is `null`. Casting `null` with `as String` (non-null target) would throw instead."
+    },
+    {
+      "id": "d03q14",
+      "type": "mcq",
+      "topic": "fragment listener",
+      "difficulty": "Medium",
+      "question": "A Fragment uses this code in `onAttach`. What happens if the host Activity does NOT implement `MyListener`?",
+      "code": "override fun onAttach(context: Context) {\n    super.onAttach(context)\n    listener = context as? MyListener\n        ?: throw IllegalStateException(\"$context must implement MyListener\")\n}",
+      "options": [
+        "It throws IllegalStateException with the custom message in `onAttach`",
+        "It throws ClassCastException when `as?` fails",
+        "`listener` is set to null, and the app crashes later when a callback is invoked",
+        "It doesn't compile, because `throw` can't be used as the right side of `?:`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`as?` returns null on a type mismatch, never `ClassCastException`. The elvis operator then evaluates `throw`, which has type `Nothing`, so it is a valid right-hand side. The app fails fast in `onAttach` with a clear message, and `listener` can be a non-null type."
+    },
+    {
+      "id": "d03q15",
+      "type": "truefalse",
+      "topic": "requireNotNull",
+      "difficulty": "Medium",
+      "question": "This compiles: after `requireNotNull(s)` the compiler smart casts `s` to `String`, even though its return value is ignored.",
+      "code": "fun show(s: String?) {\n    requireNotNull(s)\n    println(s.length)\n}\n\nfun main() {\n    show(\"abc\")\n}",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "compiles": true,
+      "explanation": "`requireNotNull` declares a contract saying it returns only if its argument is non-null. That lets the compiler smart cast `s` afterwards. The same applies to `checkNotNull`, `require(s != null)` and `check(s != null)`."
+    },
+    {
+      "id": "d03q16",
+      "type": "multi",
+      "topic": "require vs check",
+      "difficulty": "Medium",
+      "question": "Which of these calls throw `IllegalStateException`? Select all that apply.",
+      "options": [
+        "`check(false)`",
+        "`checkNotNull(null)`",
+        "`error(\"boom\")`",
+        "`require(false)`",
+        "`requireNotNull(null)`"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "The `check` family and `error()` signal an invalid object or program state, so they throw `IllegalStateException`. The `require` family validates arguments passed by the caller and throws `IllegalArgumentException`."
+    },
+    {
+      "id": "d03q17",
+      "type": "mcq",
+      "topic": "platform types",
+      "difficulty": "Hard",
+      "question": "A Java method `public String getName()` has no nullability annotations and returns null at runtime. What happens in Kotlin?",
+      "code": "val user = JavaUser()\nval a = user.getName()      // line 1\nval b: String = user.getName() // line 2",
+      "options": [
+        "Line 1 types `a` as `String!`, and line 2 throws NPE right away",
+        "Both lines fail to compile until you add `?` or `!!`",
+        "Both lines succeed, and the crash happens only when `b.length` is called",
+        "Line 1 is inferred as `String?`, and line 2 is a compile error"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Unannotated Java types become platform types (`String!`). Kotlin lets you treat them as either nullable or non-null and does not check nullability at compile time. When you assign one to a declared non-null type, Kotlin inserts a runtime null check, so line 2 throws NPE right there. `a` stays `String!`, which can blow up much later. That delay is why it's safer to declare such values as `String?` explicitly."
+    },
+    {
+      "id": "d03q18",
+      "type": "output",
+      "topic": "unchecked cast",
+      "difficulty": "Hard",
+      "question": "What does this print?",
+      "code": "fun main() {\n    val x: Any = listOf(1, 2, 3)\n    val strs = x as List<String>\n    println(strs.size)\n}",
+      "options": [
+        "3",
+        "Throws ClassCastException",
+        "Compile error",
+        "0"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Because of type erasure, the runtime can only check `x is List`, so the cast succeeds with just an \"unchecked cast\" warning. Calling `size` never touches the elements. The `ClassCastException` would happen only when an element is used as a `String`, for example `val s: String = strs[0]`."
+    },
+    {
+      "id": "d03q19",
+      "type": "mcq",
+      "topic": "k2 smart cast",
+      "difficulty": "Hard",
+      "question": "What happens when this is compiled with Kotlin 2.x (the K2 compiler) and run?",
+      "code": "fun main() {\n    val x: Any = \"Kotlin\"\n    val isStr = x is String\n    if (isStr) println(x.length)\n}",
+      "options": [
+        "It compiles and prints 6",
+        "Compile error: unresolved reference `length`, because the check isn't inside the `if`",
+        "It compiles but throws ClassCastException",
+        "It compiles only if `isStr` is declared `const`"
+      ],
+      "answer": [
+        0
+      ],
+      "compiles": true,
+      "explanation": "K2 keeps track of what a local `val` holding a type check implies, so `if (isStr)` smart casts `x` to `String`. The old K1 compiler rejected this code, which is why many older answers online say it fails."
+    },
+    {
+      "id": "d03q20",
+      "type": "output",
+      "topic": "k2 smart cast",
+      "difficulty": "Hard",
+      "question": "What does this print with kotlinc 2.x (K2)?",
+      "code": "interface Named { val name: String }\nclass Cat(override val name: String) : Named\nclass Dog(override val name: String) : Named\n\nfun main() {\n    val x: Any = Cat(\"Tom\")\n    if (x is Cat || x is Dog) println(x.name)\n}",
+      "options": [
+        "Tom",
+        "Compile error",
+        "Cat",
+        "Throws ClassCastException"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "After `x is Cat || x is Dog`, K2 smart casts `x` to the closest common supertype, `Named`, so `x.name` resolves and prints \"Tom\". K1 couldn't do this and reported an unresolved reference."
+    }
+  ]
+}

@@ -1,0 +1,364 @@
+{
+  "day": 60,
+  "topic": "Grand finale: everything",
+  "questions": [
+    {
+      "id": "d60q01",
+      "type": "output",
+      "topic": "scope function chain",
+      "difficulty": "Easy",
+      "question": "What does this print?",
+      "code": "fun main() {\n    val list = mutableListOf(1, 2)\n    val r = list\n        .apply { add(3) }\n        .also { it.add(4) }\n        .let { it.size }\n    println(\"$r ${list.last()}\")\n}",
+      "options": [
+        "4 4",
+        "3 4",
+        "4 3",
+        "2 4"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`apply` and `also` both return the same list, so both `add` calls mutate `list`, and `let` returns the lambda result, the size 4. Guessing `3` forgets that `also` hands the list on after adding 4."
+    },
+    {
+      "id": "d60q02",
+      "type": "mcq",
+      "topic": "single source of truth",
+      "difficulty": "Easy",
+      "question": "A list screen observes `dao.observeArticles(): Flow<List<Article>>` through the repository. The user pulls to refresh and the Retrofit call succeeds. In a single-source-of-truth design, how do the new articles reach the screen?",
+      "options": [
+        "The repository writes the response into Room, the Room `Flow` re-emits, and the UI recomposes",
+        "The ViewModel replaces its list with the Retrofit response and writes to Room later in the background",
+        "The composable calls the Retrofit API itself and merges the result with the Room list",
+        "The ViewModel must call `observeArticles()` again, because a Room `Flow` emits only once"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "With a single source of truth the network only feeds the database, and the UI only reads the database, so there is one consistent copy that also works offline. Room `Flow` queries re-emit whenever their tables change, so you don't need to query again."
+    },
+    {
+      "id": "d60q03",
+      "type": "mcq",
+      "topic": "freshness vs battery",
+      "difficulty": "Easy",
+      "question": "A weather app's forecast changes about once an hour. Which way of keeping it fresh is the most battery- and data-friendly?",
+      "options": [
+        "Fetch on open using HTTP cache headers, plus a rare constrained WorkManager refresh if a widget needs it",
+        "Keep a WebSocket open so the server can push every change, which costs less than repeated requests",
+        "Poll the API every 30 seconds while the app is installed",
+        "Have the server send a high-priority FCM message to every user each minute, since FCM batches wakeups"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Data that changes hourly doesn't need a real-time channel. Every socket keep-alive, poll or high-priority push wakes the radio and drains battery. Fetching on demand plus rare, constrained background refreshes gives fresh enough data at a fraction of the cost."
+    },
+    {
+      "id": "d60q04",
+      "type": "output",
+      "topic": "async ordering",
+      "difficulty": "Easy",
+      "question": "What does this print?",
+      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking {\n    val a = async { delay(200); \"A\" }\n    val b = async { delay(100); \"B\" }\n    launch { delay(150); println(\"tick\") }\n    println(b.await() + a.await())\n}",
+      "options": [
+        "tick\nBA",
+        "BA\ntick",
+        "tick\nAB",
+        "AB\ntick"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "All three coroutines run concurrently. `b` is ready at 100 ms, but the `println` also needs `a`, which is ready at 200 ms, and \"tick\" prints at 150 ms in between. The string is built in source order, `b` then `a`, so it's `BA` whichever finishes first."
+    },
+    {
+      "id": "d60q05",
+      "type": "mcq",
+      "topic": "money in apis",
+      "difficulty": "Easy",
+      "question": "You're designing the order API for a shopping app. How should a price be represented in the JSON?",
+      "options": [
+        "As an integer in minor units (e.g. `1999`) plus a currency code like `\"INR\"`",
+        "As a JSON number like `19.99`, parsed into a `Double` and rounded when displayed",
+        "As a pre-formatted display string like `\"₹19.99\"`",
+        "As a `Float`, to keep the payload smaller"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Binary floating point can't represent most decimal amounts exactly, so sums and comparisons drift (`0.1 + 0.2 != 0.3`). Integer minor units with an explicit currency are exact and unambiguous. A formatted string can't be computed with and bakes in one locale."
+    },
+    {
+      "id": "d60q06",
+      "type": "multi",
+      "topic": "nullable to non-null",
+      "difficulty": "Medium",
+      "question": "Given `val s: String? = intent.getStringExtra(\"name\")`, which expressions have the non-null type `String`? Select all that apply.",
+      "options": [
+        "`s ?: \"\"`",
+        "`s.orEmpty()`",
+        "`s.toString()`",
+        "`s!!`",
+        "`s?.trim()`",
+        "`s?.let { it }`"
+      ],
+      "answer": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "explanation": "Elvis, `orEmpty()` and `!!` all produce `String`. `toString()` is defined on `Any?`, so it also returns `String`, though it gives the text \"null\" for a null value, which is a classic bug. Any `?.` call keeps the result nullable, so `s?.trim()` and `s?.let { it }` are `String?`."
+    },
+    {
+      "id": "d60q07",
+      "type": "mcq",
+      "topic": "edge-to-edge insets",
+      "difficulty": "Medium",
+      "question": "After raising `targetSdk` to 35, a Compose screen's top title draws under the status bar and its bottom button sits under the gesture navigation bar. What is the right fix?",
+      "options": [
+        "Consume window insets, e.g. `Scaffold`'s `innerPadding` or `windowInsetsPadding(WindowInsets.safeDrawing)`",
+        "Hard-code `24.dp` top and `48.dp` bottom padding, which matches the standard bar heights on most devices",
+        "Set `windowOptOutEdgeToEdgeEnforcement` in the theme, which permanently restores the pre-35 layout",
+        "Lower `targetSdk` back to 34 to keep the old layout"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Apps targeting Android 15 are drawn edge-to-edge, so content has to consume the system bar and cutout insets. Bar sizes vary by device and navigation mode, so hard-coded padding breaks. The opt-out attribute is deprecated and ignored once you target 36, and Play's target-SDK rules rule out staying on an old target."
+    },
+    {
+      "id": "d60q08",
+      "type": "output",
+      "topic": "data class arrays",
+      "difficulty": "Medium",
+      "question": "What does this print?",
+      "code": "data class Tags(val values: List<String>)\ndata class Pixels(val values: IntArray)\n\nfun main() {\n    println(Tags(listOf(\"a\")) == Tags(listOf(\"a\")))\n    println(Pixels(intArrayOf(1)) == Pixels(intArrayOf(1)))\n}",
+      "options": [
+        "true\nfalse",
+        "true\ntrue",
+        "false\nfalse",
+        "false\ntrue"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "The generated `equals` calls `equals` on each property. `List` compares its contents, but arrays inherit identity `equals` from the JVM, so two different `IntArray`s are never equal. The compiler warns about this, and the usual fix is a `List` or a hand-written `equals`/`hashCode` using `contentEquals`."
+    },
+    {
+      "id": "d60q09",
+      "type": "mcq",
+      "topic": "Eagerly keeps polling",
+      "difficulty": "Medium",
+      "question": "The screen collects `prices` with `collectAsStateWithLifecycle()`. The user presses Home and leaves the app in the background for an hour, and the process isn't killed. What happens to the polling loop?",
+      "code": "val prices = flow {\n    while (true) {\n        emit(api.prices())\n        delay(5_000)\n    }\n}.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())",
+      "options": [
+        "It keeps polling every 5 seconds all hour, since `Eagerly` ties the upstream to `viewModelScope`",
+        "It stops when the screen goes to STOPPED, because `collectAsStateWithLifecycle` cancels the upstream flow",
+        "It pauses because `viewModelScope` is suspended while the app is in the background",
+        "It stops after 5 seconds, because `stateIn` waits for the delay timeout"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Lifecycle-aware collection only stops the UI's subscription. With `Eagerly` the shared upstream runs for as long as `viewModelScope` lives, and the ViewModel survives in the background. `SharingStarted.WhileSubscribed(5_000)` would stop the polling a few seconds after the last collector leaves."
+    },
+    {
+      "id": "d60q10",
+      "type": "truefalse",
+      "topic": "polling cost",
+      "difficulty": "Medium",
+      "question": "Polling an endpoint every minute with `If-None-Match` is cheap on battery, because an unchanged resource returns `304 Not Modified` with no body.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "A `304` saves bytes and parsing, but each poll still wakes the cellular radio, which then stays in a high-power state for several seconds afterwards. That wake-up, not the payload, dominates the energy cost, so frequent polling is expensive even when nothing changed. Push, or less frequent batched fetches, fix it."
+    },
+    {
+      "id": "d60q11",
+      "type": "mcq",
+      "topic": "sealed when with else",
+      "difficulty": "Medium",
+      "question": "`PaymentState` is a sealed interface. A teammate adds a new `Refunded` subtype, and the project still compiles with no warnings. Screens render it like this. What's going on?",
+      "code": "when (state) {\n    is PaymentState.Pending -> Spinner()\n    is PaymentState.Paid -> Receipt(state.receipt)\n    is PaymentState.Failed -> ErrorView(state.reason)\n    else -> {}\n}",
+      "options": [
+        "The `else` branch silently swallows `Refunded`; without it, the compiler would flag each unhandled `when`",
+        "Sealed hierarchies are only checked for exhaustiveness at runtime, so a crash is coming",
+        "The compiler routes `Refunded` to the nearest matching branch, `Paid`, by declaration order",
+        "`when` on a sealed type must always have an `else`, so this is the recommended pattern"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Exhaustiveness checking is the main benefit of sealed types. Listing every subtype without `else` turns adding a new state into a compile error at each place that needs updating. A catch-all `else` gives that up and hides new cases."
+    },
+    {
+      "id": "d60q12",
+      "type": "multi",
+      "topic": "runtime permissions",
+      "difficulty": "Medium",
+      "question": "Which statements about runtime permissions on current Android are true? Select all that apply.",
+      "options": [
+        "Apps targeting Android 13+ must request `POST_NOTIFICATIONS` at runtime before their notifications are shown",
+        "The recommended way to request a permission is an `ActivityResultContracts.RequestPermission` launcher",
+        "`ACCESS_BACKGROUND_LOCATION` must be requested separately, after foreground location has been granted",
+        "`INTERNET` is a dangerous permission, so the user is prompted before the first network call",
+        "Once granted, a permission stays granted forever and the app never needs to check it again"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "Notifications are opt-in from Android 13, the Activity Result API replaced `onRequestPermissionsResult`, and background location is a separate, later request. `INTERNET` is a normal install-time permission. Grants can be one-time, revoked in Settings or auto-reset for unused apps, so check with `checkSelfPermission` each time."
+    },
+    {
+      "id": "d60q13",
+      "type": "mcq",
+      "topic": "typealias vs value class",
+      "difficulty": "Medium",
+      "question": "What happens when you compile this file?",
+      "code": "typealias UserId = String\n@JvmInline value class OrderId(val raw: String)\n\nfun load(id: String) = \"string\"\nfun load(id: UserId) = \"user\"\nfun load(id: OrderId) = \"order\"",
+      "options": [
+        "It fails with conflicting overloads for the `String` and `UserId` versions. The `OrderId` overload is fine",
+        "It compiles, and Kotlin picks the overload based on the alias name",
+        "It fails for all three, because `OrderId` is also just a `String` at runtime",
+        "It fails only for the `OrderId` overload, because value classes can't be parameters of overloaded functions"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A `typealias` is just another name for the same type, so `load(UserId)` is the same signature as `load(String)`. A value class is a distinct type at compile time, and its JVM name is mangled so it doesn't clash with `String`, even though it's unboxed at runtime.",
+      "compiles": false
+    },
+    {
+      "id": "d60q14",
+      "type": "truefalse",
+      "topic": "hiltViewModel scoping",
+      "difficulty": "Medium",
+      "question": "Two different Navigation destinations each call `hiltViewModel<DetailViewModel>()` with no arguments. While both are on the back stack, they share the same `DetailViewModel` instance.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "Inside a `NavHost`, each back stack entry is its own `ViewModelStoreOwner`, so each destination gets its own instance, cleared when that entry is popped. To share one, pass a common owner such as the parent graph's back stack entry."
+    },
+    {
+      "id": "d60q15",
+      "type": "output",
+      "topic": "mutable hash keys",
+      "difficulty": "Hard",
+      "question": "What does this print?",
+      "code": "data class Key(var id: Int)\n\nfun main() {\n    val k = Key(1)\n    val map = hashMapOf(k to \"cached\")\n    k.id = 2\n    println(\"${map[k]} ${map[Key(1)]} ${map.size}\")\n}",
+      "options": [
+        "null null 1",
+        "cached null 1",
+        "null cached 1",
+        "cached cached 1"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "The entry was stored in the bucket for `hashCode()` 1. After the mutation, `map[k]` searches the bucket for hash 2 and finds nothing. `map[Key(1)]` finds the right bucket, but `equals` fails because the stored key now has id 2. The entry is still there (size 1) but can't be reached, which is why hash keys should be immutable."
+    },
+    {
+      "id": "d60q16",
+      "type": "mcq",
+      "topic": "renaming an api field",
+      "difficulty": "Hard",
+      "question": "You need to rename a JSON field from `user_name` to `username`. Old app versions stay installed for months and can't be force-upgraded. What's the safest rollout?",
+      "options": [
+        "Send both fields, ship clients reading `username` (fallback `user_name`), and drop `user_name` once old traffic is negligible",
+        "Rename the field on the server and release the app update the same day, so both change together",
+        "Raise the minimum supported version right away so every user has to update before the rename",
+        "Create a `/v2` copy of the whole API for this one field"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "This is the expand-and-contract pattern: add the new field, migrate the clients, and remove the old field once nobody reads it. Renaming in place breaks every installed old version, a forced update is a heavy hammer for a cosmetic change, and a whole new API version adds lasting maintenance cost for one field."
+    },
+    {
+      "id": "d60q17",
+      "type": "multi",
+      "topic": "main-safety",
+      "difficulty": "Hard",
+      "question": "Which of these are safe to call directly inside `viewModelScope.launch { }` (which runs on `Dispatchers.Main`) without wrapping them in `withContext`? Select all that apply.",
+      "options": [
+        "A Retrofit `suspend fun getUser(): User`",
+        "A Room DAO `suspend fun insert(user: User)`",
+        "`dataStore.data.first()`",
+        "A non-suspend Room DAO `fun getAll(): List<User>`",
+        "`File(cacheDir, \"feed.json\").readText()` on a 2 MB file",
+        "`Json.decodeFromString<Feed>(hugeString)` on a 5 MB payload"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "Retrofit, Room and DataStore suspend APIs are main-safe because they move their own work off the main thread. A blocking Room DAO called on the main thread throws `IllegalStateException`, file I/O blocks it, and decoding a large payload is CPU work, so those need `withContext(Dispatchers.IO)` or `Dispatchers.Default`."
+    },
+    {
+      "id": "d60q18",
+      "type": "mcq",
+      "topic": "lazy item state",
+      "difficulty": "Hard",
+      "question": "In a keyed `LazyColumn`, each row holds `var a by remember { mutableStateOf(false) }` and `var b by rememberSaveable { mutableStateOf(false) }`. The user sets both to `true` on row 3, scrolls far down so the row is disposed, then scrolls back. What does row 3 show?",
+      "options": [
+        "`a` is `false` again and `b` is still `true`",
+        "Both are still `true`, because `LazyColumn` caches every row it has composed",
+        "Both are `false`, because `rememberSaveable` only survives configuration changes",
+        "`a` is `true` and `b` is `false`, because the saved state is restored only after rotation"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A row that scrolls out of the viewport leaves the composition, so its `remember` state is lost. Lazy layouts save each item's `rememberSaveable` state under the item key and restore it when the item comes back. State that really matters, like a selection, should be hoisted into the ViewModel anyway."
+    },
+    {
+      "id": "d60q19",
+      "type": "output",
+      "topic": "sibling failure",
+      "difficulty": "Hard",
+      "question": "What does this print?",
+      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking {\n    val result = runCatching {\n        coroutineScope {\n            val a = async { delay(50); error(\"boom\") }\n            val b = async { delay(100); \"b\" }\n            launch {\n                try { awaitCancellation() } finally { println(\"c cancelled\") }\n            }\n            b.await() + a.await()\n        }\n    }\n    println(result.exceptionOrNull()?.message)\n}",
+      "options": [
+        "c cancelled\nboom",
+        "boom",
+        "c cancelled\nnull",
+        "b\nboom"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "When `a` fails at 50 ms, `coroutineScope` cancels all of its children, so `b` never finishes and the `launch` runs its `finally`. The scope then rethrows the original `IllegalStateException(\"boom\")`, not a `CancellationException`, even though the body was suspended in `b.await()` at the time."
+    },
+    {
+      "id": "d60q20",
+      "type": "output",
+      "topic": "the finale",
+      "difficulty": "Hard",
+      "question": "The last one: a running total of the study plan, one value per track. What does this print?",
+      "code": "import kotlinx.coroutines.*\nimport kotlinx.coroutines.flow.*\n\nfun main() = runBlocking {\n    // Kotlin, Coroutines, Android, Design, Finale\n    val days = flowOf(21, 11, 17, 7, 4)\n        .onStart { print(\"go \") }\n        .scan(0) { done, n -> done + n }\n        .filter { it > 0 }\n    val msg = days.map { \"$it\" }.reduce { a, b -> \"$a,$b\" }\n    println(if (days.last() == 60) \"$msg: done!\" else msg)\n}",
+      "options": [
+        "go go 21,32,49,56,60: done!",
+        "go 21,32,49,56,60: done!",
+        "go go 0,21,32,49,56,60: done!",
+        "go 21,11,17,7,4: done!"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`scan` emits its seed 0 and then each running total, and `filter` drops the 0. `days` is a cold flow, so `reduce` and `last` each collect it from scratch and `onStart` runs twice, which is why \"go\" prints twice. Congratulations, that's all 60 days!"
+    }
+  ]
+}

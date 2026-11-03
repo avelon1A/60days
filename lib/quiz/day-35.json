@@ -1,0 +1,353 @@
+{
+  "day": 35,
+  "topic": "Intents, services, broadcast receivers & WorkManager",
+  "questions": [
+    {
+      "id": "d35q01",
+      "type": "mcq",
+      "topic": "implicit intent",
+      "difficulty": "Easy",
+      "question": "A screen shares a link with this code. What kind of intent is `send`?",
+      "code": "val send = Intent(Intent.ACTION_SEND).apply {\n    type = \"text/plain\"\n    putExtra(Intent.EXTRA_TEXT, link)\n}\nstartActivity(Intent.createChooser(send, null))",
+      "options": [
+        "An implicit intent, resolved by matching its action and MIME type against intent filters",
+        "An explicit intent, because it carries an `EXTRA_TEXT` extra with the exact data to share",
+        "An explicit intent, because `createChooser` picks the exact target component",
+        "A `PendingIntent`, because another app will execute it"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "An intent is explicit only when it names a target component (e.g. `Intent(context, DetailActivity::class.java)`). `send` names only `ACTION_SEND` and a type, so it is implicit and resolved against intent filters. Extras and the chooser wrapper don't change that."
+    },
+    {
+      "id": "d35q02",
+      "type": "truefalse",
+      "topic": "intentservice",
+      "difficulty": "Easy",
+      "question": "`IntentService` is still the recommended way for a modern app to run a one-off background task off the main thread.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "`IntentService` was deprecated in API 30. Since Android 8 background execution limits it can't be reliably started from the background anyway. Use WorkManager for deferrable work, or a coroutine for work tied to a screen."
+    },
+    {
+      "id": "d35q03",
+      "type": "multi",
+      "topic": "package visibility",
+      "difficulty": "Medium",
+      "question": "On an app targeting Android 11+, `intent.resolveActivity(packageManager)` returns `null` for a `geo:` map intent even though Google Maps is installed, so the \"Open in Maps\" button is hidden. Which changes make the feature work correctly?",
+      "options": [
+        "Declare a `<queries>` element in the manifest with an `<intent>` matching the `geo:` VIEW intent",
+        "Skip the check: call `startActivity(intent)` directly and catch `ActivityNotFoundException`",
+        "Add `FLAG_ACTIVITY_NEW_TASK` to the intent before calling `resolveActivity`",
+        "Request the runtime permission for package visibility before resolving",
+        "Make the intent explicit by setting the Maps activity class name you expect"
+      ],
+      "answer": [
+        0,
+        1
+      ],
+      "explanation": "Android 11 package visibility hides other apps from `PackageManager` queries unless you declare them in `<queries>`, so `resolveActivity` returns `null`. Launching the implicit intent still works without `<queries>`, so try/catch is also valid. There is no runtime permission for this, and hard-coding another app's class name is brittle."
+    },
+    {
+      "id": "d35q04",
+      "type": "output",
+      "topic": "backoff",
+      "difficulty": "Medium",
+      "question": "This models WorkManager's exponential backoff (30 s initial delay, doubling each attempt, capped at 5 hours). What does it print?",
+      "code": "const val MAX_BACKOFF = 5 * 60 * 60L\n\nfun backoffSeconds(attempt: Int, initial: Long = 30): Long =\n    minOf(initial shl (attempt - 1), MAX_BACKOFF)\n\nfun main() {\n    println((1..4).map { backoffSeconds(it) })\n    println(backoffSeconds(11))\n}",
+      "options": [
+        "[30, 60, 120, 240]\n18000",
+        "[30, 60, 90, 120]\n330",
+        "[30, 60, 120, 240]\n30720",
+        "[60, 120, 240, 480]\n18000"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Attempt `n` waits `30 shl (n - 1)`, so attempts 1..4 give 30, 60, 120, 240 (doubling, not linear). Attempt 11 would be 30 * 1024 = 30720 s, but `minOf` caps it at 18000 s (5 h), like WorkManager's maximum backoff."
+    },
+    {
+      "id": "d35q05",
+      "type": "mcq",
+      "topic": "activity result api",
+      "difficulty": "Easy",
+      "question": "Which is the current way for an Activity or Fragment to let the user pick a photo and receive the result?",
+      "options": [
+        "Register `registerForActivityResult(PickVisualMedia())` and call `launch(...)` on the launcher",
+        "Call `startActivityForResult(intent, REQUEST_CODE)` and override `onActivityResult`",
+        "Send a broadcast with `ACTION_PICK` and listen for the reply in a receiver",
+        "Create a `PendingIntent` for the gallery and read the result from `Intent` extras in `onResume`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "The Activity Result API (`registerForActivityResult` with a typed contract) replaced `startActivityForResult`/`onActivityResult`, which are deprecated. It gives you a typed callback without request codes. In Compose the equivalent is `rememberLauncherForActivityResult`."
+    },
+    {
+      "id": "d35q06",
+      "type": "multi",
+      "topic": "pendingintent",
+      "difficulty": "Medium",
+      "question": "Which statements about `PendingIntent` are correct?",
+      "options": [
+        "When targeting Android 12+, creating one without `FLAG_IMMUTABLE` or `FLAG_MUTABLE` throws `IllegalArgumentException`",
+        "`FLAG_MUTABLE` is needed when the receiving side must fill in data, such as a notification's inline reply",
+        "When it's sent, the wrapped intent runs with the creating app's identity and permissions, even if that app's process has died",
+        "`FLAG_IMMUTABLE` still lets the holder replace the target component, just not the extras",
+        "`FLAG_UPDATE_CURRENT` alone satisfies the Android 12 mutability requirement"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "Since Android 12 you must state the mutability explicitly, and `FLAG_IMMUTABLE` should be the default. Use `FLAG_MUTABLE` only when the other side must fill in the intent, e.g. `RemoteInput` replies. An immutable PendingIntent can't be changed at all. `FLAG_UPDATE_CURRENT` controls updating extras, not mutability."
+    },
+    {
+      "id": "d35q07",
+      "type": "mcq",
+      "topic": "periodic work",
+      "difficulty": "Easy",
+      "question": "What happens with this request?",
+      "code": "val request = PeriodicWorkRequestBuilder<SyncWorker>(5, TimeUnit.MINUTES)\n    .build()\nWorkManager.getInstance(context).enqueue(request)",
+      "options": [
+        "It is clamped to the 15-minute minimum and runs roughly every 15 minutes",
+        "It runs every 5 minutes exactly as requested",
+        "`build()` throws `IllegalArgumentException` because the interval is too short",
+        "It runs once and is never repeated"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`PeriodicWorkRequest` has a minimum repeat interval of 15 minutes. A shorter interval doesn't throw: WorkManager logs a warning and uses 15 minutes. For anything more frequent while the user is looking at the screen, use a coroutine loop."
+    },
+    {
+      "id": "d35q08",
+      "type": "truefalse",
+      "topic": "exported",
+      "difficulty": "Easy",
+      "question": "On an app targeting Android 12+, an `<activity>` that has an `<intent-filter>` but no explicit `android:exported` attribute makes the app fail to build or install.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Since Android 12, any activity, service or receiver with an intent filter must declare `android:exported` explicitly. Otherwise the build fails (manifest merger error) and the APK can't be installed. Before that, the system silently assumed `true`, which caused accidental exposure."
+    },
+    {
+      "id": "d35q09",
+      "type": "mcq",
+      "topic": "launch flags",
+      "difficulty": "Medium",
+      "question": "The back stack is A → B → C (all `standard` launch mode). From C you call `startActivity` for A with `FLAG_ACTIVITY_CLEAR_TOP or FLAG_ACTIVITY_SINGLE_TOP`. What happens?",
+      "options": [
+        "B and C finish, and the existing A gets `onNewIntent()`",
+        "B and C are finished, and A is destroyed and recreated with the new intent",
+        "A new instance of A is pushed on top: A → B → C → A",
+        "Only C is finished, giving A → B → A"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`CLEAR_TOP` finishes everything above the existing A. Adding `SINGLE_TOP` makes A, now on top, reuse its instance and get `onNewIntent()`. With `CLEAR_TOP` alone and `standard` launch mode, A itself would also be finished and recreated."
+    },
+    {
+      "id": "d35q10",
+      "type": "truefalse",
+      "topic": "bound service",
+      "difficulty": "Medium",
+      "question": "A service started with `startService()` and later bound by an Activity is destroyed as soon as that Activity calls `unbindService()`.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "A service that is both started and bound stays alive until it is stopped (`stopSelf()`/`stopService()`) AND all clients have unbound. Only a service that is purely bound (created by `bindService`) is destroyed when its last client unbinds."
+    },
+    {
+      "id": "d35q11",
+      "type": "multi",
+      "topic": "implicit broadcasts",
+      "difficulty": "Medium",
+      "question": "An app targeting Android 8+ declares a `<receiver>` in its manifest. Which broadcasts can still reach it when the app isn't running?",
+      "options": [
+        "`ACTION_BOOT_COMPLETED`",
+        "`ACTION_LOCALE_CHANGED`",
+        "An explicit broadcast sent to that receiver's component (or with `setPackage`)",
+        "`ACTION_POWER_CONNECTED`",
+        "`ConnectivityManager.CONNECTIVITY_ACTION`"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "Since Android 8, manifest-declared receivers can't get most implicit broadcasts. A short exemption list includes boot completed and locale changed, and explicit broadcasts are unaffected. Power connected isn't exempt. Connectivity changes need a context-registered receiver or a `NetworkCallback`, or WorkManager constraints."
+    },
+    {
+      "id": "d35q12",
+      "type": "mcq",
+      "topic": "receiver export flags",
+      "difficulty": "Medium",
+      "question": "An app targeting Android 14 registers a receiver at runtime for its own custom action `com.example.SYNC_DONE`, which only the app itself sends. How should it register?",
+      "options": [
+        "`ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)`",
+        "`ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_EXPORTED)`, so the system can deliver it",
+        "`context.registerReceiver(receiver, filter)` with no flag, since flags only apply to manifest receivers",
+        "Use `LocalBroadcastManager`, the recommended in-app event bus"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "From Android 14, a context-registered receiver for non-system broadcasts must pass `RECEIVER_EXPORTED` or `RECEIVER_NOT_EXPORTED`. Without one, registration throws `SecurityException`. For in-app-only events choose `NOT_EXPORTED` so other apps can't send it. `LocalBroadcastManager` is deprecated, and a `Flow` is the usual replacement."
+    },
+    {
+      "id": "d35q13",
+      "type": "output",
+      "topic": "unique work",
+      "difficulty": "Medium",
+      "question": "This toy model mimics `enqueueUniqueWork` with `ExistingWorkPolicy`. What does it print?",
+      "code": "enum class Policy { KEEP, REPLACE, APPEND }\n\nval queue = mutableMapOf<String, MutableList<String>>()\n\nfun enqueueUnique(name: String, policy: Policy, work: String) {\n    val existing = queue[name]\n    when {\n        existing == null -> queue[name] = mutableListOf(work)\n        policy == Policy.KEEP -> {}\n        policy == Policy.REPLACE -> queue[name] = mutableListOf(work)\n        policy == Policy.APPEND -> existing += work\n    }\n}\n\nfun main() {\n    listOf(Policy.KEEP to \"a\", Policy.KEEP to \"b\", Policy.APPEND to \"c\",\n        Policy.REPLACE to \"d\", Policy.APPEND to \"e\")\n        .forEach { (p, w) -> enqueueUnique(\"sync\", p, w) }\n    println(queue)\n}",
+      "options": [
+        "{sync=[d, e]}",
+        "{sync=[a, c, d, e]}",
+        "{sync=[b, c, d, e]}",
+        "{sync=[e]}"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`KEEP` ignores \"b\" because \"sync\" already exists, `APPEND` adds \"c\", `REPLACE` throws away the existing chain and leaves only \"d\", and the final `APPEND` adds \"e\". Real WorkManager behaves the same way for those three policies."
+    },
+    {
+      "id": "d35q14",
+      "type": "mcq",
+      "topic": "foreground service type",
+      "difficulty": "Hard",
+      "question": "An app targeting Android 14 runs a location-tracking foreground service. It has a notification and calls `startForeground()` on time, but the call crashes. What is missing?",
+      "options": [
+        "A `foregroundServiceType=\"location\"` on the `<service>` plus `FOREGROUND_SERVICE_LOCATION`",
+        "A call to `startForeground()` from `onBind()` instead of `onStartCommand()`",
+        "`FLAG_IMMUTABLE` on the notification's content `PendingIntent`",
+        "`START_STICKY` returned from `onStartCommand()`, which Android 14 requires for location"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "From Android 14, every foreground service must declare a `foregroundServiceType` and hold the matching `FOREGROUND_SERVICE_<TYPE>` permission. Without the type, `startForeground()` throws `MissingForegroundServiceTypeException`. `START_STICKY` only affects restarts after the process is killed."
+    },
+    {
+      "id": "d35q15",
+      "type": "mcq",
+      "topic": "background fgs start",
+      "difficulty": "Hard",
+      "question": "An app targeting Android 12+ receives a normal-priority FCM data message while in the background and calls `startForegroundService()` to upload a file. What happens, and what is the recommended fix?",
+      "options": [
+        "It throws `ForegroundServiceStartNotAllowedException`. Enqueue expedited WorkManager work instead",
+        "It works because `startForeground()` is called within a few seconds of starting",
+        "The service starts, but the system hides its notification until the app returns to the foreground",
+        "The system queues the start and runs the service the next time the user opens the app"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Since Android 12, apps generally can't start foreground services from the background. Only listed exemptions are allowed, such as handling a high-priority FCM message. The documented replacement for short, urgent work is `setExpedited(...)` on a `OneTimeWorkRequest`. Calling `startForeground()` quickly doesn't help, because the start itself is refused."
+    },
+    {
+      "id": "d35q16",
+      "type": "mcq",
+      "topic": "chaining",
+      "difficulty": "Medium",
+      "question": "What happens to `process` and `upload` if `DownloadWorker` returns `Result.failure()`?",
+      "code": "WorkManager.getInstance(context)\n    .beginWith(download)\n    .then(process)\n    .then(upload)\n    .enqueue()",
+      "options": [
+        "They are never run and are marked `FAILED` too",
+        "They run anyway, with empty input `Data`",
+        "They stay `ENQUEUED` until `download` is retried manually",
+        "WorkManager retries `download` with backoff, then continues the chain"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "In a chain, a failed or cancelled work request makes all of its dependents fail or cancel as well. Backoff and retry happen only when the worker returns `Result.retry()`, not `failure()`. On success, each worker's output `Data` becomes the next one's input."
+    },
+    {
+      "id": "d35q17",
+      "type": "multi",
+      "topic": "choosing an api",
+      "difficulty": "Easy",
+      "question": "Which tasks are a good fit for WorkManager?",
+      "options": [
+        "Uploading crash logs only when the device is on an unmetered network",
+        "A nightly backup of the local Room database that must happen even if the app is never opened",
+        "Playing a podcast while the screen is off and the user controls it from the notification",
+        "Loading the list of products for the screen the user is currently looking at"
+      ],
+      "answer": [
+        0,
+        1
+      ],
+      "explanation": "WorkManager is for deferrable work that must be guaranteed to run, with constraints like network type, and it survives app exit and reboot. User-visible ongoing work such as playback belongs in a foreground service (`mediaPlayback` type). Data for the visible screen should be loaded with a coroutine in `viewModelScope`."
+    },
+    {
+      "id": "d35q18",
+      "type": "mcq",
+      "topic": "register timing",
+      "difficulty": "Hard",
+      "question": "What happens when the user taps the button?",
+      "code": "override fun onCreate(savedInstanceState: Bundle?) {\n    super.onCreate(savedInstanceState)\n    setContentView(R.layout.activity_main)\n    pickButton.setOnClickListener {\n        registerForActivityResult(GetContent()) { uri ->\n            show(uri)\n        }.launch(\"image/*\")\n    }\n}",
+      "options": [
+        "It throws `IllegalStateException`: launchers must be registered before `STARTED`",
+        "The picker opens and the result is delivered to the lambda normally",
+        "The picker opens, but the result is lost if the Activity is recreated by rotation",
+        "It compiles but is a no-op, because the launcher is never stored in a property"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`registerForActivityResult` must be called unconditionally during initialization (a property initializer or `onCreate`). Registering in `RESUMED` throws, saying LifecycleOwners must register before they are `STARTED`. Early registration is what lets the result come back to the right callback after recreation or process death."
+    },
+    {
+      "id": "d35q19",
+      "type": "mcq",
+      "topic": "coroutineworker",
+      "difficulty": "Easy",
+      "question": "Which statement about `CoroutineWorker` is correct?",
+      "options": [
+        "`doWork()` is a `suspend` function on `Dispatchers.Default`, cancelled when the work is stopped",
+        "`doWork()` runs on the main thread, so you must wrap everything in `withContext(Dispatchers.IO)` to avoid an ANR",
+        "`doWork()` must return a `Result` without suspending, so you need `runBlocking` to call suspend functions",
+        "It keeps running to completion even if its constraints stop being met"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`CoroutineWorker` lets you call suspend functions (Room, Retrofit) directly in `doWork()`. It defaults to `Dispatchers.Default`, not the main thread. When constraints are no longer met or the work is cancelled, WorkManager cancels the coroutine, and it will be retried later if needed."
+    },
+    {
+      "id": "d35q20",
+      "type": "truefalse",
+      "topic": "force stop",
+      "difficulty": "Hard",
+      "question": "WorkManager work survives a reboot and process death, so pending periodic work also keeps running on schedule after the user force-stops the app from Settings.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "Work is persisted and rescheduled after reboot or process death. Force stop is different: the OS cancels the app's jobs and alarms, and no work runs until the user launches the app again, at which point WorkManager reschedules it."
+    }
+  ]
+}

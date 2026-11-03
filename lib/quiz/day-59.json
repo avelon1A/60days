@@ -1,0 +1,291 @@
+{
+  "day": 59,
+  "topic": "Final boss: mobile system design",
+  "questions": [
+    {
+      "id": "d59q01",
+      "type": "mcq",
+      "topic": "offline reading",
+      "difficulty": "Easy",
+      "question": "News app: users want this morning's top stories to be readable on the subway with no signal. Which design fits best?",
+      "options": [
+        "Fetch each article from the network when it's opened, and show a friendly offline screen with a Retry button when there's no signal",
+        "Turn on OkHttp's disk cache with a long `max-age`, so articles the user opened earlier can be served offline",
+        "Prefetch top stories and resized images into Room with an unmetered-network WorkManager job, and always render from it",
+        "Keep a hidden WebView loading the front page in the background so its cache stays warm"
+      ],
+      "answer": [2],
+      "explanation": "Prefetching into an app-owned store trades some data and storage for articles that are there before the user needs them, and the reader works the same online or offline. An HTTP cache only holds what was already requested and can be evicted at any time, so it can't promise offline reading."
+    },
+    {
+      "id": "d59q02",
+      "type": "truefalse",
+      "topic": "live tracking transport",
+      "difficulty": "Easy",
+      "question": "Food-delivery tracking screen: it's sound to keep a live connection (WebSocket or SSE) open only while the tracking screen is visible, and rely on push notifications for milestones such as \"Out for delivery\" once the app is in the background.",
+      "options": ["True", "False"],
+      "answer": [0],
+      "explanation": "A live channel gives second-by-second courier updates when someone is actually watching. In the background, Doze and app standby break long-lived sockets and they cost battery, so push for the few milestones that matter trades update frequency for reliability and battery life."
+    },
+    {
+      "id": "d59q03",
+      "type": "mcq",
+      "topic": "offline cart",
+      "difficulty": "Easy",
+      "question": "E-commerce app: the user taps Add to cart on a product page while offline. What should happen?",
+      "options": [
+        "Show an error and ask the user to try again online, since price and stock can't be checked offline",
+        "Save it to the local cart table as pending right away and sync later; the server re-checks price and stock",
+        "Hold the item in the ViewModel and send it as soon as the network comes back, so nothing stale is stored",
+        "Queue a WorkManager job, but leave the item out of the cart screen until the server confirms it"
+      ],
+      "answer": [1],
+      "explanation": "Writing locally first makes the tap instant and survives process death, at the cost of showing a price that may be stale until the server re-validates it. A ViewModel field is lost when the process dies, and hiding the item until the server confirms makes the cart feel broken offline."
+    },
+    {
+      "id": "d59q04",
+      "type": "mcq",
+      "topic": "stories prefetch",
+      "difficulty": "Easy",
+      "question": "Stories viewer: users tap through stories that last about 5 seconds each. Which prefetching strategy fits best?",
+      "options": [
+        "Download every story from every followed account on app start, so each tap is instant",
+        "Don't prefetch; start downloading a story when the user taps it",
+        "Prefetch the next one or two stories (and the next account's first story) while the current one plays",
+        "Start fetching the next story only once the current one has finished, so no data is spent on skipped stories"
+      ],
+      "answer": [2],
+      "explanation": "A small lookahead hides network latency for the content the user is most likely to see next, while keeping wasted data low. Downloading everything burns data and battery on stories that are never watched, and fetching on tap or after playback shows a spinner between stories."
+    },
+    {
+      "id": "d59q05",
+      "type": "multi",
+      "topic": "durable analytics",
+      "difficulty": "Medium",
+      "question": "Analytics SDK case study: events must survive airplane mode and the app being killed at any moment. Which choices are sound? Select all that apply.",
+      "options": [
+        "Append each event to a local store (Room or a file) as soon as it's logged",
+        "Upload events in batches from a WorkManager job with a network constraint",
+        "Give each event a client-generated unique ID so the server can drop duplicates when a batch is retried",
+        "Buffer events in memory and flush them in `Activity.onDestroy()`",
+        "Send every event in its own HTTP request right away, so nothing ever needs to be queued"
+      ],
+      "answer": [0, 1, 2],
+      "explanation": "Persisting first, uploading in batches when there's a network, and deduplicating by event ID gives at-least-once delivery with an effectively-once result, at the cost of some delay. `onDestroy()` isn't called when the process is killed, and one request per event wakes the radio constantly and still loses events when offline."
+    },
+    {
+      "id": "d59q06",
+      "type": "mcq",
+      "topic": "where sync lives",
+      "difficulty": "Medium",
+      "question": "Notes app with sync: the list and editor screens both observe Room, and a background worker pulls changes from the server. Where should the logic that merges a server change with an unsynced local edit live?",
+      "options": [
+        "In the editor's ViewModel, because that's where the user edits the note",
+        "In the data layer (the repository or sync engine that writes to Room)",
+        "In the composable, comparing both versions just before drawing them",
+        "Nowhere on the client: the client should overwrite its local copy with whatever the server sends"
+      ],
+      "answer": [1],
+      "explanation": "Merging where data enters the single source of truth means the background worker, the list and the editor all see one merged result, even when no screen is open. In a ViewModel it only runs while that screen is alive, and blindly taking the server copy throws away the user's unsynced edits."
+    },
+    {
+      "id": "d59q07",
+      "type": "truefalse",
+      "topic": "seen receipts",
+      "difficulty": "Medium",
+      "question": "Stories viewer: \"seen\" receipts can be marked locally right away and uploaded in batches, because a receipt that arrives late, or occasionally twice, costs little and setting seen = true is idempotent on the server.",
+      "options": ["True", "False"],
+      "answer": [0],
+      "explanation": "For low-value, idempotent signals, batching saves radio wake-ups and battery in exchange for the author seeing view counts a little later. A payment is different: it can't tolerate the same casual at-least-once handling without idempotency keys and status checks."
+    },
+    {
+      "id": "d59q08",
+      "type": "mcq",
+      "topic": "payment process death",
+      "difficulty": "Medium",
+      "question": "Payments retry flow: the user taps Pay, the app sends `POST /payments`, and the process is killed before the response arrives. The user reopens the app. Which design handles this correctly?",
+      "options": [
+        "Keep the idempotency key in a ViewModel field, and on relaunch generate a fresh key and resend so the payment goes through",
+        "Treat any payment without a recorded response as failed, and show the Pay button again as if nothing had happened",
+        "Persist the key in a pending payment row before sending, and query its status with that key before any retry",
+        "Treat it as a success because the request left the device, and show the order confirmation screen"
+      ],
+      "answer": [2],
+      "explanation": "The outcome is unknown, so the client must keep the same idempotency key across process death and ask the server what happened before charging again. That costs an extra database write before each payment. A fresh key or a blind retry can double-charge, and assuming success hides a payment that may have failed."
+    },
+    {
+      "id": "d59q09",
+      "type": "multi",
+      "topic": "order tracking screen",
+      "difficulty": "Medium",
+      "question": "Food-delivery order tracking screen: which choices are sound? Select all that apply.",
+      "options": [
+        "When the screen opens or the app returns to the foreground, fetch the current order snapshot before applying live updates",
+        "Animate the courier marker between position updates instead of letting it jump",
+        "Show an ongoing notification for the active order so its status is visible without opening the app",
+        "Run a foreground service on the customer's phone to hold the socket open for the whole order",
+        "Advance the status on the client from timers, e.g. assume \"Picked up\" 15 minutes after \"Preparing\""
+      ],
+      "answer": [0, 1, 2],
+      "explanation": "A snapshot on resume covers the events missed while away, interpolation smooths sparse updates, and an ongoing notification keeps status glanceable without a live socket. A foreground service on the customer's phone spends battery and a user-visible service for a low-value job, and timer-driven status shows things that never happened."
+    },
+    {
+      "id": "d59q10",
+      "type": "mcq",
+      "topic": "media cache budget",
+      "difficulty": "Medium",
+      "question": "Stories/reels viewer: video segments are cached on disk so prefetched and rewatched items play instantly. How should that cache be managed?",
+      "options": [
+        "A size-capped LRU cache in `cacheDir` that also evicts stories after their 24-hour expiry",
+        "An unbounded cache in `filesDir`, so no video is ever downloaded twice",
+        "Memory only, so the app never writes anything to the user's storage",
+        "Store each video in the Room database as a BLOB column next to its metadata, for atomic cleanup"
+      ],
+      "answer": [0],
+      "explanation": "A capped LRU cache trades a few re-downloads for predictable storage use, and `cacheDir` lets the OS reclaim space under pressure, while TTL eviction drops content that can't be viewed anymore. An unbounded `filesDir` cache can grow to gigabytes, memory-only loses everything on process death, and large BLOBs in SQLite are slow and bloat the database."
+    },
+    {
+      "id": "d59q11",
+      "type": "truefalse",
+      "topic": "queue cap",
+      "difficulty": "Medium",
+      "question": "Analytics SDK: when the on-device event queue hits its size cap during a long offline period, dropping events (low-priority ones first) is an acceptable trade-off, compared with letting the queue grow without limit.",
+      "options": ["True", "False"],
+      "answer": [0],
+      "explanation": "Analytics is best-effort, so losing some events is a smaller harm than eating the user's storage or sending a huge upload when the network returns. Prioritising means events such as purchases are kept while noisy ones like scroll impressions go first, and the SDK can record how many it dropped."
+    },
+    {
+      "id": "d59q12",
+      "type": "mcq",
+      "topic": "cart merge",
+      "difficulty": "Medium",
+      "question": "E-commerce cart on phone and web: while offline, the user adds a charger on the phone. Meanwhile, on the web, they remove a phone case. When the phone syncs, how should its change be sent so neither edit is lost?",
+      "options": [
+        "Upload the phone's whole cart as a snapshot, and let the newest snapshot win",
+        "Download the server cart and replace the local one, discarding the offline add",
+        "Send per-item operations (add, remove, set quantity) for the server to apply to its current cart",
+        "Compare the two carts' device timestamps and keep whichever is newer, since it reflects the latest intent"
+      ],
+      "answer": [2],
+      "explanation": "Operations on individual line items merge cleanly: the add and the remove touch different SKUs, so both survive. That costs a bit more server logic and needs each operation to be idempotent. Snapshot or timestamp last-write-wins brings the removed case back or drops the charger."
+    },
+    {
+      "id": "d59q13",
+      "type": "mcq",
+      "topic": "event ordering",
+      "difficulty": "Medium",
+      "question": "Analytics SDK: one install's events are uploaded in several batches, sometimes after the app was killed or the phone rebooted, and the wall clock can jump. How can the server reliably rebuild the order of that install's events?",
+      "options": [
+        "Sort them by the time the server received each batch",
+        "Sort them by each event's `System.currentTimeMillis()` timestamp",
+        "Stamp them with `SystemClock.elapsedRealtime()`, which is monotonic and unaffected by clock changes",
+        "Give each event a persisted per-install sequence number, incremented on every log"
+      ],
+      "answer": [3],
+      "explanation": "A persisted counter gives a total order that's independent of clocks and of retry or arrival order. You still keep wall-clock time for display. Receive time changes with retries, the wall clock can be changed by the user or by network time, and `elapsedRealtime()` resets to zero on reboot, so it can't be compared across boots."
+    },
+    {
+      "id": "d59q14",
+      "type": "multi",
+      "topic": "metered prefetch",
+      "difficulty": "Hard",
+      "question": "Reels viewer on a metered mobile network: product wants near-instant playback without burning through the user's data plan. Which choices are sound? Select all that apply.",
+      "options": [
+        "Stream with adaptive bitrate (HLS or DASH) so quality follows the measured bandwidth",
+        "Prefetch only the first few seconds of the next couple of reels, not whole files",
+        "Prefetch less when `ConnectivityManager.isActiveNetworkMetered()` is true or Data Saver is on",
+        "Prefetch the next 10 reels in full at the highest resolution so swiping never stalls",
+        "Download each reel completely before starting playback, so it never rebuffers"
+      ],
+      "answer": [0, 1, 2],
+      "explanation": "Instant start only needs the opening segment of the likely-next reels, and adaptive bitrate plus a smaller lookahead on metered networks trades a little quality and the occasional stall for much lower data use. Full high-resolution prefetch wastes data on reels the user swipes past, and downloading before playing makes every start slow."
+    },
+    {
+      "id": "d59q15",
+      "type": "mcq",
+      "topic": "push thundering herd",
+      "difficulty": "Hard",
+      "question": "News app: a breaking-news push goes out to 30 million devices at once. Each app immediately fetches the full article from the API when the data message arrives, and the origin servers fall over. What is the best fix?",
+      "options": [
+        "Have every client retry the article fetch with exponential backoff and jitter, so failures spread out over time",
+        "Send the push as high priority so it reaches devices sooner and spreads out less",
+        "Put the headline and article ID in the notification, fetch only on tap, and serve it from a CDN-cacheable URL",
+        "Replace push with a WebSocket from every device to the news backend for breaking stories"
+      ],
+      "answer": [2],
+      "explanation": "Lazy fetching cuts the load down to the users who actually tap, and a CDN absorbs that load because everyone requests the same cacheable resource. The cost is a short load after the tap and a few seconds of possible staleness. Backoff only spreads out failing requests, high priority makes the spike sharper, and 30 million sockets is a far bigger problem."
+    },
+    {
+      "id": "d59q16",
+      "type": "truefalse",
+      "topic": "offline checkout",
+      "difficulty": "Hard",
+      "question": "Offline-first shopping app: because each order carries an idempotency key, the user can safely place an order while offline. The app queues it in the outbox, and the order goes through when the network returns.",
+      "options": ["True", "False"],
+      "answer": [1],
+      "explanation": "An idempotency key prevents duplicate charges, but it doesn't make a stale order valid. Placing an order needs the current price, stock and payment authorisation (possibly with a 3-D Secure challenge) at that moment, and hours later any of those may have changed. Cart edits can be queued offline, but checkout should require a live confirmation from the server."
+    },
+    {
+      "id": "d59q17",
+      "type": "mcq",
+      "topic": "out-of-order status",
+      "difficulty": "Hard",
+      "question": "Food-delivery tracking: order updates arrive over both FCM and the WebSocket, sometimes out of order. One phone showed \"Delivered\" and then flipped back to \"Out for delivery\". What is the most robust fix?",
+      "options": [
+        "Have the server stamp each update with an increasing version, and apply only versions above the stored one",
+        "Apply updates in the order they arrive, and ignore FCM whenever the WebSocket is connected, since sockets are ordered",
+        "Order updates by the phone's clock at the moment each one is received",
+        "Debounce updates for 5 seconds and keep only the last one received in that window"
+      ],
+      "answer": [0],
+      "explanation": "A server-assigned version makes applying updates idempotent and immune to the order they arrive in or the channel they came from, at the cost of storing a version per order. Arrival order, receive time and debouncing all still let a late, stale update overwrite a newer one, for example after a socket reconnect."
+    },
+    {
+      "id": "d59q18",
+      "type": "multi",
+      "topic": "push-triggered sync",
+      "difficulty": "Hard",
+      "question": "Notes app syncing a phone and a tablet: the server sends an FCM message when a note changes so other devices update quickly. Which choices are sound? Select all that apply.",
+      "options": [
+        "Make the push a small \"something changed\" tickle that triggers the normal delta sync from the device's sync cursor",
+        "Use a collapse key so a burst of edits leaves at most one pending tickle per device",
+        "Also sync on app open (and periodically), because pushes can be delayed, dropped, or blocked after a force-stop",
+        "Put the full note content in the push payload so the device can skip the sync call",
+        "Drop all other sync triggers once push is in place, to save battery"
+      ],
+      "answer": [0, 1, 2],
+      "explanation": "Push is a latency optimisation layered on top of cursor-based sync, which remains the source of correctness. The trade-off is an extra request after each tickle in exchange for one code path that also repairs any missed pushes. Payloads are capped at about 4 KB and aren't guaranteed to arrive, so content in the push and push-only sync both lose edits."
+    },
+    {
+      "id": "d59q19",
+      "type": "mcq",
+      "topic": "same-field conflict",
+      "difficulty": "Hard",
+      "question": "Notes app where losing text is unacceptable: offline, the user edits the same paragraph on the phone and on the tablet, both starting from version 12. The tablet syncs first and the server moves to version 13. What should happen when the phone syncs?",
+      "options": [
+        "Last write wins: the phone synced later, so its paragraph replaces the tablet's on every device",
+        "Detect the conflict from base version 12, three-way merge, and keep a conflict copy if the same lines changed",
+        "Reject the phone's edit and quietly replace it with the server's version 13, since the tablet synced first",
+        "Lock the note on the server whenever a device opens it for editing, so two devices can never edit it together"
+      ],
+      "answer": [1],
+      "explanation": "The base version shows the edits were concurrent. A three-way merge keeps changes that don't overlap, and a conflict copy keeps both when they do, so the cost is occasionally asking the user to resolve the conflict instead of silently losing text. Last-write-wins and rejecting the edit both throw one edit away, and server locks can't work while devices are offline."
+    },
+    {
+      "id": "d59q20",
+      "type": "multi",
+      "topic": "async payment status",
+      "difficulty": "Hard",
+      "question": "Payments flow: `POST /payments` returns `202` with status `pending`, and the final result comes from the payment provider seconds to minutes later. Which client behaviours are correct? Select all that apply.",
+      "options": [
+        "Show a \"Processing\" state for that payment, not success or failure",
+        "While the screen is visible, poll the status endpoint with backoff (or listen on a live channel), and also handle a push when the payment completes",
+        "Disable Pay for this order while its payment is pending, so a second tap can't start another charge",
+        "Treat the payment as failed after 10 seconds and let the user pay again with a new idempotency key",
+        "Show success immediately, because `202` means the server accepted the payment"
+      ],
+      "answer": [0, 1, 2],
+      "explanation": "Only the server knows the final result, so the client shows an honest pending state and finds out about completion through polling while visible and push otherwise. The trade-off is a slower-feeling flow in exchange for never misreporting money. A timeout with a new key risks a double charge, and `202` only means the request was accepted, not that the payment succeeded."
+    }
+  ]
+}

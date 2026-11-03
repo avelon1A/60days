@@ -1,0 +1,217 @@
+{
+  "day": 5,
+  "topic": "Equality, strings & special types",
+  "questions": [
+    {
+      "id": "d05q01",
+      "type": "output",
+      "topic": "== vs ===",
+      "difficulty": "Easy",
+      "question": "What does this print?",
+      "code": "data class Point(val x: Int, val y: Int)\n\nfun main() {\n    val a = Point(1, 2)\n    val b = Point(1, 2)\n    println(a == b)\n    println(a === b)\n}",
+      "options": ["true\nfalse", "true\ntrue", "false\nfalse", "false\ntrue"],
+      "answer": [0],
+      "explanation": "`==` is structural equality and calls the generated `equals`, which compares `x` and `y`. `===` is referential equality, and `a` and `b` are two separate objects, so it is `false`."
+    },
+    {
+      "id": "d05q02",
+      "type": "mcq",
+      "topic": "null-safe ==",
+      "difficulty": "Easy",
+      "question": "In Kotlin, what does `a == b` compile to when `a` and `b` are nullable references?",
+      "options": ["`a?.equals(b) ?: (b === null)`", "`a.equals(b)`, which throws if `a` is null", "`a === b`", "`a.hashCode() == b.hashCode()`"],
+      "answer": [0],
+      "explanation": "`==` is null-safe: if `a` is non-null it calls `a.equals(b)`, otherwise it is true only when `b` is also null. It never throws a NullPointerException, unlike calling `equals` directly in Java."
+    },
+    {
+      "id": "d05q03",
+      "type": "output",
+      "topic": "string functions",
+      "difficulty": "Easy",
+      "question": "What does this print?",
+      "code": "fun main() {\n    val s = \"  Kotlin  \"\n    println(s.trim().lowercase().replace(\"o\", \"0\").reversed())\n}",
+      "options": ["nilt0k", "niltok", "k0tlin", "niltoK"],
+      "answer": [0],
+      "explanation": "`trim()` removes the spaces, `lowercase()` gives `kotlin`, `replace` gives `k0tlin`, and `reversed()` gives `nilt0k`. Each call returns a new String, so the whole chain applies in order."
+    },
+    {
+      "id": "d05q04",
+      "type": "truefalse",
+      "topic": "string immutability",
+      "difficulty": "Easy",
+      "question": "Given `var name = \"ada\"`, calling `name.uppercase()` on its own line changes `name` to `\"ADA\"`.",
+      "options": ["True", "False"],
+      "answer": [1],
+      "explanation": "Strings are immutable. `uppercase()` returns a new String and leaves `name` unchanged. You must assign the result, e.g. `name = name.uppercase()`."
+    },
+    {
+      "id": "d05q05",
+      "type": "mcq",
+      "topic": "default equals",
+      "difficulty": "Easy",
+      "question": "A Retrofit model is declared as a plain `class`, not a `data class`. Two responses produce objects with identical fields. What does `old == new` return?",
+      "code": "class UserDto(val id: Int, val name: String)\n\nval old = UserDto(1, \"Ada\")\nval new = UserDto(1, \"Ada\")\nval same = old == new",
+      "options": ["`false`, because `Any.equals` compares references", "`true`, because all constructor properties match", "`true`, because `==` compares field by field using reflection", "It does not compile, because `==` needs a data class"],
+      "answer": [0],
+      "explanation": "A regular class inherits `equals` from `Any`, which is identity-based. Only a `data class` (or a manual `equals` override) compares property values."
+    },
+    {
+      "id": "d05q06",
+      "type": "output",
+      "topic": "char arithmetic",
+      "difficulty": "Easy",
+      "question": "What does this print?",
+      "code": "fun main() {\n    println('a' + 1)\n    println('z' - 'a')\n}",
+      "options": ["b\n25", "98\n25", "a1\n25", "b\nz"],
+      "answer": [0],
+      "explanation": "`Char + Int` returns a `Char`, so `'a' + 1` is `'b'`, not the number 98. `Char - Char` returns an `Int`: the distance between the two codes, 25."
+    },
+    {
+      "id": "d05q07",
+      "type": "mcq",
+      "topic": "buildString",
+      "difficulty": "Easy",
+      "question": "Why is `buildString { for (line in lines) append(line) }` preferred over `var s = \"\"; for (line in lines) s += line` for large lists?",
+      "options": ["Each `+=` allocates a new String; `buildString` appends to one `StringBuilder`", "`+=` on a String does not compile inside a loop", "`buildString` runs the loop on a background thread, so the main thread isn't blocked", "`+=` silently drops characters once the String passes 64 KB on Android"],
+      "answer": [0],
+      "explanation": "Because String is immutable, each `+=` copies the whole accumulated text into a new object, which makes the loop quadratic. `buildString` gives you a mutable `StringBuilder` and calls `toString()` once at the end."
+    },
+    {
+      "id": "d05q08",
+      "type": "output",
+      "topic": "data class body property",
+      "difficulty": "Medium",
+      "question": "What does this print?",
+      "code": "data class Item(val id: Int) {\n    var note: String = \"\"\n}\n\nfun main() {\n    val a = Item(1).apply { note = \"x\" }\n    val b = Item(1).apply { note = \"y\" }\n    println(a == b)\n    println(a)\n}",
+      "options": ["true\nItem(id=1)", "false\nItem(id=1, note=x)", "true\nItem(id=1, note=x)", "false\nItem(id=1)"],
+      "answer": [0],
+      "explanation": "The generated `equals`, `hashCode` and `toString` use only properties declared in the primary constructor. `note` lives in the class body, so it is ignored: the objects are equal and `toString` does not show it."
+    },
+    {
+      "id": "d05q09",
+      "type": "truefalse",
+      "topic": "nothing",
+      "difficulty": "Medium",
+      "question": "`Nothing` has no instances, so a function whose return type is `Nothing` can never return normally. It can only throw or loop forever.",
+      "options": ["True", "False"],
+      "answer": [0],
+      "explanation": "No value of type `Nothing` exists, so such a function can never produce one to return. That is why `throw` expressions and `error()` have type `Nothing`, and why code after them is unreachable."
+    },
+    {
+      "id": "d05q10",
+      "type": "output",
+      "topic": "digitToInt vs code",
+      "difficulty": "Medium",
+      "question": "What does this print?",
+      "code": "fun main() {\n    val ch = '5'\n    println(ch.code + 1)\n    println(ch.digitToInt() + 1)\n}",
+      "options": ["54\n6", "6\n6", "54\n54", "6\n54"],
+      "answer": [0],
+      "explanation": "`code` is the character's Unicode code point: `'5'` is 53, so the first line prints 54. `digitToInt()` converts the digit character to its numeric value 5, so the second prints 6."
+    },
+    {
+      "id": "d05q11",
+      "type": "mcq",
+      "topic": "todo()",
+      "difficulty": "Medium",
+      "question": "Why does `fun loadUser(): User = TODO()` compile even though `TODO()` builds no `User`?",
+      "options": ["`TODO()` returns `Nothing`, which is a subtype of every type", "`TODO()` returns `Any`, which is cast to `User` automatically", "`TODO()` returns `null`, and the compiler makes the return type `User?`", "The compiler skips type checking for any function that calls `TODO()`"],
+      "answer": [0],
+      "explanation": "`TODO()` is an ordinary stdlib function declared to return `Nothing`, which is a subtype of every type. It type-checks anywhere and throws `NotImplementedError` when called. It does not return `null` or `Any`."
+    },
+    {
+      "id": "d05q12",
+      "type": "multi",
+      "topic": "padStart",
+      "difficulty": "Medium",
+      "question": "Which expressions evaluate to the string `\"07\"`?",
+      "options": ["`\"7\".padStart(2, '0')`", "`\"70\".reversed()`", "`\"7\".padEnd(2, '0')`", "`\"x07\".substring(1, 2)`"],
+      "answer": [0, 1],
+      "explanation": "`padStart` adds the padding on the left, giving `\"07\"`, and reversing `\"70\"` also gives `\"07\"`. `padEnd` pads on the right (`\"70\"`), and `substring(1, 2)` excludes the end index, so it returns only `\"0\"`."
+    },
+    {
+      "id": "d05q13",
+      "type": "output",
+      "topic": "double equality",
+      "difficulty": "Medium",
+      "question": "What does this print?",
+      "code": "fun main() {\n    println(0.1 + 0.2 == 0.3)\n    println(0.1 + 0.2)\n}",
+      "options": ["false\n0.30000000000000004", "true\n0.3", "false\n0.3", "true\n0.30000000000000004"],
+      "answer": [0],
+      "explanation": "0.1 and 0.2 have no exact binary representation, so their sum is 0.30000000000000004, which is not equal to the `Double` closest to 0.3. Compare doubles with a tolerance, e.g. `abs(a - b) < 1e-9`."
+    },
+    {
+      "id": "d05q14",
+      "type": "mcq",
+      "topic": "trimMargin",
+      "difficulty": "Medium",
+      "question": "What is the value of `s`?",
+      "code": "val s = \"\"\"\n    |Hello\n    |  World\n\"\"\".trimMargin()",
+      "options": ["`\"Hello\\n  World\"`", "`\"|Hello\\n|  World\"`", "`\"Hello\\nWorld\"`", "`\"\\n    |Hello\\n    |  World\\n\"`"],
+      "answer": [0],
+      "explanation": "`trimMargin()` removes everything up to and including the `|` margin prefix on each line, and drops the blank first and last lines. Whitespace after the `|` is kept, so `World` keeps its two leading spaces."
+    },
+    {
+      "id": "d05q15",
+      "type": "mcq",
+      "topic": "stateflow equality",
+      "difficulty": "Medium",
+      "question": "`UiState` is a data class. The ViewModel assigns a new instance whose properties equal the current value. What do the collectors of `state` receive?",
+      "code": "data class UiState(val loading: Boolean, val items: List<String>)\n\nprivate val _state = MutableStateFlow(UiState(false, listOf(\"a\")))\nval state: StateFlow<UiState> = _state\n\nfun refresh() {\n    _state.value = UiState(false, listOf(\"a\"))\n}",
+      "options": ["Nothing, because StateFlow skips a value `==` to the current one", "The new value, because it is a different object (`!==`)", "The new value twice, once for each changed property", "An exception, because StateFlow values must be immutable singletons"],
+      "answer": [0],
+      "explanation": "StateFlow conflates by equality: when the new value `equals` the current one, it does not emit. With a data class that is structural equality, so an identical `UiState` causes no recomposition or re-render."
+    },
+    {
+      "id": "d05q16",
+      "type": "truefalse",
+      "topic": "diffutil",
+      "difficulty": "Medium",
+      "question": "In a `DiffUtil.ItemCallback<Item>` where `Item` is a data class, `areContentsTheSame = oldItem == newItem` will NOT notice a change to a `var` declared in the class body instead of the primary constructor.",
+      "options": ["True", "False"],
+      "answer": [0],
+      "explanation": "Data class `equals` compares only primary-constructor properties. A change to a body property leaves the items equal, so DiffUtil decides nothing changed and the row is never rebound."
+    },
+    {
+      "id": "d05q17",
+      "type": "output",
+      "topic": "boxed int identity",
+      "difficulty": "Hard",
+      "question": "What does this print on the JVM? (The compiler warns about `===` on `Int?`, but it compiles.)",
+      "code": "fun main() {\n    val a: Int? = 127\n    val b: Int? = 127\n    val c: Int? = 128\n    val d: Int? = 128\n    println(a === b)\n    println(c === d)\n    println(c == d)\n}",
+      "options": ["true\nfalse\ntrue", "true\ntrue\ntrue", "false\nfalse\ntrue", "true\nfalse\nfalse"],
+      "answer": [0],
+      "explanation": "`Int?` is boxed as `java.lang.Integer`, and `Integer.valueOf` caches values from -128 to 127, so both 127s are the same object while the two 128s are different boxes. `==` compares values, so `c == d` is still `true`."
+    },
+    {
+      "id": "d05q18",
+      "type": "multi",
+      "topic": "any, unit, nothing",
+      "difficulty": "Hard",
+      "question": "Which statements are true?",
+      "options": ["`Any` is the root of the non-nullable type hierarchy", "`Unit` is an object with exactly one value", "`Unit` has no instances, just like Java `void`", "The only value of type `Nothing?` is `null`", "A function declared as `fun log() {}` returns `Nothing`"],
+      "answer": [0, 1, 3],
+      "explanation": "`Unit` is a real singleton object, which is why `val u = println()` works. `Nothing` is the type with no instances, so `Nothing?` can hold only `null`. A block-bodied function with no return type returns `Unit`, not `Nothing`."
+    },
+    {
+      "id": "d05q19",
+      "type": "output",
+      "topic": "nan",
+      "difficulty": "Hard",
+      "question": "What does this print?",
+      "code": "fun main() {\n    val x = Double.NaN\n    val y: Any = Double.NaN\n    println(x == x)\n    println(y == y)\n    println(x < 1.0 || x >= 1.0)\n}",
+      "options": ["false\ntrue\nfalse", "false\nfalse\nfalse", "true\ntrue\ntrue", "false\nfalse\ntrue"],
+      "answer": [0],
+      "explanation": "When the static type is `Double`, `==` follows IEEE 754, where `NaN` is not equal to itself and every comparison with it is false. When the static type is `Any`, `==` calls `Double.equals`, which treats `NaN` as equal to itself."
+    },
+    {
+      "id": "d05q20",
+      "type": "mcq",
+      "topic": "split",
+      "difficulty": "Hard",
+      "question": "What is `\"a,,b,\".split(\",\").size` in Kotlin?",
+      "options": ["4", "3", "2", "5"],
+      "answer": [0],
+      "explanation": "Kotlin's `split` keeps every empty piece, giving `[\"a\", \"\", \"b\", \"\"]`. Java's `String.split` drops trailing empty strings and would give 3, which is the common trap."
+    }
+  ]
+}

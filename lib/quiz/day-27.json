@@ -1,0 +1,354 @@
+{
+  "day": 27,
+  "topic": "viewModelScope, lifecycleScope & repeatOnLifecycle",
+  "questions": [
+    {
+      "id": "d27q01",
+      "type": "mcq",
+      "topic": "viewmodelscope dispatcher",
+      "difficulty": "Easy",
+      "question": "Which dispatcher does `viewModelScope.launch { }` use when you don't pass one?",
+      "options": [
+        "`Dispatchers.Main.immediate`",
+        "`Dispatchers.IO`",
+        "`Dispatchers.Default`",
+        "`Dispatchers.Unconfined`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`viewModelScope` is built from `SupervisorJob() + Dispatchers.Main.immediate`, so code runs on the main thread, and runs right away if you're already on it. Blocking IO has to be moved off with `withContext(Dispatchers.IO)` or a main-safe suspend API such as Room or Retrofit."
+    },
+    {
+      "id": "d27q02",
+      "type": "output",
+      "topic": "scope cancel",
+      "difficulty": "Easy",
+      "question": "`scope.cancel()` plays the role of `onCleared()` here. What does this print?",
+      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking {\n    val scope = CoroutineScope(SupervisorJob())\n    val job = scope.launch {\n        try { delay(1000); println(\"loaded\") }\n        finally { println(\"cleanup\") }\n    }\n    delay(50)\n    scope.cancel()\n    job.join()\n    scope.launch { println(\"late\") }\n    delay(50)\n    println(\"cancelled=${job.isCancelled}\")\n}",
+      "options": [
+        "cleanup\ncancelled=true",
+        "cleanup\nlate\ncancelled=true",
+        "loaded\ncleanup\ncancelled=false",
+        "cancelled=true"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Cancelling the scope cancels its running child, so `delay` throws `CancellationException` and only the `finally` block runs. A cancelled scope's job stays cancelled, so a later `launch` in it never runs. That is why you can't reuse `viewModelScope` after `onCleared()`."
+    },
+    {
+      "id": "d27q03",
+      "type": "truefalse",
+      "topic": "lifecyclescope",
+      "difficulty": "Easy",
+      "question": "An Activity's `lifecycleScope` is cancelled when the lifecycle reaches DESTROYED, not when the Activity is merely stopped.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`lifecycleScope` is tied to the whole lifecycle and is cancelled only at DESTROYED. Coroutines launched in it keep running while the app is in the background, which is why flow collection needs `repeatOnLifecycle` on top of it."
+    },
+    {
+      "id": "d27q04",
+      "type": "mcq",
+      "topic": "configuration change",
+      "difficulty": "Easy",
+      "question": "A ViewModel starts a network call in `viewModelScope` and exposes the result as a `StateFlow`. The user rotates the screen while it's loading. What happens?",
+      "options": [
+        "The call keeps running and the new Activity gets the result from the same `StateFlow`",
+        "The call is cancelled and started again when the new Activity is created",
+        "The call keeps running, but its result is lost because the old Activity was destroyed",
+        "The app crashes because the coroutine still references the destroyed Activity"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A ViewModel survives configuration changes, so `viewModelScope` isn't cancelled. `onCleared()` only runs when the owner goes away for good. The new Activity gets the same ViewModel and collects the latest state."
+    },
+    {
+      "id": "d27q05",
+      "type": "multi",
+      "topic": "viewmodelscope",
+      "difficulty": "Easy",
+      "question": "Which statements about `viewModelScope` are true?",
+      "options": [
+        "It is cancelled when the ViewModel's `onCleared()` runs",
+        "It uses a `SupervisorJob`, so one failing child doesn't cancel its siblings",
+        "It survives configuration changes such as rotation",
+        "It is cancelled whenever the hosting Activity goes to the background",
+        "You must cancel it yourself in `onDestroy()` to avoid leaks"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "`viewModelScope` lives exactly as long as the ViewModel and is cancelled automatically when it is cleared, so you never cancel it yourself. Going to the background (STOP) doesn't clear a ViewModel."
+    },
+    {
+      "id": "d27q06",
+      "type": "output",
+      "topic": "supervisorjob",
+      "difficulty": "Medium",
+      "question": "This scope is built like `viewModelScope` (a `SupervisorJob` plus a handler). What does it print?",
+      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking {\n    val handler = CoroutineExceptionHandler { _, e ->\n        println(\"caught ${e.message}\")\n    }\n    val scope = CoroutineScope(SupervisorJob() + handler)\n    val a = scope.launch { delay(10); error(\"boom\") }\n    val b = scope.launch { delay(100); println(\"b done\") }\n    joinAll(a, b)\n    println(\"active=${scope.isActive}\")\n}",
+      "options": [
+        "caught boom\nb done\nactive=true",
+        "caught boom\nactive=false",
+        "caught boom\nb done\nactive=false",
+        "b done\ncaught boom\nactive=true"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "With a `SupervisorJob`, a failing child doesn't cancel its siblings or the scope, so `b` still finishes and the scope stays active. With a plain `Job`, the failure would cancel `b` and the scope, which would be fatal for a ViewModel running several independent loads."
+    },
+    {
+      "id": "d27q07",
+      "type": "mcq",
+      "topic": "launchwhenstarted",
+      "difficulty": "Medium",
+      "question": "Why was `lifecycleScope.launchWhenStarted { locationFlow.collect { ... } }` deprecated in favour of `repeatOnLifecycle`?",
+      "options": [
+        "Below STARTED it only suspends the collector, so the upstream keeps running",
+        "It cancels the collector at STOP and never restarts it on START",
+        "It runs its block on a background thread, so updating views from it crashes",
+        "It is cancelled on rotation, unlike `repeatOnLifecycle`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`launchWhenStarted` pauses the coroutine instead of cancelling it, so producers like `callbackFlow` stay registered and keep emitting into a buffer while the app is in the background. `repeatOnLifecycle(STARTED)` cancels the collection on STOP, which also stops the upstream."
+    },
+    {
+      "id": "d27q08",
+      "type": "truefalse",
+      "topic": "globalscope",
+      "difficulty": "Easy",
+      "question": "For work that must keep going after the user leaves a screen, `GlobalScope.launch` is the recommended approach on Android.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "`GlobalScope` has no owner, so nothing can cancel it or replace its dispatcher in tests. The recommended options are an app-wide `CoroutineScope` injected via DI, or WorkManager when the work must be guaranteed to finish even if the process dies."
+    },
+    {
+      "id": "d27q09",
+      "type": "mcq",
+      "topic": "collectasstatewithlifecycle",
+      "difficulty": "Easy",
+      "question": "In Compose, what does `viewModel.uiState.collectAsStateWithLifecycle()` do that `collectAsState()` doesn't?",
+      "options": [
+        "It stops collecting below STARTED and resumes when the lifecycle is STARTED again",
+        "It keeps the collected value across process death",
+        "It collects on `Dispatchers.IO` instead of the main thread, so slow emissions don't cause jank",
+        "It caches the latest value in the ViewModel's `SavedStateHandle`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`collectAsStateWithLifecycle` uses `repeatOnLifecycle` internally with `minActiveState = STARTED` by default. `collectAsState` keeps collecting as long as the composable is in the composition, including while the app is in the background."
+    },
+    {
+      "id": "d27q10",
+      "type": "multi",
+      "topic": "stop cancellation",
+      "difficulty": "Medium",
+      "question": "The app goes to the background (Activity reaches STOPPED). Which of these collections are cancelled, rather than suspended or left running?",
+      "options": [
+        "`lifecycleScope.launch { repeatOnLifecycle(Lifecycle.State.STARTED) { flow.collect { ... } } }`",
+        "`lifecycleScope.launch { flow.flowWithLifecycle(lifecycle, Lifecycle.State.STARTED).collect { ... } }`",
+        "`val state by flow.collectAsStateWithLifecycle()` in a composable",
+        "`lifecycleScope.launchWhenStarted { flow.collect { ... } }`",
+        "`lifecycleScope.launch { flow.collect { ... } }`"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "`repeatOnLifecycle`, `flowWithLifecycle` and `collectAsStateWithLifecycle` all cancel the collection below STARTED and restart it on START. `launchWhenStarted` only suspends, and a plain `lifecycleScope.launch` keeps collecting until DESTROYED."
+    },
+    {
+      "id": "d27q11",
+      "type": "output",
+      "topic": "collect never returns",
+      "difficulty": "Medium",
+      "question": "The timeout stands in for the lifecycle stopping. What does this print?",
+      "code": "import kotlinx.coroutines.*\nimport kotlinx.coroutines.flow.*\n\nfun main() = runBlocking {\n    val names = MutableStateFlow(\"Ann\")\n    val count = MutableStateFlow(1)\n    withTimeoutOrNull(100) {\n        names.collect { println(\"name=$it\") }\n        count.collect { println(\"count=$it\") }\n    }\n    println(\"stopped\")\n}",
+      "options": [
+        "name=Ann\nstopped",
+        "name=Ann\ncount=1\nstopped",
+        "count=1\nname=Ann\nstopped",
+        "stopped"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Collecting a `StateFlow` never completes, so the first `collect` suspends until the timeout cancels it and the second line is never reached. The same thing happens inside one `repeatOnLifecycle` block, so each flow needs its own `launch`."
+    },
+    {
+      "id": "d27q12",
+      "type": "mcq",
+      "topic": "flowwithlifecycle",
+      "difficulty": "Medium",
+      "question": "What is `flow.flowWithLifecycle(lifecycle, Lifecycle.State.STARTED)` best described as?",
+      "options": [
+        "An operator that collects upstream only while at least STARTED, like `repeatOnLifecycle`",
+        "A terminal operator that collects the flow by itself, so no coroutine is needed",
+        "An operator that buffers every value emitted while stopped and replays them all on START",
+        "A replacement for `viewModelScope` that ties the flow to the ViewModel"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`flowWithLifecycle` is built on `repeatOnLifecycle` and is handy when you have a single flow to collect. It returns a new `Flow`, so it still has to be collected from a coroutine, and it doesn't replay values the upstream emitted while stopped."
+    },
+    {
+      "id": "d27q13",
+      "type": "truefalse",
+      "topic": "repeatonlifecycle suspends",
+      "difficulty": "Medium",
+      "question": "`repeatOnLifecycle(Lifecycle.State.STARTED) { ... }` is a suspend call that doesn't return until the lifecycle is DESTROYED, so code written after it in the same coroutine only runs at that point.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`repeatOnLifecycle` keeps re-running its block on every START and resumes the caller only once the lifecycle is destroyed. Code placed after it, such as another `collect`, effectively never runs while the screen is in use."
+    },
+    {
+      "id": "d27q14",
+      "type": "mcq",
+      "topic": "applicationscope",
+      "difficulty": "Medium",
+      "question": "When the user taps Send, a chat message must be written to the local DB and posted (about 1s), even if they immediately press back and the ViewModel is cleared. Surviving process death isn't required. What's the best place to launch this work?",
+      "options": [
+        "An app-wide `CoroutineScope(SupervisorJob())` injected into the repository via DI",
+        "`GlobalScope.launch`, because it is never cancelled",
+        "The Activity's `lifecycleScope`, because it outlives the ViewModel and is only cancelled at process death",
+        "`runBlocking` inside `onCleared()` so the ViewModel waits for it"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "An injected `applicationScope` outlives any one screen while staying owned, testable and replaceable in tests. `GlobalScope` can't be controlled, `lifecycleScope` is cancelled at DESTROYED, which happens on back, and `runBlocking` freezes the main thread. If the work had to survive process death, WorkManager would be the right tool."
+    },
+    {
+      "id": "d27q15",
+      "type": "multi",
+      "topic": "multiple flows",
+      "difficulty": "Medium",
+      "question": "The `onItems` callback never fires. Which changes fix it?",
+      "code": "lifecycleScope.launch {\n    repeatOnLifecycle(Lifecycle.State.STARTED) {\n        viewModel.header.collect { bindHeader(it) }\n        viewModel.items.collect { onItems(it) }\n    }\n}",
+      "options": [
+        "Wrap each `collect` in its own `launch { }` inside the `repeatOnLifecycle` block",
+        "Use two separate `lifecycleScope.launch { repeatOnLifecycle(STARTED) { ... } }` blocks, one per flow",
+        "Swap the order of the two `collect` calls",
+        "Add `yield()` between the two `collect` calls",
+        "Replace `repeatOnLifecycle` with `launchWhenStarted`"
+      ],
+      "answer": [
+        0,
+        1
+      ],
+      "explanation": "`header` is a `StateFlow`, so its `collect` never returns and the second line is never reached. Each collector needs its own coroutine. Swapping the order just starves `header` instead, and `yield()` or `launchWhenStarted` don't change the fact that `collect` suspends forever."
+    },
+    {
+      "id": "d27q16",
+      "type": "mcq",
+      "topic": "viewlifecycleowner",
+      "difficulty": "Hard",
+      "question": "A Fragment calls `lifecycleScope.launch { repeatOnLifecycle(STARTED) { vm.state.collect { binding.title.text = it } } }` in `onViewCreated`. The user navigates to another Fragment (this one goes on the back stack) and then presses back. What's the problem?",
+      "options": [
+        "The Fragment isn't destroyed, so each return adds another collector that outlives its view",
+        "Nothing, because `lifecycleScope` in a Fragment already follows the view lifecycle",
+        "The collector is cancelled when the view is destroyed and never restarts after the user returns",
+        "The app crashes right away because `lifecycleScope` can't be used before `onStart`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A Fragment on the back stack loses its view (`onDestroyView`) but the Fragment itself isn't destroyed, so its `lifecycleScope` lives on. Use `viewLifecycleOwner.lifecycleScope` and `viewLifecycleOwner.repeatOnLifecycle` for UI work, so the collector dies with the view and exactly one exists per view."
+    },
+    {
+      "id": "d27q17",
+      "type": "output",
+      "topic": "restart on start",
+      "difficulty": "Hard",
+      "question": "Each loop iteration simulates START (launch) and STOP (cancel), like `repeatOnLifecycle`. What does this print?",
+      "code": "import kotlinx.coroutines.*\nimport kotlinx.coroutines.flow.*\n\nfun main() = runBlocking {\n    val state = MutableStateFlow(0)\n    repeat(2) { round ->\n        val job = launch { state.collect { println(\"r$round:$it\") } }\n        delay(10)\n        state.value++\n        delay(10)\n        job.cancel()\n        state.value++\n    }\n}",
+      "options": [
+        "r0:0\nr0:1\nr1:2\nr1:3",
+        "r0:0\nr0:1\nr0:2\nr1:3",
+        "r0:0\nr0:1\nr1:3",
+        "r0:0\nr0:1\nr1:1\nr1:2\nr1:3"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "While \"stopped\" there is no collector, so the update to 2 isn't printed then. On the next START a fresh collector immediately gets the current `StateFlow` value (2), then 3. Restarting on START gives the UI the latest state without replaying what it missed."
+    },
+    {
+      "id": "d27q18",
+      "type": "multi",
+      "topic": "compose scopes",
+      "difficulty": "Medium",
+      "question": "Which statements about coroutine scopes in Compose are true?",
+      "options": [
+        "`LaunchedEffect(key)` cancels its coroutine and launches a new one when `key` changes",
+        "The scope from `rememberCoroutineScope()` is cancelled when that composable leaves the composition",
+        "`rememberCoroutineScope()` is the right way to start a coroutine from an `onClick` handler",
+        "`LaunchedEffect` can be called directly inside an `onClick` lambda",
+        "`rememberCoroutineScope()` survives configuration changes like `viewModelScope`"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "`LaunchedEffect` is a composable tied to the composition and its keys, so it can't be called from a non-composable callback like `onClick`. Use `rememberCoroutineScope()` there. That scope is bound to the composition, so it's cancelled when the composable leaves it, and also on rotation, when the composition is rebuilt."
+    },
+    {
+      "id": "d27q19",
+      "type": "mcq",
+      "topic": "repeatonlifecycle placement",
+      "difficulty": "Hard",
+      "question": "An Activity calls `lifecycleScope.launch { repeatOnLifecycle(STARTED) { vm.events.collect { show(it) } } }` inside `onStart()` instead of `onCreate()`. After the user leaves the app and comes back twice, what happens?",
+      "options": [
+        "Three collectors are active, because each call keeps restarting its block until DESTROYED",
+        "Exactly one collector is active, because `repeatOnLifecycle` cancels any earlier call",
+        "No collector is active, because `repeatOnLifecycle` called in `onStart` misses the START event",
+        "It throws `IllegalStateException`, because `repeatOnLifecycle` may only be called from `onCreate`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`repeatOnLifecycle` only returns at DESTROYED and restarts its block on every START, so calling it from `onStart` stacks up a new restarting collector every time. Call it once from `onCreate` (or `onViewCreated` with `viewLifecycleOwner` in a Fragment)."
+    },
+    {
+      "id": "d27q20",
+      "type": "truefalse",
+      "topic": "uncaught exceptions",
+      "difficulty": "Hard",
+      "question": "Because `viewModelScope` uses a `SupervisorJob`, an exception thrown inside `viewModelScope.launch { }` with no try/catch or handler is silently swallowed and the app keeps running.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "A `SupervisorJob` only stops the failure from cancelling siblings and the scope. The exception is still uncaught, so it goes to the thread's default uncaught exception handler, which crashes an Android app. Catch it in the coroutine or map it to an error state."
+    }
+  ]
+}

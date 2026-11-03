@@ -1,0 +1,252 @@
+{
+  "day": 2,
+  "topic": "Null safety I: ?., ?: and !!",
+  "questions": [
+    {
+      "id": "d02q01",
+      "type": "output",
+      "topic": "string template",
+      "difficulty": "Easy",
+      "question": "What does this print?",
+      "code": "fun main() {\n    val name: String? = null\n    println(\"Hi, $name!\")\n}",
+      "options": ["Hi, null!", "Hi, !", "Hi, $name!", "Compile error"],
+      "answer": [0],
+      "explanation": "A nullable value in a string template is allowed and is converted with `toString()`, which gives the text \"null\" for a null reference. Kotlin does not print an empty string, and it does not reject the template."
+    },
+    {
+      "id": "d02q02",
+      "type": "mcq",
+      "topic": "nullable types",
+      "difficulty": "Easy",
+      "question": "What happens with this code?",
+      "code": "fun main() {\n    var name: String = \"Ann\"\n    name = null\n    println(name)\n}",
+      "options": ["Compile error", "Prints null", "Throws NullPointerException", "Prints Ann"],
+      "answer": [0],
+      "compiles": false,
+      "explanation": "`String` is a non-null type, so the compiler rejects `null` for it. You would have to declare `var name: String? = \"Ann\"` to allow null. Nothing happens at runtime because the code never compiles."
+    },
+    {
+      "id": "d02q03",
+      "type": "truefalse",
+      "topic": "subtyping",
+      "difficulty": "Easy",
+      "question": "A `String` value can be passed wherever a `String?` is expected, but not the other way round.",
+      "options": ["True", "False"],
+      "answer": [0],
+      "explanation": "`String` is a subtype of `String?`, so a non-null value always fits a nullable slot. Going from `String?` to `String` needs a null check, `?:`, or `!!`."
+    },
+    {
+      "id": "d02q04",
+      "type": "output",
+      "topic": "elvis",
+      "difficulty": "Easy",
+      "question": "What does this print?",
+      "code": "fun main() {\n    val s: String? = null\n    println(s?.length ?: -1)\n}",
+      "options": ["-1", "null", "0", "Compile error"],
+      "answer": [0],
+      "explanation": "`s?.length` is `null` because `s` is null, so the elvis operator returns its right side, `-1`. You would only see `null` printed without the `?: -1`."
+    },
+    {
+      "id": "d02q05",
+      "type": "mcq",
+      "topic": "bundle",
+      "difficulty": "Easy",
+      "question": "Inside `onCreate(savedInstanceState: Bundle?)`, what is the type of `count`?",
+      "code": "val count = savedInstanceState?.getInt(\"count\")",
+      "options": ["Int?", "Int", "Bundle?", "Unit"],
+      "answer": [0],
+      "explanation": "`getInt` returns a non-null `Int`, but a safe call always gives a nullable result, because the whole expression is `null` when the receiver is null. So `count` is `Int?`, and on the first launch it is null."
+    },
+    {
+      "id": "d02q06",
+      "type": "output",
+      "topic": "filterNotNull",
+      "difficulty": "Easy",
+      "question": "What does this print?",
+      "code": "fun main() {\n    val xs: List<Int?> = listOf(1, null, 2, null, 3)\n    println(\"${xs.size} ${xs.filterNotNull().sum()}\")\n}",
+      "options": ["5 6", "3 6", "5 3", "5 null"],
+      "answer": [0],
+      "explanation": "Null elements count toward `size`, so the list has 5 elements. `filterNotNull()` returns a new `List<Int>` holding 1, 2 and 3, and their sum is 6."
+    },
+    {
+      "id": "d02q07",
+      "type": "truefalse",
+      "topic": "orEmpty",
+      "difficulty": "Easy",
+      "question": "Given `val tags: List<String>? = null`, the expression `tags.orEmpty().size` compiles and evaluates to `0`.",
+      "options": ["True", "False"],
+      "answer": [0],
+      "explanation": "`orEmpty()` is an extension on the nullable type `List<T>?`, so you can call it without `?.`. It returns an empty list when the receiver is null, so `size` is 0."
+    },
+    {
+      "id": "d02q08",
+      "type": "output",
+      "topic": "safe call chain",
+      "difficulty": "Medium",
+      "question": "What does this print?",
+      "code": "class Address(val city: String?)\nclass User(val address: Address?)\n\nfun main() {\n    val users = listOf(\n        User(Address(\"Pune\")),\n        User(null),\n        User(Address(null))\n    )\n    println(users.map { it.address?.city?.length })\n}",
+      "options": ["[4, null, null]", "[4, 0, 0]", "[4]", "[4, null]"],
+      "answer": [0],
+      "explanation": "A safe-call chain stops at the first null and the whole chain evaluates to `null`. It does not matter whether `address` or `city` was the null one. `map` keeps one result per element, so the list still has three entries."
+    },
+    {
+      "id": "d02q09",
+      "type": "mcq",
+      "topic": "intent extras",
+      "difficulty": "Medium",
+      "question": "`intent.getStringExtra(\"user_id\")` returns `String?`. Which expression gives a non-null `String` that is empty when the extra is missing?",
+      "options": [
+        "intent.getStringExtra(\"user_id\") ?: \"\"",
+        "intent.getStringExtra(\"user_id\").toString()",
+        "intent.getStringExtra(\"user_id\")!!",
+        "intent.getStringExtra(\"user_id\") as String"
+      ],
+      "answer": [0],
+      "explanation": "Elvis gives the empty-string default. `toString()` on a null `String?` is the tempting wrong answer: it returns the text \"null\", not \"\". `!!` and `as String` both throw when the extra is missing."
+    },
+    {
+      "id": "d02q10",
+      "type": "multi",
+      "topic": "isNullOrBlank",
+      "difficulty": "Medium",
+      "question": "Given `val a: String? = null`, `val b = \"\"`, `val c = \"   \"` and `val d = \"x\"`, which expressions are `true`?",
+      "options": [
+        "a.isNullOrEmpty()",
+        "b.isNullOrEmpty()",
+        "c.isNullOrEmpty()",
+        "c.isNullOrBlank()",
+        "d.isNullOrBlank()"
+      ],
+      "answer": [0, 1, 3],
+      "explanation": "`isNullOrEmpty()` is true for null or length 0. `isNullOrBlank()` is also true for strings that contain only whitespace. So `c` is blank but not empty, and `\"x\"` is neither."
+    },
+    {
+      "id": "d02q11",
+      "type": "output",
+      "topic": "elvis return",
+      "difficulty": "Medium",
+      "question": "What does this print?",
+      "code": "fun describe(s: String?): String {\n    val v = s ?: return \"none\"\n    println(\"got $v\")\n    return v.uppercase()\n}\n\nfun main() {\n    println(describe(null))\n    println(describe(\"hi\"))\n}",
+      "options": [
+        "none\ngot hi\nHI",
+        "got null\nnone\ngot hi\nHI",
+        "none\nHI",
+        "null\ngot hi\nHI"
+      ],
+      "answer": [0],
+      "explanation": "When `s` is null, `return \"none\"` on the right side of `?:` leaves the function at once, so `got ...` is never printed for that call. For \"hi\", `v` is smart-cast to `String`, so the function prints `got hi` and returns `HI`."
+    },
+    {
+      "id": "d02q12",
+      "type": "mcq",
+      "topic": "elvis throw",
+      "difficulty": "Medium",
+      "question": "What is the inferred type of `userId`?",
+      "code": "fun requireUser(id: String?): String {\n    val userId = id ?: throw IllegalArgumentException(\"id missing\")\n    return userId\n}",
+      "options": ["String", "String?", "Nothing", "Any"],
+      "answer": [0],
+      "explanation": "A `throw` expression has type `Nothing`, which is a subtype of every type. The common type of `String` and `Nothing` is `String`, so `userId` is non-null. You can return it without `!!`."
+    },
+    {
+      "id": "d02q13",
+      "type": "truefalse",
+      "topic": "findViewById",
+      "difficulty": "Medium",
+      "question": "In an Activity, `findViewById(R.id.some_id)` throws an exception right away if no view with that id exists in the current layout.",
+      "options": ["True", "False"],
+      "answer": [1],
+      "explanation": "`findViewById` returns `null` when the id is not found. The crash usually happens later, as a NullPointerException, when that null is used as a non-null `View`. `requireViewById` is the variant that throws right away."
+    },
+    {
+      "id": "d02q14",
+      "type": "output",
+      "topic": "getOrNull",
+      "difficulty": "Medium",
+      "question": "What does this print?",
+      "code": "fun main() {\n    val xs = listOf(3, 8, 5)\n    println(xs.firstOrNull { it > 10 })\n    println(xs.getOrNull(5) ?: xs.getOrNull(1))\n}",
+      "options": ["null\n8", "null\n3", "0\n8", "3\n8"],
+      "answer": [0],
+      "explanation": "No element is greater than 10, so `firstOrNull` returns `null` instead of throwing like `first` would. `getOrNull(5)` is out of range and returns `null`, so elvis falls back to `getOrNull(1)`. Index 1 holds 8, not 3."
+    },
+    {
+      "id": "d02q15",
+      "type": "mcq",
+      "topic": "nullable generics",
+      "difficulty": "Medium",
+      "question": "Which statement about `List<Int?>` and `List<Int>?` is correct?",
+      "options": [
+        "`List<Int?>` can't be null itself, but its elements can",
+        "`List<Int>?` is a list whose elements may be null",
+        "The two types are interchangeable",
+        "`List<Int?>` may be null itself, but its elements may not"
+      ],
+      "answer": [0],
+      "explanation": "The `?` applies to what it follows. In `List<Int?>` the elements are nullable and the list is not. In `List<Int>?` the list reference is nullable but its elements are not. Neither type can be assigned to the other."
+    },
+    {
+      "id": "d02q16",
+      "type": "mcq",
+      "topic": "!! operator",
+      "difficulty": "Medium",
+      "question": "In a Retrofit interceptor, `token` comes back as `null`. What happens on the second line (Kotlin 1.4+)?",
+      "code": "val token: String? = prefs.getString(\"token\", null)\nval header = \"Bearer \" + token!!",
+      "options": [
+        "A `NullPointerException` is thrown",
+        "A `KotlinNullPointerException` is thrown",
+        "`header` becomes \"Bearer null\"",
+        "It does not compile"
+      ],
+      "answer": [0],
+      "explanation": "`!!` throws when the value is null. Since Kotlin 1.4 it throws a plain `java.lang.NullPointerException`, not the old `KotlinNullPointerException`. You would get \"Bearer null\" only without `!!`, because `String.plus` accepts `Any?`."
+    },
+    {
+      "id": "d02q17",
+      "type": "output",
+      "topic": "let",
+      "difficulty": "Hard",
+      "question": "What does this print?",
+      "code": "fun main() {\n    val s: String? = \"abc\"\n    val r = s?.let {\n        println(\"let\")\n        null\n    } ?: \"fallback\"\n    println(r)\n}",
+      "options": ["let\nfallback", "let\nnull", "fallback", "let"],
+      "answer": [0],
+      "explanation": "`s` is not null, so the `let` block runs and prints `let`. But the lambda's last expression is `null`, so `s?.let { ... }` evaluates to null and elvis still picks \"fallback\". This is why `x?.let { } ?: other` is not a true if/else."
+    },
+    {
+      "id": "d02q18",
+      "type": "output",
+      "topic": "safe assignment",
+      "difficulty": "Hard",
+      "question": "What does this print?",
+      "code": "class Person(var name: String)\n\nfun pick(): String {\n    println(\"pick\")\n    return \"Bob\"\n}\n\nfun rename(p: Person?) {\n    p?.name = pick()\n}\n\nfun main() {\n    val ann = Person(\"Ann\")\n    rename(null)\n    rename(ann)\n    println(ann.name)\n}",
+      "options": ["pick\nBob", "pick\npick\nBob", "Bob", "pick\nAnn"],
+      "answer": [0],
+      "explanation": "A safe call can appear on the left side of an assignment. If the receiver is null, the assignment is skipped and the right side is not evaluated either, so `pick()` runs only for `ann`."
+    },
+    {
+      "id": "d02q19",
+      "type": "multi",
+      "topic": "toIntOrNull",
+      "difficulty": "Hard",
+      "question": "Which of these expressions return `null`?",
+      "options": [
+        "\"12a\".toIntOrNull()",
+        "\" 42\".toIntOrNull()",
+        "\"+7\".toIntOrNull()",
+        "\"-0\".toIntOrNull()",
+        "\"2147483648\".toIntOrNull()"
+      ],
+      "answer": [0, 1, 4],
+      "explanation": "`toIntOrNull()` does not trim whitespace, so \" 42\" gives null. A value that overflows `Int` (2147483648 is `Int.MAX_VALUE + 1`) also gives null. A leading `+` or `-` sign is accepted, so \"+7\" is 7 and \"-0\" is 0."
+    },
+    {
+      "id": "d02q20",
+      "type": "output",
+      "topic": "elvis precedence",
+      "difficulty": "Hard",
+      "question": "What does this print?",
+      "code": "fun main() {\n    val a: Int? = 5\n    val b: Int? = null\n    println(a ?: 0 + 1)\n    println(b ?: 0 + 1)\n}",
+      "options": ["5\n1", "6\n1", "6\n0", "5\n0"],
+      "answer": [0],
+      "explanation": "`?:` binds more loosely than `+`, so `a ?: 0 + 1` is parsed as `a ?: (0 + 1)`. With `a = 5` the result is 5, not 6. Write `(a ?: 0) + 1` if you mean to add 1 in both cases."
+    }
+  ]
+}

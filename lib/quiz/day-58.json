@@ -1,0 +1,359 @@
+{
+  "day": 58,
+  "topic": "Final boss: Android & Jetpack",
+  "questions": [
+    {
+      "id": "d58q01",
+      "type": "mcq",
+      "topic": "state survival",
+      "difficulty": "Easy",
+      "question": "On a checkout screen, the shipping option the user picked must survive rotation and process death, and `CheckoutVm` needs it in `init` to compute the total, even right after the process is recreated. Where should it live?",
+      "options": [
+        "In `CheckoutVm`'s `SavedStateHandle`",
+        "In a `rememberSaveable` value inside the checkout composable",
+        "In a plain `var` field of `CheckoutVm`",
+        "In a Hilt `@Singleton` `CartSession` object"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`SavedStateHandle` survives both rotation and process death, and the ViewModel owns it. `rememberSaveable` survives too, but only the composable can read it, so the ViewModel's `init` can't. A plain field or a `@Singleton` is in-memory only and is gone after process death."
+    },
+    {
+      "id": "d58q02",
+      "type": "truefalse",
+      "topic": "args after death",
+      "difficulty": "Easy",
+      "question": "With type-safe Navigation Compose, if the process dies while the user is on `Profile(userId = \"42\")`, the recreated `ProfileViewModel` can still read the argument with `savedStateHandle.toRoute<Profile>()`.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "The NavController saves its back stack, including each entry's arguments, into saved state. After process death the `Profile` entry is restored with its arguments, and its new ViewModel's `SavedStateHandle` is filled with them again."
+    },
+    {
+      "id": "d58q03",
+      "type": "mcq",
+      "topic": "room + compose",
+      "difficulty": "Easy",
+      "question": "`MainActivity` is `@AndroidEntryPoint` and a Hilt module provides `NoteDao`. Which part of this code breaks?",
+      "code": "@Dao\ninterface NoteDao {\n    @Query(\"SELECT * FROM notes\")\n    fun observeAll(): Flow<List<Note>>\n}\n\n@HiltViewModel\nclass NotesVm @Inject constructor(dao: NoteDao) : ViewModel() {\n    val notes: Flow<List<Note>> = dao.observeAll()\n}\n\n@Composable\nfun NotesScreen(vm: NotesVm = hiltViewModel()) {\n    val notes by vm.notes.collectAsStateWithLifecycle()\n    NoteList(notes)\n}",
+      "options": [
+        "It doesn't compile: on a plain `Flow`, `collectAsStateWithLifecycle()` needs an `initialValue`",
+        "A Room DAO can only return `Flow` from a `suspend` function, so `observeAll()` is rejected",
+        "Hilt can't inject a DAO into a ViewModel, only the whole `RoomDatabase`",
+        "Room runs the query on the main thread when Compose collects it, so it throws `IllegalStateException` at runtime"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A plain `Flow` has no current value, so `collectAsStateWithLifecycle` needs an `initialValue`, or the ViewModel should turn it into a `StateFlow` with `stateIn`. `Flow` DAO functions must NOT be `suspend`, Room runs the query on its own executor, and Hilt can inject anything it has a binding for."
+    },
+    {
+      "id": "d58q04",
+      "type": "mcq",
+      "topic": "work after swipe",
+      "difficulty": "Easy",
+      "question": "The user taps Upload, which enqueues a `OneTimeWorkRequest` with a `NetworkType.UNMETERED` constraint. They're on mobile data, so they swipe the app away from Recents. An hour later the phone joins Wi-Fi. On a stock Android device, what happens?",
+      "options": [
+        "WorkManager starts the app's process in the background and runs the upload",
+        "Nothing: swiping the app from Recents cancels all of its enqueued work",
+        "The upload ran right away on mobile data, because the constraint is dropped when the process dies",
+        "The upload waits until the user opens the app again"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "WorkManager persists work in its own database and the system schedules it, so it runs once the constraint is met even if the app isn't running. Swiping from Recents is not a force-stop; only a force-stop stops pending work until the app is launched again."
+    },
+    {
+      "id": "d58q05",
+      "type": "output",
+      "topic": "runattemptcount",
+      "difficulty": "Medium",
+      "question": "This models a worker's `doWork()`, where `attempt` plays the role of `runAttemptCount`. The network only comes back on the fourth run. What does it print?",
+      "code": "enum class R { SUCCESS, RETRY, FAILURE }\n\nfun doWork(attempt: Int, online: Boolean): R = when {\n    attempt >= 3 -> R.FAILURE\n    !online -> R.RETRY\n    else -> R.SUCCESS\n}\n\nfun main() {\n    val online = listOf(false, false, false, true)\n    var attempt = 0\n    while (true) {\n        val r = doWork(attempt, online[attempt])\n        println(\"$attempt $r\")\n        if (r != R.RETRY) break\n        attempt++\n    }\n}",
+      "options": [
+        "0 RETRY\n1 RETRY\n2 RETRY\n3 FAILURE",
+        "0 RETRY\n1 RETRY\n2 RETRY\n3 SUCCESS",
+        "1 RETRY\n2 RETRY\n3 FAILURE",
+        "0 RETRY\n1 RETRY\n2 FAILURE"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`runAttemptCount` starts at 0, so the fourth run has `attempt == 3`. The `attempt >= 3` check comes first, so the worker gives up with `FAILURE` even though the network is back. Order your checks (and the limit) with that in mind."
+    },
+    {
+      "id": "d58q06",
+      "type": "mcq",
+      "topic": "remembered viewmodel",
+      "difficulty": "Medium",
+      "question": "A teammate creates the ViewModel with `remember` instead of `viewModel()`/`hiltViewModel()`. `SearchVm` starts a long-running collection in `viewModelScope` in its `init`. What happens when the user rotates the phone?",
+      "code": "@Composable\nfun SearchScreen(repo: SearchRepo) {\n    val vm = remember { SearchVm(repo) }\n    val state by vm.state.collectAsStateWithLifecycle()\n    SearchContent(state, vm::onQuery)\n}",
+      "options": [
+        "A new `SearchVm` starts from scratch, and the old one's `viewModelScope` is never cancelled",
+        "The same `SearchVm` is reused, because `remember` keeps values across Activity recreation",
+        "The old `SearchVm` gets `onCleared()` when `remember` forgets it, so its coroutines stop and only its state is lost",
+        "It doesn't compile, because a `ViewModel` subclass constructor can't be called directly"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`remember` only lives as long as the composition, which is destroyed with the Activity, so rotation builds a fresh `SearchVm`. Only a `ViewModelStore` calls `onCleared()` (which cancels `viewModelScope`), and this object was never in one, so its coroutines keep running and leak."
+    },
+    {
+      "id": "d58q07",
+      "type": "truefalse",
+      "topic": "whilesubscribed",
+      "difficulty": "Medium",
+      "question": "The ViewModel exposes `dao.observeNotes().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())`, and the screen uses `collectAsStateWithLifecycle()`. On a rotation the Room query isn't restarted, because the recreated screen subscribes again within 5 seconds.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "The ViewModel survives the rotation, and `WhileSubscribed(5_000)` keeps the upstream Room flow running for 5 s after the last collector leaves. The new screen subscribes well within that window and gets the cached value. If the app sits in the background for longer, the upstream is cancelled and restarts on return."
+    },
+    {
+      "id": "d58q08",
+      "type": "multi",
+      "topic": "startup + hilt",
+      "difficulty": "Medium",
+      "question": "Cold start is slow. The `@HiltAndroidApp` Application has five `@Inject lateinit var` fields for `@Singleton` SDK wrappers whose constructors initialize heavy SDKs, and most aren't needed on the first screen. Which changes reduce startup time? Select all that apply.",
+      "options": [
+        "Inject `dagger.Lazy<T>` instead, and call `get()` only where the SDK is first needed",
+        "Move initialization that the first screen doesn't need off the main thread, after the first frame",
+        "Remove `@Singleton` so Hilt no longer creates these objects at startup",
+        "Switch Hilt's annotation processing from kapt to KSP"
+      ],
+      "answer": [
+        0,
+        1
+      ],
+      "explanation": "The cost comes from field injection in `Application.onCreate` building every wrapper eagerly, so `Lazy<T>` or deferring the work helps. Hilt creates `@Singleton`s lazily anyway, so dropping the scope only means more instances. KSP speeds up builds, not the app."
+    },
+    {
+      "id": "d58q09",
+      "type": "mcq",
+      "topic": "viewmodel owner",
+      "difficulty": "Medium",
+      "question": "`DetailVm` reads its route in its constructor with `handle.toRoute<Detail>()`. The app crashes at launch, before anyone opens Detail. Why?",
+      "code": "setContent {\n    val nav = rememberNavController()\n    val detailVm: DetailVm = hiltViewModel()\n    NavHost(nav, startDestination = Home) {\n        composable<Home> { HomeScreen(onOpen = { nav.navigate(Detail(it)) }) }\n        composable<Detail> { DetailScreen(detailVm) }\n    }\n}",
+      "options": [
+        "Outside a destination the Activity owns the VM, so it's created at launch without the route's `id`",
+        "Hilt can't inject `SavedStateHandle` into a ViewModel that's used from a `NavHost`",
+        "`toRoute` only works on a `NavBackStackEntry` inside `composable<Detail> { }` and always throws when called from a ViewModel",
+        "`NavHost` must be created before any `hiltViewModel()` call, otherwise Hilt throws"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`hiltViewModel()` scopes to the nearest `ViewModelStoreOwner`. Above the `NavHost` that's the Activity, so `DetailVm` is created right away, and its `SavedStateHandle` holds the Activity's extras instead of the `Detail` route's arguments. Call `hiltViewModel()` inside `composable<Detail>` so the back stack entry owns it."
+    },
+    {
+      "id": "d58q10",
+      "type": "multi",
+      "topic": "result + process death",
+      "difficulty": "Medium",
+      "question": "`ColorPicker` returns a result with `nav.previousBackStackEntry?.savedStateHandle?.set(\"color\", argb)` and then `popBackStack()`. `Editor` observes `getStateFlow<Int?>(\"color\", null)` on its own entry's `savedStateHandle`. The process is killed while the picker is open. Which statements are true? Select all that apply.",
+      "options": [
+        "When the user comes back, the back stack `Editor` → `ColorPicker` is restored",
+        "Picking a colour still delivers it to `Editor`, because each back stack entry's `SavedStateHandle` is saved and restored with the entry",
+        "The value must be a type that a `Bundle` can hold, otherwise `set` throws",
+        "`Editor`'s ViewModel fields that aren't in its `SavedStateHandle` are restored too",
+        "After restoration `previousBackStackEntry` is null, so the result is silently dropped"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "The NavController saves the whole back stack and each entry's `SavedStateHandle`, so the result flow keeps working after process death. That's why `set` checks the value can go in a `Bundle`. The ViewModel itself is new, though, so its plain in-memory fields start from scratch."
+    },
+    {
+      "id": "d58q11",
+      "type": "mcq",
+      "topic": "datastore scope",
+      "difficulty": "Medium",
+      "question": "The settings screen works, but opening another screen whose ViewModel also injects `DataStore<Preferences>` crashes with an `IllegalStateException`. Why?",
+      "code": "@Module\n@InstallIn(SingletonComponent::class)\nobject DataModule {\n    @Provides\n    fun prefs(@ApplicationContext ctx: Context): DataStore<Preferences> =\n        PreferenceDataStoreFactory.create {\n            ctx.preferencesDataStoreFile(\"settings\")\n        }\n}",
+      "options": [
+        "The unscoped `@Provides` makes a new DataStore per injection, and two on one file aren't allowed",
+        "DataStore can't be injected into more than one ViewModel at a time, so share it through a `@Singleton` repository instead",
+        "`PreferenceDataStoreFactory.create` must be called on the main thread, and Hilt runs providers on a background thread",
+        "`@ApplicationContext` can't be used in a module installed in `SingletonComponent`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Without a scope, Hilt calls `@Provides` for every injection, creating a new DataStore instance on the same file. DataStore throws when it finds more than one active instance for a file in the process. Marking the provider `@Singleton` keeps one instance for the app, and many ViewModels can share it."
+    },
+    {
+      "id": "d58q12",
+      "type": "mcq",
+      "topic": "repeatonlifecycle",
+      "difficulty": "Medium",
+      "question": "The user goes Home and comes back three times. After that, every new `state` emission calls `render` four times. Why?",
+      "code": "override fun onStart() {\n    super.onStart()\n    lifecycleScope.launch {\n        repeatOnLifecycle(Lifecycle.State.STARTED) {\n            vm.state.collect { render(it) }\n        }\n    }\n}",
+      "options": [
+        "Each `onStart` adds another `repeatOnLifecycle` loop, and every loop collects on each start",
+        "`repeatOnLifecycle` replays the last four values to new collectors",
+        "`StateFlow` keeps one subscription per Activity start since `onCreate` and delivers each value to all of them",
+        "`lifecycleScope` is recreated on every `onStart`, and the old scopes are never cancelled"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`lifecycleScope` lasts until `onDestroy`, and `repeatOnLifecycle` keeps its outer coroutine suspended and relaunches the block every time the lifecycle reaches STARTED. Calling this in `onStart` adds one more such loop each time. Call it once, in `onCreate`."
+    },
+    {
+      "id": "d58q13",
+      "type": "mcq",
+      "topic": "flavors + hilt",
+      "difficulty": "Medium",
+      "question": "The `demo` flavor should use `FakeApi` and the `prod` flavor `RetrofitApi` for the `Api` interface, with no fake code shipped in prod. What's the clean way to do it with Hilt?",
+      "options": [
+        "A module binding `FakeApi` in `src/demo` and one binding `RetrofitApi` in `src/prod`",
+        "Put both `@Binds` functions in `src/main`; Hilt picks the binding that matches the current flavor",
+        "Use one `@Binds` in `src/main` whose body returns `if (BuildConfig.FLAVOR == \"demo\") fake else real`",
+        "Annotate the fake module with `@TestInstallIn` so it replaces the real one in demo builds"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Each variant compiles only its own flavor source set, so each build sees exactly one binding for `Api`, and `FakeApi` never reaches prod. Two bindings in `main` are a duplicate-binding build error, a `@Binds` function is abstract and has no body, and `@TestInstallIn` only applies to tests."
+    },
+    {
+      "id": "d58q14",
+      "type": "mcq",
+      "topic": "launchedeffect key",
+      "difficulty": "Hard",
+      "question": "`loadArticles` sets `isLoading = true`, fetches, then stores the articles in `state`. The network log shows the same request firing again and again. Why?",
+      "code": "val state by vm.state.collectAsStateWithLifecycle()\n\nLaunchedEffect(state) {\n    vm.loadArticles(state.category)\n}",
+      "options": [
+        "It's keyed on the whole `state`, so each change the load makes restarts it and loads again",
+        "`collectAsStateWithLifecycle` re-subscribes to the `StateFlow` on every recomposition, and each new subscription restarts the effect",
+        "`LaunchedEffect` restarts on every recomposition whatever its key is",
+        "Data class keys are compared by reference, so even an unchanged state restarts the effect"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Keys are compared with `equals`, and `state` really changes twice per load (`isLoading`, then the articles), so each load starts the next one. Keying on `state.category` stops the loop. It's better still for the ViewModel to derive loads from the category, e.g. with `flatMapLatest`, so the UI doesn't trigger fetches."
+    },
+    {
+      "id": "d58q15",
+      "type": "truefalse",
+      "topic": "hiltworker",
+      "difficulty": "Hard",
+      "question": "For `@HiltWorker class UploadWorker @AssistedInject constructor(@Assisted ctx: Context, @Assisted params: WorkerParameters, api: Api)`, these annotations are all you need: WorkManager's default initializer uses Hilt's worker factory automatically.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "The default initializer uses the default `WorkerFactory`, which only knows the `(Context, WorkerParameters)` constructor, so the worker can't be created. The Application must implement `Configuration.Provider` with an injected `HiltWorkerFactory`, and the manifest must remove the default `WorkManagerInitializer`."
+    },
+    {
+      "id": "d58q16",
+      "type": "multi",
+      "topic": "r8 + gson",
+      "difficulty": "Hard",
+      "question": "Retrofit with `GsonConverterFactory` works in debug, but the minified release build gets `User(name=null, email=null)` from the same JSON. Which changes fix it? Select all that apply.",
+      "code": "data class User(val name: String, val email: String)\n\ninterface Api {\n    @GET(\"me\")\n    suspend fun me(): User\n}",
+      "options": [
+        "Add `@SerializedName(\"name\")` and so on to the fields (recent Gson versions ship R8 rules that keep fields annotated with it)",
+        "Add a keep rule such as `-keep class com.example.api.dto.** { *; }`",
+        "Switch the DTOs to `@Serializable` with kotlinx.serialization, whose compiler plugin generates the serializers",
+        "Set `isShrinkResources = false` in the release build type",
+        "Turn off R8 full mode with `android.enableR8.fullMode=false`"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "R8 renamed the fields, so Gson, which matches JSON keys to field names by reflection, finds no matches and leaves them null. Fixed names, a keep rule or generated serializers all fix that. Resource shrinking is unrelated, and compatibility mode still obfuscates field names."
+    },
+    {
+      "id": "d58q17",
+      "type": "mcq",
+      "topic": "singleton leak",
+      "difficulty": "Hard",
+      "question": "The user rotates the phone three times and then presses Back, finishing `MainActivity` while the process stays alive. What does this code retain?",
+      "code": "@Singleton\nclass CartBadge @Inject constructor() {\n    var listener: ((Int) -> Unit)? = null\n}\n\n@AndroidEntryPoint\nclass MainActivity : ComponentActivity() {\n    @Inject lateinit var badge: CartBadge\n    override fun onCreate(savedInstanceState: Bundle?) {\n        super.onCreate(savedInstanceState)\n        val label = TextView(this)\n        badge.listener = { label.text = \"$it\" }\n        setContentView(label)\n    }\n}",
+      "options": [
+        "Only the last `MainActivity`, which the singleton keeps alive after Back",
+        "All four `MainActivity` instances, since every rotation adds another reference that the singleton holds forever",
+        "Nothing: Hilt clears a `@Singleton`'s references to an Activity when that Activity is destroyed",
+        "It doesn't build, because Hilt won't inject a `@Singleton` into an Activity"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "The lambda captures the `TextView`, which holds its Activity as its `Context`. Each new `onCreate` overwrites `listener`, freeing the previous Activity, but nothing clears it on the way out, so the app-lifetime singleton pins the last one. Clear it in `onDestroy`, or expose a `StateFlow` and collect it with the lifecycle."
+    },
+    {
+      "id": "d58q18",
+      "type": "multi",
+      "topic": "testing workers",
+      "difficulty": "Hard",
+      "question": "You're testing an `UploadWorker` (a Hilt `CoroutineWorker` with an extra injected `Api` parameter) that retries on network errors. Which statements are true? Select all that apply.",
+      "options": [
+        "`TestListenableWorkerBuilder<UploadWorker>(context).setRunAttemptCount(3)` builds a worker whose `doWork()` you can call directly and check the `Result` for that attempt",
+        "Because of the extra constructor parameter, the builder needs `setWorkerFactory(...)` with a factory that can create the worker",
+        "With `WorkManagerTestInitHelper`, `TestDriver.setAllConstraintsMet(id)` lets enqueued work run even though the test device's network doesn't meet the constraint",
+        "Inside `runTest`, virtual time also skips WorkManager's backoff, so a retried request reruns instantly"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "`TestListenableWorkerBuilder` builds one worker for a direct `doWork()` call, but like WorkManager it needs a factory that knows the extra parameter. `WorkManagerTestInitHelper` and its `TestDriver` let you fake constraints and delays. WorkManager schedules backoff itself, outside the test dispatcher, so `runTest`'s virtual time doesn't affect it."
+    },
+    {
+      "id": "d58q19",
+      "type": "mcq",
+      "topic": "remotemediator refresh",
+      "difficulty": "Hard",
+      "question": "On pull-to-refresh, the feed sometimes flashes the empty state and the scroll position jumps to the top before the new posts appear. The UI reads `db.postDao().pagingSource()`. What is the bug?",
+      "code": "override suspend fun load(type: LoadType, state: PagingState<Int, Post>): MediatorResult {\n    val page = pageFor(type, state) ?: return MediatorResult.Success(true)\n    val posts = api.feed(page)\n    if (type == LoadType.REFRESH) db.postDao().clearAll()\n    db.postDao().insertAll(posts)\n    return MediatorResult.Success(endOfPaginationReached = posts.isEmpty())\n}",
+      "options": [
+        "The delete and insert aren't in one `db.withTransaction { }`, so Paging can load the empty table",
+        "The pager flow is missing `cachedIn(viewModelScope)`, so each refresh rebuilds the list from nothing",
+        "`prefetchDistance` is too small, so Paging shows the empty state before the next page arrives",
+        "Room doesn't invalidate its `PagingSource` on writes, so the mediator must call `invalidate()` after inserting"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Room invalidates its `PagingSource` after every write, and between the `clearAll()` and the `insertAll()` the table really is empty, so the new `PagingSource` can load nothing. One transaction makes the change atomic, so readers only see the old or the new feed. Room invalidates the source on its own, and `cachedIn` doesn't make the gap go away."
+    },
+    {
+      "id": "d58q20",
+      "type": "mcq",
+      "topic": "unique work replace",
+      "difficulty": "Hard",
+      "question": "Every note edit saves the row with `dirty = true` and calls `enqueueUniqueWork(\"sync\", ExistingWorkPolicy.REPLACE, request)`. `SyncWorker` uploads all dirty rows, then clears their flag. The user edits a note while a sync is halfway through uploading. What happens?",
+      "options": [
+        "The running sync is cancelled and a new one re-sends every row still marked dirty",
+        "The new request waits until the running sync finishes, then runs",
+        "The new edit is never synced, because a unique work name that's already running silently ignores new requests",
+        "Both workers run at the same time, each uploading half of the dirty rows"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`REPLACE` cancels the existing unfinished work, including work that's running (its coroutine gets cancelled and `isStopped` becomes true), then enqueues the new request. Rows sent before the cancellation still have `dirty = true`, so they're sent again, which is why the upload must be idempotent. Waiting for the running sync is `APPEND`/`APPEND_OR_REPLACE`, and keeping it and ignoring the new request is `KEEP`."
+    }
+  ]
+}

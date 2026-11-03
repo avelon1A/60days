@@ -1,0 +1,361 @@
+{
+  "day": 36,
+  "topic": "Compose basics: composables, recomposition & modifiers",
+  "questions": [
+    {
+      "id": "d36q01",
+      "type": "truefalse",
+      "topic": "@composable",
+      "difficulty": "Easy",
+      "question": "A UI-emitting composable like `Greeting` returns the `Text` it creates, so the caller can keep a reference and update it later.",
+      "code": "@Composable\nfun Greeting(name: String) {\n    Text(\"Hello, $name\")\n}",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "UI-emitting composables return `Unit`: they emit nodes into the composition rather than handing back widget objects. To change what is shown you call the composable again with new inputs (recomposition), not mutate a returned element."
+    },
+    {
+      "id": "d36q02",
+      "type": "mcq",
+      "topic": "setcontent",
+      "difficulty": "Easy",
+      "question": "In a `ComponentActivity`, what is the standard way to show a Compose UI?",
+      "options": [
+        "Call `setContent { AppTheme { AppScreen() } }` in `onCreate`",
+        "Call `setContentView(AppScreen())` in `onCreate`",
+        "Call `setContent { AppScreen() }` in `onResume` so the UI refreshes every time the Activity resumes",
+        "Annotate the Activity class with `@Composable` and override `onCompose()`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "The `setContent` extension from activity-compose creates a `ComposeView` and sets it as the content view, so you call it once in `onCreate`. Compose refreshes the UI through recomposition, so there's no need to call it again in `onResume`, and `setContentView` takes a View or layout id, not a composable."
+    },
+    {
+      "id": "d36q03",
+      "type": "output",
+      "topic": "slots",
+      "difficulty": "Easy",
+      "question": "A slot API is a lambda parameter that the parent invokes where it wants. This plain-Kotlin model mimics one. What does it print?",
+      "code": "fun section(title: String, content: () -> Unit) {\n    println(\"[$title\")\n    content()\n    println(\"]\")\n}\n\nfun main() {\n    section(\"Profile\") {\n        println(\"avatar\")\n        section(\"Stats\") { println(\"posts\") }\n    }\n}",
+      "options": [
+        "[Profile\navatar\n[Stats\nposts\n]\n]",
+        "[Profile\n]\navatar\n[Stats\n]\nposts",
+        "[Profile\navatar\n[Stats\n]\nposts\n]",
+        "avatar\nposts\n[Profile\n[Stats\n]\n]"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "The parent decides where `content()` runs, here between its opening and closing lines, so the nested section is fully wrapped inside the outer one. `Scaffold`, `Card` and `Button` work the same way: their `content: @Composable () -> Unit` is invoked inside their own layout."
+    },
+    {
+      "id": "d36q04",
+      "type": "mcq",
+      "topic": "modifier order",
+      "difficulty": "Easy",
+      "question": "You want the red background to reach the edges of the element, with the text inset 16dp inside it. Which modifier chain does that?",
+      "code": "Text(\n    \"Sale\",\n    modifier = /* ? */\n)",
+      "options": [
+        "`Modifier.background(Color.Red).padding(16.dp)`",
+        "`Modifier.padding(16.dp).background(Color.Red)`",
+        "Either one: modifier order doesn't change the result",
+        "`Modifier.padding(16.dp)` alone, because padding is filled with the background color by default"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Modifiers apply from left to right, each wrapping what follows. `background` first paints the full area, then `padding` insets the text. With `padding().background()` the padding is applied first, so the red only covers the inner area and leaves a 16dp transparent gap around it."
+    },
+    {
+      "id": "d36q05",
+      "type": "multi",
+      "topic": "declarative ui",
+      "difficulty": "Medium",
+      "question": "Which statements describe how declarative UI in Compose differs from the classic View system? Select all that apply.",
+      "options": [
+        "You describe the UI for the current state, and when the state changes Compose re-runs the affected composables",
+        "To hide a message you wrap it in `if (visible) { Text(msg) }` instead of setting a visibility property",
+        "You keep a reference to a `Text` and call `setText` on it when the data changes",
+        "After changing data you call `invalidate()` on the root composable to redraw the screen"
+      ],
+      "answer": [
+        0,
+        1
+      ],
+      "explanation": "In Compose, UI is a function of state: you re-describe it and Compose works out what changed. There are no widget references to mutate, and you never invalidate the tree manually because recomposition is driven by state reads."
+    },
+    {
+      "id": "d36q06",
+      "type": "mcq",
+      "topic": "local var",
+      "difficulty": "Medium",
+      "question": "The user taps this button three times. What does the button show?",
+      "code": "@Composable\nfun Counter() {\n    var count = 0\n    Button(onClick = { count++ }) {\n        Text(\"Clicked $count\")\n    }\n}",
+      "options": [
+        "\"Clicked 0\" every time",
+        "\"Clicked 3\"",
+        "It doesn't compile because a lambda can't modify a captured `var`",
+        "\"Clicked 1\", because only the first change triggers recomposition"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A plain local isn't observable state, so changing it doesn't schedule recomposition, and if `Counter` did recompose for another reason `count` would be reset to 0. Kotlin lambdas can modify a captured `var`, so it compiles. The fix is `remember { mutableStateOf(0) }`, covered with state."
+    },
+    {
+      "id": "d36q07",
+      "type": "truefalse",
+      "topic": "@preview",
+      "difficulty": "Easy",
+      "question": "You can put `@Preview` directly on `@Composable fun UserCard(user: User)` and Android Studio will create a sample `User` to render it.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "Studio can't make up arguments for a preview. You write a separate `@Preview` function that calls `UserCard(User(...))` with sample data, or supply values with `@PreviewParameter` and a `PreviewParameterProvider`."
+    },
+    {
+      "id": "d36q08",
+      "type": "mcq",
+      "topic": "modifier parameter",
+      "difficulty": "Easy",
+      "question": "Which signature follows the Compose API guidelines for a reusable component?",
+      "options": [
+        "`fun ProfileCard(user: User, modifier: Modifier = Modifier, onClick: () -> Unit = {})`",
+        "`fun ProfileCard(modifier: Modifier, user: User, onClick: () -> Unit)`",
+        "`fun ProfileCard(user: User, modifier: Modifier = Modifier.padding(16.dp))`",
+        "`fun ProfileCard(user: User, onClick: () -> Unit = {})`, with sizing hard-coded inside"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Required parameters come first, then `modifier: Modifier = Modifier` as the first optional parameter, applied once to the root layout. A non-empty default such as `Modifier.padding(16.dp)` is silently lost when a caller passes their own modifier, and with no modifier parameter callers can't position or size the component."
+    },
+    {
+      "id": "d36q09",
+      "type": "output",
+      "topic": "modifier chain",
+      "difficulty": "Medium",
+      "question": "This program models how a modifier chain applies left to right, with each `padding` shrinking the space for everything after it. What does it print?",
+      "code": "fun main() {\n    var width = 100\n    val chain = listOf(\"background:red\", \"padding:10\", \"background:blue\", \"padding:5\")\n    for (op in chain) {\n        val (name, arg) = op.split(\":\")\n        when (name) {\n            \"padding\" -> width -= 2 * arg.toInt()\n            \"background\" -> println(\"$arg fills $width\")\n        }\n    }\n    println(\"content $width\")\n}",
+      "options": [
+        "red fills 100\nblue fills 80\ncontent 70",
+        "red fills 100\nblue fills 90\ncontent 85",
+        "red fills 70\nblue fills 70\ncontent 70",
+        "red fills 100\nblue fills 100\ncontent 70"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Padding applies on both sides: 100 becomes 80 before the blue background, then 70 for the content. `Modifier.background(Red).padding(10.dp).background(Blue).padding(5.dp)` behaves the same way: a red frame, then a blue frame, then the content. Each modifier only affects what comes after it in the chain."
+    },
+    {
+      "id": "d36q10",
+      "type": "mcq",
+      "topic": "clickable",
+      "difficulty": "Medium",
+      "question": "A list row should be tappable everywhere, including its 16dp padding, with the ripple covering the whole row. Which chain should you use?",
+      "code": "Row(\n    modifier = Modifier\n        /* ? */\n) { Text(item.title) }",
+      "options": [
+        "`.clickable { onOpen(item) }.padding(16.dp)`",
+        "`.padding(16.dp).clickable { onOpen(item) }`",
+        "Either one: `clickable` always covers the composable's full bounds",
+        "`.padding(16.dp)` and pass `onClick` to `Text` instead"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "When `clickable` comes before `padding`, it wraps the padded area, so the touch target and ripple include the padding. With `padding().clickable {}` the padding sits outside the clickable region, so taps near the edge do nothing and the ripple looks inset."
+    },
+    {
+      "id": "d36q11",
+      "type": "multi",
+      "topic": "recomposition",
+      "difficulty": "Medium",
+      "question": "Which statements about recomposition are true? Select all that apply.",
+      "options": [
+        "Compose can skip a composable whose parameters are stable and unchanged since the last composition",
+        "A recomposition can be cancelled and its result thrown away if the state changes again before it finishes",
+        "Composables may run in any order, so one composable shouldn't rely on a global variable that a sibling sets",
+        "When any state changes, the whole tree re-runs from `setContent` down",
+        "A composable runs exactly once per frame whether or not its inputs changed"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "Recomposition is optimistic and targeted: only composables that read changed state re-run, unchanged ones are skipped, and a pass can be cancelled. Because of this, composables must be fast, idempotent and side-effect free. They neither re-run the whole tree nor run on a fixed per-frame schedule."
+    },
+    {
+      "id": "d36q12",
+      "type": "truefalse",
+      "topic": "compositionlocal",
+      "difficulty": "Medium",
+      "question": "This code compiles and shows a toast when the button is tapped.",
+      "code": "@Composable\nfun HelloButton() {\n    Button(onClick = {\n        Toast.makeText(LocalContext.current, \"Hi\", Toast.LENGTH_SHORT).show()\n    }) {\n        Text(\"Tap\")\n    }\n}",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "`CompositionLocal.current` is a `@Composable` getter, and `onClick` is a regular lambda rather than a composable scope, so this is a compile error. Read `val context = LocalContext.current` in the composable body and use `context` inside the lambda."
+    },
+    {
+      "id": "d36q13",
+      "type": "mcq",
+      "topic": "weight",
+      "difficulty": "Medium",
+      "question": "The `Row` is 300dp wide. How wide are the three boxes?",
+      "code": "Row(Modifier.width(300.dp)) {\n    Box(Modifier.width(60.dp).height(40.dp))\n    Box(Modifier.weight(1f).height(40.dp))\n    Box(Modifier.weight(2f).height(40.dp))\n}",
+      "options": [
+        "60dp, 80dp, 160dp",
+        "60dp, 100dp, 200dp",
+        "100dp, 100dp, 100dp",
+        "60dp, 120dp, 120dp"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "The `Row` measures unweighted children first (60dp), then shares the remaining 240dp between weighted children in proportion to their weights, 1:2, which gives 80dp and 160dp. Weights split the leftover space, not the full 300dp."
+    },
+    {
+      "id": "d36q14",
+      "type": "multi",
+      "topic": "arrangement vs alignment",
+      "difficulty": "Medium",
+      "question": "Which of these compile and do what their names suggest? Select all that apply.",
+      "options": [
+        "`Column(verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.CenterHorizontally)`",
+        "`Row(horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically)`",
+        "`Box(contentAlignment = Alignment.BottomEnd)`, which stacks children in the bottom-end corner with later children drawn on top",
+        "`Column(horizontalArrangement = Arrangement.Center)`",
+        "`Row(verticalAlignment = Alignment.CenterHorizontally)`"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "Arrangement controls the main axis (vertical for `Column`, horizontal for `Row`) and Alignment controls the cross axis. `Column` has no `horizontalArrangement`, and `Row.verticalAlignment` takes an `Alignment.Vertical`, so `CenterHorizontally` is a type error. `Box` stacks its children, with later ones on top."
+    },
+    {
+      "id": "d36q15",
+      "type": "mcq",
+      "topic": "side-effect free",
+      "difficulty": "Hard",
+      "question": "What is wrong with this screen?",
+      "code": "@Composable\nfun ProductScreen(product: Product, analytics: Analytics) {\n    analytics.log(\"product_viewed\", product.id)\n    ProductDetails(product)\n}",
+      "options": [
+        "The body runs on every recomposition, even ones later discarded, so it can log many times",
+        "It doesn't compile because only `@Composable` functions can be called inside a composable",
+        "Nothing: a composable body runs exactly once when the screen first appears, like `onCreate`",
+        "Composition runs on a background thread, so `analytics.log` will crash if it touches the main thread"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Composables can re-run often and unpredictably, so their bodies must be free of side effects. Calling regular functions inside one compiles fine, which is why this bug is easy to miss. A one-off event like this belongs in an effect API such as `LaunchedEffect(product.id)`."
+    },
+    {
+      "id": "d36q16",
+      "type": "truefalse",
+      "topic": "scaffold slots",
+      "difficulty": "Medium",
+      "question": "Here, the first rows of the list can end up hidden behind the top app bar.",
+      "code": "Scaffold(\n    topBar = { TopAppBar(title = { Text(\"Inbox\") }) }\n) { innerPadding ->\n    LazyColumn {\n        items(mails) { MailRow(it) }\n    }\n}",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`Scaffold` fills its `topBar` slot and passes the space that bar (and other bars and insets) takes up as `PaddingValues` to the content lambda. If you ignore `innerPadding`, the content starts at the top of the screen, underneath the bar. Apply it with `Modifier.padding(innerPadding)` or `contentPadding = innerPadding`."
+    },
+    {
+      "id": "d36q17",
+      "type": "multi",
+      "topic": "compositionlocal",
+      "difficulty": "Medium",
+      "question": "Which statements about `CompositionLocal` and `MaterialTheme` are true? Select all that apply.",
+      "options": [
+        "`MaterialTheme.colorScheme.primary` resolves to the value from the nearest enclosing `MaterialTheme`",
+        "`LocalContext.current` gives you the Context of the view hosting the composition, without passing it through every parameter",
+        "`CompositionLocalProvider(LocalContentColor provides Color.Red) { ... }` changes the value only for composables inside that block",
+        "A `CompositionLocal` can be read from any regular, non-composable function",
+        "Changing a value that a `CompositionLocalProvider` provides requires recreating the Activity"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "CompositionLocals pass values implicitly down the tree, scoped to the nearest provider, which is how `MaterialTheme` exposes colors and typography. `.current` can only be read in composition, and a provided value can change at runtime, which recomposes the readers."
+    },
+    {
+      "id": "d36q18",
+      "type": "mcq",
+      "topic": "size vs fillmaxwidth",
+      "difficulty": "Hard",
+      "question": "This is placed in a `Column` that is 360dp wide. How big is the `Box`?",
+      "code": "Box(\n    Modifier\n        .fillMaxWidth()\n        .size(100.dp)\n        .background(Color.Blue)\n)",
+      "options": [
+        "360dp wide, 100dp tall",
+        "100dp × 100dp",
+        "360dp × 360dp",
+        "It crashes because the constraints conflict"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`fillMaxWidth` fixes the width constraint at 360dp. `size` respects incoming constraints, so its 100dp width is clamped to 360dp, while its 100dp height fits. To force 100dp anyway, use `requiredSize`. In the reverse order, `size(100.dp).fillMaxWidth()`, the result would be 100dp × 100dp."
+    },
+    {
+      "id": "d36q19",
+      "type": "mcq",
+      "topic": "phases",
+      "difficulty": "Hard",
+      "question": "While the color animates, which Compose phases re-run for this `Box` on each frame?",
+      "code": "@Composable\nfun Dot(selected: Boolean) {\n    val color by animateColorAsState(if (selected) Color.Red else Color.Gray)\n    Box(\n        Modifier\n            .size(48.dp)\n            .drawBehind { drawRect(color) }\n    )\n}",
+      "options": [
+        "Only drawing",
+        "Composition, layout and drawing",
+        "Layout and drawing",
+        "Only composition"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A frame goes through composition, then layout, then drawing, and a state change only restarts the phase where that state was read. Because the delegated `color` is read inside the `drawBehind` lambda, only drawing re-runs. If you read it in the body, for example with `Modifier.background(color)`, `Dot` would recompose on every frame."
+    },
+    {
+      "id": "d36q20",
+      "type": "mcq",
+      "topic": "composeview interop",
+      "difficulty": "Hard",
+      "question": "A Fragment hosts Compose like this. Why set this `ViewCompositionStrategy`?",
+      "code": "override fun onCreateView(\n    inflater: LayoutInflater, container: ViewGroup?, state: Bundle?\n) = ComposeView(requireContext()).apply {\n    setViewCompositionStrategy(\n        ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed\n    )\n    setContent { AppTheme { SettingsScreen() } }\n}",
+      "options": [
+        "It disposes the composition with the Fragment's view lifecycle, not whenever the view detaches",
+        "Without it, `setContent` throws because a Fragment has no `ViewTreeLifecycleOwner`",
+        "It keeps the composition and its remembered values alive across configuration changes",
+        "It makes `LocalContext.current` return the Fragment instead of the host Activity"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "By default, a `ComposeView` disposes its composition when it detaches from the window. A Fragment's view can be detached while its view lifecycle is still alive (for example during a transition), so the docs recommend disposing when the view's lifecycle is destroyed (`onDestroyView`). The composition is still rebuilt after a configuration change, and a Context is never a Fragment."
+    }
+  ]
+}

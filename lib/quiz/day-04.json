@@ -1,0 +1,366 @@
+{
+  "day": 4,
+  "topic": "Control flow: if, when, ranges & loops",
+  "questions": [
+    {
+      "id": "d04q01",
+      "type": "output",
+      "topic": "if expression",
+      "difficulty": "Easy",
+      "question": "What does this print?",
+      "code": "fun main() {\n    val n = 7\n    val label = if (n % 2 == 0) {\n        println(\"even\")\n        \"E\"\n    } else {\n        println(\"odd\")\n        \"O\"\n    }\n    println(label)\n}",
+      "options": [
+        "odd\nO",
+        "O",
+        "odd",
+        "odd\nodd"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`if` is an expression: each branch is a block whose last expression becomes the value, so `label` is `\"O\"`. The `println(\"odd\")` still runs as a side effect before the value is produced, so both lines are printed."
+    },
+    {
+      "id": "d04q02",
+      "type": "mcq",
+      "topic": "if else required",
+      "difficulty": "Easy",
+      "question": "What happens when you compile this line?",
+      "code": "val max = if (a > b) a",
+      "options": [
+        "Compile error: an `if` expression needs an `else` branch",
+        "It compiles and `max` is `Int?`, `null` when `a <= b`",
+        "It compiles and `max` is `Unit` when `a <= b`",
+        "It compiles but throws IllegalStateException at runtime when `a <= b`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "When `if` is used as an expression its value must exist on every path, so Kotlin requires an `else`. It never silently produces `null` or `Unit`; only an `if` used as a statement may omit `else`."
+    },
+    {
+      "id": "d04q03",
+      "type": "output",
+      "topic": "until vs ..",
+      "difficulty": "Easy",
+      "question": "What does this print?",
+      "code": "fun main() {\n    for (i in 1 until 4) print(i)\n    println()\n    for (i in 1..<4) print(i)\n    println()\n    for (i in 1..4) print(i)\n}",
+      "options": [
+        "123\n123\n1234",
+        "1234\n123\n1234",
+        "123\n1234\n1234",
+        "1234\n1234\n1234"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`1 until 4` and `1..<4` are both half-open ranges that exclude the end, while `1..4` includes it. `..<` is just the operator form of `until`."
+    },
+    {
+      "id": "d04q04",
+      "type": "truefalse",
+      "topic": "empty range",
+      "difficulty": "Easy",
+      "question": "True or false: this loop prints `54321`.",
+      "code": "for (i in 5..1) print(i)",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "`..` always counts upward, so `5..1` is an empty range and the loop body never runs. To count down you need `5 downTo 1`."
+    },
+    {
+      "id": "d04q05",
+      "type": "output",
+      "topic": "when branches",
+      "difficulty": "Easy",
+      "question": "What does this print?",
+      "code": "fun describe(code: Int) = when (code) {\n    200, 201 -> \"ok\"\n    in 400..499 -> \"client\"\n    !in 0..599 -> \"invalid\"\n    else -> \"other\"\n}\n\nfun main() {\n    println(listOf(201, 404, 302, 700).joinToString { describe(it) })\n}",
+      "options": [
+        "ok, client, other, invalid",
+        "ok, client, invalid, other",
+        "other, client, other, invalid",
+        "ok, client, other, other"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`200, 201 ->` matches either value, `in 400..499` is a range check and `!in 0..599` matches values outside the range. `302` is inside `0..599` so it falls to `else`, while `700` is outside and hits the `!in` branch."
+    },
+    {
+      "id": "d04q06",
+      "type": "mcq",
+      "topic": "when on itemId",
+      "difficulty": "Easy",
+      "question": "In this Activity menu handler, why is the `else` branch required?",
+      "code": "override fun onOptionsItemSelected(item: MenuItem): Boolean {\n    return when (item.itemId) {\n        R.id.action_search -> { openSearch(); true }\n        R.id.action_settings -> { openSettings(); true }\n        else -> super.onOptionsItemSelected(item)\n    }\n}",
+      "options": [
+        "`when` is an expression on an `Int`, and an `Int` subject can't be exhaustive without `else`",
+        "`R.id` values aren't compile-time constants, and `when` needs `else` for non-constant branches",
+        "Without `else` the matching branch would fall through into the next one",
+        "Android Lint rejects any `when` without `else`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "The `when` is the return value, so it must produce a `Boolean` for every possible `itemId`, which only `else` can guarantee for an `Int`. Branch conditions don't need to be constants, and Kotlin's `when` never falls through."
+    },
+    {
+      "id": "d04q07",
+      "type": "truefalse",
+      "topic": "repeat",
+      "difficulty": "Easy",
+      "question": "True or false: `repeat(3) { print(it) }` prints `012`.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`repeat(n)` calls the lambda `n` times and passes the zero-based iteration index as `it`, so it prints `0`, `1`, `2`. It does not start at 1."
+    },
+    {
+      "id": "d04q08",
+      "type": "multi",
+      "topic": "downTo & step",
+      "difficulty": "Medium",
+      "question": "Which of these produce exactly the sequence `10, 8, 6, 4, 2`? Select all that apply.",
+      "options": [
+        "`10 downTo 2 step 2`",
+        "`(2..10 step 2).reversed()`",
+        "`(2..10).reversed() step 2`",
+        "`10..2 step 2`",
+        "`10 downTo 2 step -2`"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "`downTo` counts down and `step` takes a positive step size, and `reversed()` flips a progression, so the first three all give `10, 8, 6, 4, 2`. `10..2` is an empty range, and a negative `step` throws `IllegalArgumentException`."
+    },
+    {
+      "id": "d04q09",
+      "type": "output",
+      "topic": "withIndex & indices",
+      "difficulty": "Medium",
+      "question": "What does this print?",
+      "code": "fun main() {\n    val tabs = listOf(\"Home\", \"Search\", \"Profile\")\n    for ((i, t) in tabs.withIndex()) {\n        if (i == tabs.lastIndex) print(t) else print(\"$t|\")\n    }\n    println()\n    for (i in tabs.indices.reversed()) print(i)\n}",
+      "options": [
+        "Home|Search|Profile\n210",
+        "Home|Search|Profile|\n210",
+        "Home|Search|Profile\n321",
+        "Home|Search|Profile\n012"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`withIndex()` gives `(index, value)` pairs you can destructure, and `lastIndex` is `size - 1`, so there's no trailing `|`. `indices` is `0..2`, and `reversed()` makes it count down from `2`."
+    },
+    {
+      "id": "d04q10",
+      "type": "mcq",
+      "topic": "when exhaustiveness",
+      "difficulty": "Medium",
+      "question": "What happens with this code?",
+      "code": "enum class Theme { LIGHT, DARK, SYSTEM }\n\nfun label(t: Theme): String = when (t) {\n    Theme.LIGHT -> \"Light\"\n    Theme.DARK -> \"Dark\"\n}\n\nfun main() {\n    println(label(Theme.SYSTEM))\n}",
+      "options": [
+        "Compile error: the `when` expression is not exhaustive",
+        "It prints an empty line",
+        "It throws `NoWhenBranchMatchedException` for `SYSTEM` at runtime",
+        "It prints `null`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A `when` used as an expression over an enum must cover every constant or have an `else`, and `SYSTEM` is missing, so the compiler rejects it. Kotlin checks this at compile time instead of failing at runtime.",
+      "compiles": false
+    },
+    {
+      "id": "d04q11",
+      "type": "output",
+      "topic": "do-while",
+      "difficulty": "Medium",
+      "question": "What does this print?",
+      "code": "fun main() {\n    var a = 10\n    while (a < 5) { print(\"w$a \"); a++ }\n    var b = 10\n    do { print(\"d$b \"); b++ } while (b < 5)\n    println(\"end\")\n}",
+      "options": [
+        "d10 end",
+        "end",
+        "w10 d10 end",
+        "w10 end"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`while` checks its condition before the first iteration, so with `a = 10` its body never runs. `do-while` checks after the body, so it always runs at least once and prints `d10 ` before the check fails."
+    },
+    {
+      "id": "d04q12",
+      "type": "mcq",
+      "topic": "when subject capture",
+      "difficulty": "Medium",
+      "question": "What happens with this code?",
+      "code": "fun fetchCode(): Int = 404\n\nfun main() {\n    when (val code = fetchCode()) {\n        200 -> println(\"OK\")\n        else -> println(\"Error $code\")\n    }\n    println(code)\n}",
+      "options": [
+        "Compile error: `code` is only in scope inside the `when`",
+        "It prints `Error 404` then `404`",
+        "It prints `Error 404` then `0`",
+        "Compile error: you can't declare a `val` inside `when (...)`"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`when (val code = fetchCode())` is allowed, but `code` is scoped to the `when` body only. That's the point of the syntax: it keeps the captured value from leaking into the surrounding scope, so the last `println(code)` doesn't compile.",
+      "compiles": false
+    },
+    {
+      "id": "d04q13",
+      "type": "output",
+      "topic": "map destructuring",
+      "difficulty": "Medium",
+      "question": "What does this print?",
+      "code": "fun main() {\n    val stock = mapOf(\"apple\" to 3, \"pear\" to 0, \"fig\" to 5)\n    for ((name, qty) in stock) {\n        if (qty == 0) continue\n        print(\"$name=$qty \")\n    }\n}",
+      "options": [
+        "apple=3 fig=5",
+        "apple=3 pear=0 fig=5",
+        "apple=3",
+        "fig=5 apple=3"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Destructuring a `Map.Entry` gives `(key, value)`, and `mapOf` keeps insertion order. `continue` skips only the current entry (`pear`), so iteration goes on to `fig` instead of stopping."
+    },
+    {
+      "id": "d04q14",
+      "type": "truefalse",
+      "topic": "exhaustive statements",
+      "difficulty": "Medium",
+      "question": "True or false: this compiles, because a `when` used as a statement doesn't need to be exhaustive.",
+      "code": "fun main() {\n    val isLoggedIn = true\n    when (isLoggedIn) {\n        true -> println(\"Welcome\")\n    }\n}",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "Since Kotlin 1.7, a `when` statement whose subject is a `Boolean`, enum or sealed type must be exhaustive too, so this needs a `false` or `else` branch. Only statements over other types (like `Int` or `String`) may skip cases.",
+      "compiles": false
+    },
+    {
+      "id": "d04q15",
+      "type": "output",
+      "topic": "CharRange",
+      "difficulty": "Medium",
+      "question": "What does this print?",
+      "code": "fun main() {\n    val r = 'a'..'k' step 3\n    println(r.joinToString(\"\"))\n    println('z' in 'a'..'y')\n    println(r.last)\n}",
+      "options": [
+        "adgj\nfalse\nj",
+        "adgjk\nfalse\nk",
+        "adgj\nfalse\nk",
+        "adgj\ntrue\nj"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`'a'..'k'` is a `CharRange`, and `step 3` keeps `a, d, g, j`. `k` is not reached, so the progression's `last` is `j`, not the range's end `k`."
+    },
+    {
+      "id": "d04q16",
+      "type": "mcq",
+      "topic": "when on UI state",
+      "difficulty": "Medium",
+      "question": "A teammate adds `object Empty : UiState`. What happens to `render`?",
+      "code": "sealed interface UiState {\n    object Loading : UiState\n    data class Success(val items: List<Item>) : UiState\n    data class Error(val message: String) : UiState\n}\n\nfun render(state: UiState) = when (state) {\n    UiState.Loading -> showSpinner()\n    is UiState.Success -> adapter.submitList(state.items)\n    is UiState.Error -> showError(state.message)\n}",
+      "options": [
+        "It stops compiling until `Empty` is handled",
+        "It compiles, and `Empty` is silently ignored",
+        "It compiles but throws `NoWhenBranchMatchedException` when `Empty` arrives",
+        "It compiles with only a warning"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Because `when` is used as an expression with no `else`, the compiler checks that it covers every subtype of the sealed interface. A new subtype breaks the build, which is why teams leave out `else` for UI state."
+    },
+    {
+      "id": "d04q17",
+      "type": "output",
+      "topic": "labeled break/continue",
+      "difficulty": "Hard",
+      "question": "What does this print?",
+      "code": "fun main() {\n    outer@ for (i in 1..3) {\n        for (j in 1..3) {\n            if (j == 2) continue@outer\n            if (i == 3) break@outer\n            print(\"$i$j \")\n        }\n    }\n    println(\"done\")\n}",
+      "options": [
+        "11 21 done",
+        "11 13 21 23 done",
+        "11 21 31 done",
+        "11 done"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`continue@outer` abandons the inner loop and moves to the next `i`, so `j = 3` is never reached. When `i == 3`, `break@outer` exits both loops before printing `31`."
+    },
+    {
+      "id": "d04q18",
+      "type": "output",
+      "topic": "return in forEach",
+      "difficulty": "Hard",
+      "question": "What does this print?",
+      "code": "fun first(): String {\n    listOf(1, 2, 3).forEach {\n        if (it == 2) return \"found $it\"\n        print(it)\n    }\n    return \"none\"\n}\n\nfun second(): String {\n    listOf(1, 2, 3).forEach {\n        if (it == 2) return@forEach\n        print(it)\n    }\n    return \"none\"\n}\n\nfun main() {\n    println(first())\n    println(second())\n}",
+      "options": [
+        "1found 2\n13none",
+        "1found 2\n1none",
+        "123found 2\n13none",
+        "1found 2\n123none"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A bare `return` inside `forEach` returns from the enclosing function `first()`, so the loop stops at `2`. `return@forEach` only ends the current lambda call, so it works like `continue` and `3` is still printed."
+    },
+    {
+      "id": "d04q19",
+      "type": "mcq",
+      "topic": "off-by-one range",
+      "difficulty": "Hard",
+      "question": "What happens when this runs?",
+      "code": "fun main() {\n    val items = listOf(\"a\", \"b\", \"c\")\n    for (i in 0..items.size) print(items[i])\n}",
+      "options": [
+        "It prints `abc` then throws `IndexOutOfBoundsException`",
+        "It prints `abc`, because `0..items.size` stops at the last index",
+        "It prints `ab`, since `..` excludes the upper bound",
+        "Compile error"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`0..items.size` is inclusive, so it reaches index `3` on a list of size 3. Use `items.indices` or `0 until items.size` (`0..<items.size`) instead."
+    },
+    {
+      "id": "d04q20",
+      "type": "multi",
+      "topic": "when semantics",
+      "difficulty": "Hard",
+      "question": "Which statements about `when` are true? Select all that apply.",
+      "options": [
+        "With a subject, branch conditions can be any expression, such as a function call, not just constants",
+        "Only the first matching branch runs; there is no fall-through",
+        "An `is` branch smart-casts the subject inside that branch",
+        "With a subject `x: Int`, a branch `x > 5 ->` checks whether `x` is greater than 5",
+        "A `when` without a subject always needs an `else`, even as a statement"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "With a subject, each branch value is compared to the subject, so `x > 5` would compare the `Int` against a `Boolean` and the compiler rejects it. Use a subject-less `when { x > 5 -> ... }` for that. A subject-less `when` used as a statement doesn't need `else`."
+    }
+  ]
+}

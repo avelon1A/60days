@@ -1,0 +1,350 @@
+{
+  "day": 33,
+  "topic": "Activity & Fragment lifecycle",
+  "questions": [
+    {
+      "id": "d33q01",
+      "type": "mcq",
+      "topic": "activity callbacks",
+      "difficulty": "Easy",
+      "question": "An Activity is launched fresh from the launcher. In what order are its callbacks called until the user can interact with it?",
+      "options": [
+        "onCreate → onStart → onResume",
+        "onCreate → onResume → onStart",
+        "onStart → onCreate → onResume",
+        "onCreate → onRestart → onStart → onResume"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`onCreate` sets up the instance, `onStart` makes it visible and `onResume` makes it interactive (foreground). `onRestart` only runs when a previously stopped activity comes back, never on a fresh launch."
+    },
+    {
+      "id": "d33q02",
+      "type": "truefalse",
+      "topic": "onrestart",
+      "difficulty": "Easy",
+      "question": "`onRestart()` is called only when an activity that was stopped comes back to the foreground, and it runs right before `onStart()`.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Returning from the stopped state goes `onRestart` → `onStart` → `onResume`. A paused-but-not-stopped activity (e.g. behind a translucent activity) skips `onRestart` and goes straight to `onResume`."
+    },
+    {
+      "id": "d33q03",
+      "type": "mcq",
+      "topic": "a starts b",
+      "difficulty": "Easy",
+      "question": "Activity A starts full-screen Activity B. In what order do the callbacks of both activities run?",
+      "options": [
+        "A.onPause → B.onCreate → B.onStart → B.onResume → A.onStop",
+        "A.onPause → A.onStop → B.onCreate → B.onStart → B.onResume",
+        "B.onCreate → B.onStart → B.onResume → A.onPause → A.onStop",
+        "A.onStop → B.onCreate → B.onStart → B.onResume → A.onPause"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A pauses first, then B is created and resumed, and only once B covers the screen is A stopped. That is why heavy work in `onPause` delays the next screen, while `onStop` is the better place for expensive cleanup."
+    },
+    {
+      "id": "d33q04",
+      "type": "output",
+      "topic": "lifecycle.state",
+      "difficulty": "Easy",
+      "question": "This enum is declared in the same order as AndroidX `Lifecycle.State`. What does it print?",
+      "code": "enum class State {\n    DESTROYED, INITIALIZED, CREATED, STARTED, RESUMED;\n\n    fun isAtLeast(s: State) = this >= s\n}\n\nfun main() {\n    val s = State.STARTED\n    println(listOf(\n        s.isAtLeast(State.CREATED),\n        s.isAtLeast(State.RESUMED),\n        State.DESTROYED.isAtLeast(State.INITIALIZED)\n    ))\n}",
+      "options": [
+        "[true, false, false]",
+        "[true, false, true]",
+        "[false, true, false]",
+        "[true, true, false]"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Enum comparison uses declaration order. `STARTED` is above `CREATED` but below `RESUMED`, and `DESTROYED` is the lowest state of all, below even `INITIALIZED`, so `isAtLeast(INITIALIZED)` is false for a destroyed lifecycle."
+    },
+    {
+      "id": "d33q05",
+      "type": "mcq",
+      "topic": "home button",
+      "difficulty": "Easy",
+      "question": "The user is on your Activity and presses Home. Assuming the process is not killed, which callbacks run?",
+      "options": [
+        "onPause → onStop",
+        "onPause → onStop → onDestroy",
+        "onPause only",
+        "onStop → onDestroy"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Home sends the task to the background: the activity becomes invisible (`onStop`) but is not finished, so `onDestroy` does not run and `isFinishing()` is false. When the user returns, it goes `onRestart` → `onStart` → `onResume`."
+    },
+    {
+      "id": "d33q06",
+      "type": "truefalse",
+      "topic": "dialogs",
+      "difficulty": "Easy",
+      "question": "Showing an `AlertDialog` (or a `DialogFragment`) from an Activity causes the Activity's `onPause()` to be called.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "A dialog is just another window owned by the same activity, so the activity stays RESUMED. Only another activity coming to the foreground (e.g. a dialog-themed or translucent Activity) pauses it."
+    },
+    {
+      "id": "d33q07",
+      "type": "multi",
+      "topic": "back stack",
+      "difficulty": "Medium",
+      "question": "Fragment A is replaced by Fragment B with `replace(...).addToBackStack(null).commit()`. Which callbacks run on Fragment A?",
+      "options": [
+        "onPause",
+        "onStop",
+        "onDestroyView",
+        "onDestroy",
+        "onDetach"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "Because the transaction is on the back stack, A's view is destroyed but the fragment instance stays alive (CREATED), so `onDestroy` and `onDetach` don't run. Popping the back stack calls A's `onCreateView`/`onViewCreated` again on the same instance."
+    },
+    {
+      "id": "d33q08",
+      "type": "mcq",
+      "topic": "onattach",
+      "difficulty": "Easy",
+      "question": "In a Fragment, which is the earliest callback where `requireContext()` is guaranteed not to throw?",
+      "options": [
+        "onAttach",
+        "onCreate",
+        "onCreateView",
+        "onViewCreated"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`onAttach(context)` is the first callback and the point where the fragment becomes associated with its host. `onCreate` and later also have a context, but they come after `onAttach`; the symmetric last callback is `onDetach`, after which `requireContext()` throws again."
+    },
+    {
+      "id": "d33q09",
+      "type": "mcq",
+      "topic": "transparent activity",
+      "difficulty": "Medium",
+      "question": "Activity A starts Activity B, which uses a translucent (dialog-like) theme so A is still visible behind it. What happens to A?",
+      "options": [
+        "A gets onPause only and stays visible in the STARTED state",
+        "A gets onPause and onStop, because another activity is in front",
+        "A gets no callbacks, because it is still visible",
+        "A gets onPause, onStop and onSaveInstanceState"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`onStop` only runs when an activity is no longer visible. A partly visible activity behind a translucent one is paused, not stopped, and on returning it goes straight to `onResume` without `onRestart`/`onStart`."
+    },
+    {
+      "id": "d33q10",
+      "type": "multi",
+      "topic": "back press",
+      "difficulty": "Medium",
+      "question": "The user presses Back on your second (non-root) Activity and nothing intercepts it. Which statements are true?",
+      "options": [
+        "onPause, onStop and onDestroy run on the activity",
+        "isFinishing() returns true in onPause/onStop/onDestroy",
+        "onSaveInstanceState is called so the screen can be restored later",
+        "isChangingConfigurations() returns true in onDestroy",
+        "Overriding onBackPressed() is the recommended way to intercept this"
+      ],
+      "answer": [
+        0,
+        1
+      ],
+      "explanation": "Back finishes the activity, so it is destroyed with `isFinishing()` true, and no instance state is saved because the user won't return to it. `isChangingConfigurations()` is only true for config-change recreation, and `onBackPressed()` is deprecated in favour of `OnBackPressedDispatcher` with an `OnBackPressedCallback`, which supports predictive back."
+    },
+    {
+      "id": "d33q11",
+      "type": "mcq",
+      "topic": "viewlifecycleowner",
+      "difficulty": "Medium",
+      "question": "This Fragment is put on the back stack and later shown again. What is the problem?",
+      "code": "override fun onViewCreated(view: View, savedInstanceState: Bundle?) {\n    super.onViewCreated(view, savedInstanceState)\n    lifecycle.addObserver(PlayerObserver(binding.playerView))\n}",
+      "options": [
+        "A second observer is added on each return, and the old one leaks the destroyed view",
+        "Nothing, because observers added in onViewCreated are removed automatically in onDestroyView",
+        "It crashes, because lifecycle can't be accessed in onViewCreated",
+        "The observer never fires, because the fragment's lifecycle is already RESUMED"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`lifecycle` here is the Fragment's own lifecycle, which outlives its view while on the back stack, so each `onViewCreated` adds another observer bound to an old view. Use `viewLifecycleOwner.lifecycle` for anything tied to the view; it is destroyed in `onDestroyView`, which removes the observer."
+    },
+    {
+      "id": "d33q12",
+      "type": "truefalse",
+      "topic": "root activity back",
+      "difficulty": "Medium",
+      "question": "On Android 12 and higher, pressing Back on a task's root launcher activity (with no back callback registered) moves the task to the background instead of finishing the activity.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Since Android 12 the system keeps root launcher activities alive on Back, so returning to the app is a warm start that doesn't run `onCreate` again. The activity gets `onPause`/`onStop` like a Home press, not `onDestroy`."
+    },
+    {
+      "id": "d33q13",
+      "type": "mcq",
+      "topic": "onsaveinstancestate",
+      "difficulty": "Medium",
+      "question": "In an app that targets Android 9 (API 28) or higher, when is `onSaveInstanceState` called as the user presses Home on your Activity?",
+      "options": [
+        "After onStop",
+        "Between onPause and onStop",
+        "Before onPause",
+        "Only in onDestroy, if the process is about to die"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "For apps targeting API 28+, it is guaranteed to run after `onStop`. For apps targeting earlier versions it ran before `onStop`, with no ordering guarantee relative to `onPause`, which is why older advice about its timing is unreliable."
+    },
+    {
+      "id": "d33q14",
+      "type": "multi",
+      "topic": "add vs replace",
+      "difficulty": "Medium",
+      "question": "Which statements about `FragmentTransaction.add` and `replace` on the same container are true?",
+      "options": [
+        "replace removes every fragment currently in that container before adding the new one",
+        "add keeps the existing fragments, so their views can end up stacked on top of each other",
+        "With replace plus addToBackStack, pressing Back brings back the removed fragment",
+        "add can only be used once per container",
+        "replace without addToBackStack keeps the old fragment instance alive for later"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "`replace` is remove-all-then-add, and `add` leaves existing fragments in place, which is the classic overlapping-views bug. Without `addToBackStack`, the removed fragment is fully destroyed (`onDestroy`, `onDetach`), so nothing is kept for later."
+    },
+    {
+      "id": "d33q15",
+      "type": "mcq",
+      "topic": "state vs event",
+      "difficulty": "Medium",
+      "question": "Right after `Lifecycle.Event.ON_PAUSE` has been dispatched, what does `lifecycle.currentState` return?",
+      "options": [
+        "STARTED",
+        "PAUSED",
+        "RESUMED",
+        "CREATED"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Events are the edges and states are the nodes: ON_PAUSE moves RESUMED down to STARTED, and ON_STOP moves STARTED down to CREATED. There is no PAUSED or STOPPED state."
+    },
+    {
+      "id": "d33q16",
+      "type": "mcq",
+      "topic": "defaultlifecycleobserver",
+      "difficulty": "Medium",
+      "question": "While an Activity is already RESUMED, you call `lifecycle.addObserver(obs)` where `obs` is a `DefaultLifecycleObserver` that logs `onCreate`, `onStart` and `onResume`. What gets logged?",
+      "options": [
+        "onCreate, onStart, onResume, in that order",
+        "Nothing until the next lifecycle event, since RESUMED was already reached",
+        "Only onResume, the event matching the current state",
+        "onResume, then onStart, then onCreate"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`LifecycleRegistry` brings a new observer up to the current state by dispatching every missed event in order, so a late observer still sees a consistent sequence. `DefaultLifecycleObserver` is the recommended API; the annotation-based `@OnLifecycleEvent` is deprecated."
+    },
+    {
+      "id": "d33q17",
+      "type": "mcq",
+      "topic": "state loss",
+      "difficulty": "Hard",
+      "question": "A network callback arrives after the user has sent the app to the background (the Activity is stopped and `onSaveInstanceState` has run). It calls `supportFragmentManager.beginTransaction().replace(R.id.c, ResultFragment()).commit()`. What happens?",
+      "options": [
+        "It throws an IllegalStateException about state loss",
+        "The transaction is queued and applied when the activity resumes",
+        "The transaction is silently dropped, since the container view is detached",
+        "It commits normally, and the new fragment survives process death"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Once state is saved, any change made after it would be missing from the saved state, so `commit()` throws to flag the state loss. `commitAllowingStateLoss()` avoids the crash but can lose the change. A better fix is to hold the result as state and update the UI when the lifecycle is at least STARTED."
+    },
+    {
+      "id": "d33q18",
+      "type": "multi",
+      "topic": "multi-window",
+      "difficulty": "Hard",
+      "question": "On a current Android version, two apps run side by side in split-screen and the user taps from app X into app Y. Which statements are true for X's activity?",
+      "options": [
+        "It stays in the RESUMED state",
+        "It is no longer the top-resumed activity and gets onTopResumedActivityChanged(false)",
+        "It receives onPause because it lost focus",
+        "It receives onStop because another app is in front"
+      ],
+      "answer": [
+        0,
+        1
+      ],
+      "explanation": "With multi-resume (Android 10+), every visible top activity in multi-window stays RESUMED. Focus is tracked separately as the single top-resumed activity, so losing focus doesn't trigger `onPause`, and X stays visible so it isn't stopped."
+    },
+    {
+      "id": "d33q19",
+      "type": "mcq",
+      "topic": "commitnow",
+      "difficulty": "Hard",
+      "question": "What happens when this transaction runs?",
+      "code": "supportFragmentManager.beginTransaction()\n    .replace(R.id.container, DetailFragment())\n    .addToBackStack(\"detail\")\n    .commitNow()",
+      "options": [
+        "It throws IllegalStateException: commitNow can't be added to the back stack",
+        "It runs synchronously and adds the entry to the back stack",
+        "It runs synchronously, and addToBackStack is silently ignored with a log warning",
+        "It behaves exactly like commit(), on the next main-thread frame"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`commitNow()` executes immediately, out of order with any pending `commit()`s, which would corrupt back-stack ordering, so it rejects `addToBackStack`. Use `commit()` for back-stack transactions, and `executePendingTransactions()` if you need them applied right away."
+    },
+    {
+      "id": "d33q20",
+      "type": "truefalse",
+      "topic": "finish in oncreate",
+      "difficulty": "Hard",
+      "question": "If an Activity calls `finish()` inside `onCreate()`, the system calls `onDestroy()` next without calling `onStart`, `onResume`, `onPause` or `onStop`.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "An activity that finishes before it was ever started goes straight from created to destroyed, a common trick for routing activities that just redirect. Cleanup placed only in `onStop` or `onPause` won't run in that case."
+    }
+  ]
+}
