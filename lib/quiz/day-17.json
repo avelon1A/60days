@@ -1,49 +1,30 @@
 {
   "day": 17,
-  "topic": "object, companion object & singletons",
+  "topic": "State hoisting, unidirectional data flow & MVVM",
   "questions": [
     {
       "id": "d17q01",
-      "type": "output",
-      "topic": "lazy object init",
+      "type": "mcq",
+      "topic": "state hoisting",
       "difficulty": "Easy",
-      "question": "What does this print?",
-      "code": "object Config {\n    init { println(\"init\") }\n    val name = \"cfg\"\n}\n\nfun main() {\n    println(\"start\")\n    println(Config.name)\n}",
+      "question": "Which signature is the hoisted, stateless version of a search field?",
       "options": [
-        "init\nstart\ncfg",
-        "start\ninit\ncfg",
-        "start\ncfg",
-        "start\ncfg\ninit"
+        "fun SearchField(query: String, onQueryChange: (String) -> Unit)",
+        "fun SearchField(viewModel: SearchViewModel = koinViewModel())",
+        "fun SearchField(state: MutableState<String>, modifier: Modifier)",
+        "fun SearchField(): String"
       ],
       "answer": [
-        1
+        0
       ],
-      "explanation": "An `object` declaration is initialized lazily, the first time it is accessed. So `start` prints first, then `Config.name` triggers the `init` block, then the value prints. It is not created at program start."
+      "explanation": "Hoisting replaces internal state with a value parameter plus an event callback, so the caller owns the state and the composable only displays and reports. Passing a `MutableState` lets the child write the caller's state directly and blurs who owns it. Taking a ViewModel ties the component to one screen and makes it hard to preview or reuse."
     },
     {
       "id": "d17q02",
-      "type": "mcq",
-      "topic": "no constructors",
-      "difficulty": "Easy",
-      "question": "What happens when you compile this?",
-      "code": "object Repo(val name: String)\n\nfun main() {\n    println(Repo.name)\n}",
-      "options": [
-        "Compile error: objects cannot have constructors",
-        "Compiles; `Repo.name` is an empty string by default",
-        "Compiles, but throws at runtime because `name` was never passed",
-        "Compiles; the constructor runs once with a `null` argument"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "An `object` is created by the runtime on first access, so there is nowhere to pass arguments, and declaring a constructor is a compile error. If a singleton needs configuration, use an `init` function, `lateinit` properties, or a regular class managed by DI."
-    },
-    {
-      "id": "d17q03",
       "type": "truefalse",
-      "topic": "one companion",
+      "topic": "ViewModel references",
       "difficulty": "Easy",
-      "question": "A class can declare two companion objects as long as you give them different names.",
+      "question": "A ViewModel should keep a reference to the Activity's `Context` or a `View` so it can show Toasts or update views directly.",
       "options": [
         "True",
         "False"
@@ -51,310 +32,149 @@
       "answer": [
         1
       ],
-      "explanation": "A class can have at most one `companion object`. Naming it only changes how it's referenced (`Foo.Factory` instead of `Foo.Companion`). You can still nest any number of ordinary `object` declarations inside the class."
+      "explanation": "A ViewModel outlives the Activity across configuration changes, so holding an Activity Context or View leaks the old Activity. In unidirectional data flow, the ViewModel exposes state, and the UI decides how to render it, including showing messages."
+    },
+    {
+      "id": "d17q03",
+      "type": "mcq",
+      "topic": "ViewModel scope",
+      "difficulty": "Easy",
+      "question": "Why does a ViewModel survive screen rotation while the Activity does not?",
+      "options": [
+        "It lives in a ViewModelStore that is kept across configuration changes",
+        "It is written into the saved-state Bundle and rebuilt after the rotation",
+        "Each ViewModel is a process-wide singleton until the app is killed",
+        "It is re-created, but the DI framework copies the old fields across"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "The `ViewModelStore` of an Activity or nav back-stack entry is retained across configuration changes and only cleared when the owner is finished for good, which is when `onCleared()` runs. Nothing is serialized, which is also why plain ViewModel fields do not survive process death. ViewModels are scoped to their owner, not to the process."
     },
     {
       "id": "d17q04",
-      "type": "output",
-      "topic": "single instance",
-      "difficulty": "Easy",
-      "question": "What does this print?",
-      "code": "object Counter {\n    var count = 0\n}\n\nfun main() {\n    val a = Counter\n    val b = Counter\n    a.count++\n    b.count += 2\n    println(\"${Counter.count} ${a === b}\")\n}",
+      "type": "mcq",
+      "topic": "read-only state",
+      "difficulty": "Medium",
+      "question": "What is the main point of this backing-property pattern?",
+      "code": "private val _uiState = MutableStateFlow(UiState())\nval uiState: StateFlow<UiState> = _uiState.asStateFlow()",
       "options": [
-        "3 true",
-        "2 false",
-        "3 false",
-        "1 true"
+        "Only the ViewModel can change the state; the UI gets a read-only view",
+        "asStateFlow makes the state thread-safe, which MutableStateFlow isn't",
+        "asStateFlow turns the hot StateFlow into a cold flow for the UI layer",
+        "collectAsStateWithLifecycle won't accept a MutableStateFlow directly"
       ],
       "answer": [
         0
       ],
-      "explanation": "`a` and `b` are both references to the one `Counter` instance, so `a === b` is `true` and both updates land on the same `count`. Assigning an object to a `val` doesn't copy it."
+      "explanation": "Exposing only `StateFlow` keeps a single owner of state, which is the core of unidirectional data flow: the UI can read it and send events, but not write. `asStateFlow()` wraps the flow in a read-only wrapper, so the UI cannot even cast it back to `MutableStateFlow`. `MutableStateFlow` is already thread-safe, and the result is still a hot StateFlow."
     },
     {
       "id": "d17q05",
-      "type": "mcq",
-      "topic": "intent creator",
-      "difficulty": "Easy",
-      "question": "Why do many Android codebases put the extra keys and a `newIntent` helper in the target Activity's companion object, like this?",
-      "code": "class DetailActivity : AppCompatActivity() {\n    companion object {\n        private const val EXTRA_ID = \"extra_id\"\n\n        fun newIntent(context: Context, id: Long) =\n            Intent(context, DetailActivity::class.java)\n                .putExtra(EXTRA_ID, id)\n    }\n}",
-      "options": [
-        "Building and reading the Intent live in one place, so callers can't misuse the key or type",
-        "Companion members are the only way to make an Intent survive process death",
-        "Android requires every Activity to expose a static `newIntent` method so the manifest can launch it",
-        "It makes the Activity a singleton, so only one `DetailActivity` instance can exist on the back stack"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "The companion acts as a factory callable as `DetailActivity.newIntent(ctx, id)`, and the key can stay `private`, so the contract is defined in one place. It has nothing to do with process death or the manifest, and the Activity is not made a singleton."
-    },
-    {
-      "id": "d17q06",
-      "type": "output",
-      "topic": "named companion",
-      "difficulty": "Easy",
-      "question": "What does this print?",
-      "code": "class User private constructor(val name: String) {\n    companion object Factory {\n        fun create(name: String) = User(name.uppercase())\n    }\n}\n\nfun main() {\n    val a = User.create(\"ann\")\n    val b = User.Factory.create(\"bob\")\n    println(\"${a.name} ${b.name}\")\n}",
-      "options": [
-        "ANN BOB",
-        "ann bob",
-        "ANN bob",
-        "Compile error"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "A named companion can be reached as `User.create(...)` or `User.Factory.create(...)`, and both go through the same factory. It can call the `private` constructor because it is declared inside the class, so both names come out uppercased."
-    },
-    {
-      "id": "d17q07",
-      "type": "output",
-      "topic": "capturing vars",
-      "difficulty": "Easy",
-      "question": "What does this print?",
-      "code": "interface Clicker {\n    fun click()\n}\n\nfun main() {\n    var clicks = 0\n    val c = object : Clicker {\n        override fun click() { clicks++ }\n    }\n    c.click()\n    c.click()\n    println(clicks)\n}",
-      "options": [
-        "2",
-        "0",
-        "1",
-        "Compile error"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Unlike Java anonymous classes, Kotlin object expressions can capture and modify local `var`s. The variable is wrapped in a shared reference, so both clicks update the same `clicks`."
-    },
-    {
-      "id": "d17q08",
-      "type": "truefalse",
-      "topic": "companion interface",
-      "difficulty": "Medium",
-      "question": "This code compiles: the companion implements `Factory<User>`, so the bare class name `User` can be passed where a `Factory<User>` is expected.",
-      "code": "interface Factory<T> { fun create(): T }\n\nclass User {\n    companion object : Factory<User> {\n        override fun create() = User()\n    }\n}\n\nfun <T> build(factory: Factory<T>): T = factory.create()\n\nfun main() {\n    val u: User = build(User)\n}",
-      "compiles": true,
-      "options": [
-        "True",
-        "False"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "A companion is a real object, and when the class name is used as a value it refers to the companion instance. So `build(User)` passes `User.Companion`, which is a `Factory<User>`. Java static methods can't do this."
-    },
-    {
-      "id": "d17q09",
-      "type": "output",
-      "topic": "companion init",
-      "difficulty": "Medium",
-      "question": "What does this print?",
-      "code": "class Foo {\n    init { println(\"instance\") }\n\n    companion object {\n        init { println(\"companion\") }\n    }\n}\n\nfun main() {\n    println(\"main\")\n    Foo()\n    Foo()\n}",
-      "options": [
-        "main\ncompanion\ninstance\ninstance",
-        "companion\nmain\ninstance\ninstance",
-        "main\ninstance\ncompanion\ninstance",
-        "main\ncompanion\ninstance\ncompanion\ninstance"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "The companion is initialized once, when the enclosing class is first loaded, which happens at the first `Foo()`, after `main` printed. Its `init` runs before the first instance's `init` and never runs again."
-    },
-    {
-      "id": "d17q10",
-      "type": "mcq",
-      "topic": "context leak",
-      "difficulty": "Medium",
-      "question": "What is the problem with this code, and what is the usual fix?",
-      "code": "object Analytics {\n    lateinit var context: Context\n}\n\nclass MainActivity : AppCompatActivity() {\n    override fun onCreate(savedInstanceState: Bundle?) {\n        super.onCreate(savedInstanceState)\n        Analytics.context = this\n    }\n}",
-      "options": [
-        "The object outlives the Activity and keeps it (and its views) reachable, so it leaks; use `applicationContext`",
-        "`lateinit` can't be used inside an `object`, so it won't compile; use `by lazy` instead",
-        "It's fine: the garbage collector clears references that singletons hold once the Activity's `onDestroy` has run",
-        "The object is re-created on every rotation, so `context` is reset to an uninitialized state and the next read throws"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "An `object` is held by a static field and lives until the process dies. After a rotation the old Activity is destroyed, but the singleton still points to it, so the GC can't collect it. `applicationContext` is safe because it already lives as long as the process."
-    },
-    {
-      "id": "d17q11",
-      "type": "output",
-      "topic": "object dependencies",
-      "difficulty": "Medium",
-      "question": "What does this print?",
-      "code": "object A {\n    init { println(\"A init\") }\n    val value = B.value + 1\n}\n\nobject B {\n    init { println(\"B init\") }\n    val value = 10\n}\n\nfun main() {\n    println(\"start\")\n    println(A.value)\n}",
-      "options": [
-        "start\nA init\nB init\n11",
-        "A init\nB init\nstart\n11",
-        "start\nB init\nA init\n11",
-        "start\nA init\n1"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Nothing is created until `A.value` is touched. `A`'s initializers run top to bottom: its `init` prints, then `B.value` forces `B` to initialize. Declaration order in the file doesn't matter, only first access does."
-    },
-    {
-      "id": "d17q12",
       "type": "multi",
-      "topic": "jvm interop",
-      "difficulty": "Medium",
-      "question": "Given this Kotlin class, which of these Java expressions compile? Select all that apply.",
-      "code": "class Prefs {\n    companion object {\n        const val KEY = \"k\"\n        @JvmField val DEFAULT = 0\n        @JvmStatic fun load() {}\n        fun save() {}\n    }\n}",
+      "topic": "process death",
+      "difficulty": "Hard",
+      "question": "The user types a draft, backgrounds the app, and the system kills the process. When they return, which of these still hold the draft? Select all that apply.",
       "options": [
-        "`Prefs.KEY`",
-        "`Prefs.DEFAULT`",
-        "`Prefs.load()`",
-        "`Prefs.save()`",
-        "`Prefs.Companion.getDEFAULT()`"
+        "A value stored in the ViewModel's SavedStateHandle",
+        "A `rememberSaveable` value in the composable",
+        "A MutableStateFlow field in the ViewModel",
+        "A `remember { mutableStateOf(\"\") }` value",
+        "A row the app wrote to its Room database"
       ],
       "answer": [
         0,
         1,
-        2
+        4
       ],
-      "explanation": "`const val` and `@JvmField` become public static fields on `Prefs`, and `@JvmStatic` also generates a static `Prefs.load()`. Without an annotation, `save()` exists only on the companion instance, so Java must call `Prefs.Companion.save()`. `@JvmField` exposes a field with no getter, so `getDEFAULT()` doesn't exist."
+      "explanation": "After process death the ViewModel and composition are new objects, so plain fields and `remember` start empty. `SavedStateHandle` and `rememberSaveable` go into the saved instance state that the system keeps and restores. Persistent storage like Room survives too, at the cost of a disk write."
     },
     {
-      "id": "d17q13",
+      "id": "d17q06",
       "type": "mcq",
-      "topic": "fragment newInstance",
+      "topic": "where to hoist",
       "difficulty": "Medium",
-      "question": "Why is the convention `companion object { fun newInstance(id: Long) = ProfileFragment().apply { arguments = bundleOf(\"id\" to id) } }` preferred over passing `id` through a Fragment constructor parameter?",
+      "question": "A filter bar and a list are siblings, and both need `selectedFilter`. Where should that state live?",
       "options": [
-        "Fragments are re-created with the no-arg constructor, losing constructor values, while `arguments` is restored",
-        "Kotlin doesn't allow classes extending `Fragment` to have primary constructors with parameters",
-        "Companion functions run on a background thread, so the Fragment is created faster and doesn't block the UI",
-        "`newInstance` makes the Fragment a singleton, so the back stack reuses one instance instead of creating copies"
+        "In their lowest common parent, or the ViewModel if business logic uses it",
+        "Inside each sibling separately, kept in sync with a LaunchedEffect in the second one",
+        "In a global singleton object so that any screen can read and change the filter",
+        "In the filter bar, which shares it with the list through a CompositionLocal"
       ],
       "answer": [
         0
       ],
-      "explanation": "On re-creation the `FragmentManager` builds the Fragment by reflection with an empty constructor (unless you set a custom `FragmentFactory`), so constructor arguments disappear. The `arguments` Bundle is part of the saved state and comes back. The companion factory just gives callers one typed entry point."
+      "explanation": "The rule of thumb is to hoist state to the lowest common ancestor of everything that reads or writes it. If the filter drives data loading, which is business logic, it belongs in the ViewModel. Duplicating state and syncing it creates two sources of truth, and a CompositionLocal hides a dependency that should be an explicit parameter."
     },
     {
-      "id": "d17q14",
-      "type": "output",
-      "topic": "expression vs declaration",
+      "id": "d17q07",
+      "type": "multi",
+      "topic": "UI vs ViewModel logic",
       "difficulty": "Medium",
-      "question": "What does this print?",
-      "code": "interface Greeter {\n    fun hi(): String\n}\n\nfun make() = object : Greeter {\n    override fun hi() = \"hi\"\n}\n\nobject Single : Greeter {\n    override fun hi() = \"hi\"\n}\n\nfun main() {\n    println(make() === make())\n    println(Single === Single)\n}",
+      "question": "Which of these belong in the ViewModel rather than in a composable? Select all that apply.",
       "options": [
-        "false\ntrue",
-        "true\ntrue",
-        "false\nfalse",
-        "true\nfalse"
+        "Calling a repository to load the screen's data",
+        "Mapping domain models into the screen's UiState",
+        "A LazyColumn's scroll position (LazyListState)",
+        "Animation progress of a card that expands",
+        "Deciding if Submit is enabled from the validation rules"
       ],
       "answer": [
-        0
+        0,
+        1,
+        4
       ],
-      "explanation": "An object expression creates a new instance every time it is evaluated, so two calls to `make()` return different objects. An object declaration is a single instance, so `Single === Single` is always `true`."
+      "explanation": "Business logic and screen-level state (loading data, mapping it, applying validation rules) belong in the ViewModel, where they are testable and survive rotation. Pure UI element state such as scroll and animation is tied to the composition and is best kept in plain state holders like `LazyListState` in the UI. Moving it into the ViewModel adds noise and can hurt performance."
     },
     {
-      "id": "d17q15",
+      "id": "d17q08",
       "type": "mcq",
-      "topic": "companion extension",
-      "difficulty": "Medium",
-      "question": "A library class `User` declares an empty `companion object {}`. How can you add a function callable as `User.fromJson(json)` without editing `User`?",
+      "topic": "one-off events",
+      "difficulty": "Hard",
+      "question": "Per the official Android architecture guidance, how should a ViewModel make the UI show a \"Saved\" snackbar exactly once?",
       "options": [
-        "`fun User.Companion.fromJson(json: String): User = ...`",
-        "`fun User.fromJson(json: String): User = ...`",
-        "`companion fun User.fromJson(json: String): User = ...`",
-        "`static fun User.fromJson(json: String): User = ...`"
+        "Put it in UiState (e.g. userMessage) and clear it once the UI reports it was shown",
+        "Keep a SnackbarHostState in the ViewModel and call showSnackbar() on it directly",
+        "Emit it on a MutableSharedFlow(replay = 1) so a collector that's late still gets it",
+        "Post it through LiveData with postValue so that it gets delivered on the main thread"
       ],
       "answer": [
         0
       ],
-      "explanation": "An extension on the companion type is called on the class name, just like a companion member. `fun User.fromJson` extends instances, so it would need `someUser.fromJson(...)`. Kotlin has no `static` or `companion fun` modifiers. This only works if the class already declares a companion."
+      "explanation": "The guidance is to model such events as state: the UI shows the message and then calls something like `onMessageShown()` so the ViewModel clears it. This survives rotation and cannot be lost while no one is collecting. `replay = 1` re-delivers the last message to every new collector, so the snackbar shows again after rotation, and a ViewModel should not hold UI objects like `SnackbarHostState`."
     },
     {
-      "id": "d17q16",
+      "id": "d17q09",
+      "type": "mcq",
+      "topic": "lost updates",
+      "difficulty": "Hard",
+      "question": "`increment()` is called many times in quick succession, but the final count is lower than the number of calls. Why?",
+      "code": "fun increment() {\n    viewModelScope.launch(Dispatchers.Default) {\n        _state.value = _state.value.copy(count = _state.value.count + 1)\n    }\n}",
+      "options": [
+        "Read and write are separate steps, so concurrent coroutines overwrite each other",
+        "StateFlow drops assignments made off the main thread, so only some of the updates are applied",
+        "copy() on a data class is lazy, so some of the copies are thrown away before they are assigned",
+        "StateFlow conflates values, so assignments made close together are merged into a single update"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "On `Dispatchers.Default`, several coroutines can read the same old value at once and each write old + 1, so updates are lost (a classic read-modify-write race). `_state.update { it.copy(count = it.count + 1) }` retries a compare-and-set until it applies to the latest value. Conflation only affects what collectors observe, not what the value ends up as."
+    },
+    {
+      "id": "d17q10",
       "type": "truefalse",
-      "topic": "thread safety",
+      "topic": "passing ViewModels down",
       "difficulty": "Medium",
-      "question": "If two threads access the `object Database` for the first time at the same moment, its `init` block runs exactly once, without any extra synchronization on your part.",
+      "question": "Passing the screen's ViewModel down into small leaf composables is recommended, so each can call any action it needs.",
       "options": [
         "True",
         "False"
       ],
       "answer": [
-        0
-      ],
-      "explanation": "On the JVM an `object` is initialized in its class's static initializer, and the JVM guarantees class initialization happens once under a lock. That makes it a lazy, thread-safe singleton for free. Mutable state inside it still needs its own synchronization."
-    },
-    {
-      "id": "d17q17",
-      "type": "output",
-      "topic": "const val inlining",
-      "difficulty": "Hard",
-      "question": "What does this print?",
-      "code": "class Keys {\n    companion object {\n        init { println(\"init\") }\n        const val A = \"a\"\n        val B = \"b\"\n    }\n}\n\nfun main() {\n    println(Keys.A)\n    println(Keys.B)\n}",
-      "options": [
-        "a\ninit\nb",
-        "init\na\nb",
-        "a\nb",
-        "init\na\ninit\nb"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "A `const val` is a compile-time constant, inlined at the call site, so reading `Keys.A` never loads the class and the companion's `init` doesn't run. Reading the ordinary `val B` goes through the companion, which triggers initialization right before `b` prints."
-    },
-    {
-      "id": "d17q18",
-      "type": "mcq",
-      "topic": "anonymous object type",
-      "difficulty": "Hard",
-      "question": "This fails with \"unresolved reference 'count'\". Why, and what's the smallest fix?",
-      "code": "class Screen {\n    val state = object {\n        var count = 0\n    }\n\n    fun bump() {\n        state.count++\n    }\n}\n\nfun main() {\n    Screen().bump()\n}",
-      "compiles": false,
-      "options": [
-        "A public property of anonymous type is exposed as `Any`; make `state` private",
-        "Object expressions can't declare `var` properties; change `count` to `val`",
-        "`state` is initialized lazily, so `count` doesn't exist yet when `bump()` is compiled; add `by lazy`",
-        "Anonymous objects must implement an interface; write `object : Any()` instead"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "When a non-private (or inline) declaration has an anonymous object type, Kotlin exposes it as the declared supertype, which here is `Any`, so `count` disappears. With `private val state`, the anonymous type is kept and `state.count` resolves. Implementing an interface explicitly would expose only that interface's members."
-    },
-    {
-      "id": "d17q19",
-      "type": "multi",
-      "topic": "object expressions",
-      "difficulty": "Hard",
-      "question": "Which statements about object expressions (`object : ... { }`) are true? Select all that apply.",
-      "options": [
-        "One expression can extend a class (passing its constructor arguments) and implement interfaces, e.g. `object : Base(42), Listener { }`",
-        "The body can declare its own properties and `init` blocks",
-        "The body runs lazily on first member access, just like an `object` declaration",
-        "It can declare a `const val`, since it is an object"
-      ],
-      "answer": [
-        0,
         1
       ],
-      "explanation": "Object expressions can have a superclass with constructor arguments plus any interfaces, and can contain properties and `init` blocks. Unlike object declarations, they are created eagerly at the point where the expression is evaluated. `const val` is allowed only at top level and in named or companion objects."
-    },
-    {
-      "id": "d17q20",
-      "type": "mcq",
-      "topic": "singleton vs di",
-      "difficulty": "Hard",
-      "question": "`ProfileViewModel` calls `UserRepository.load()` directly, where `UserRepository` is an `object` that builds its own Retrofit API. What's the main reason this is painful to unit-test, and the usual fix?",
-      "options": [
-        "It's hard-wired to a global instance, so tests can't swap in a fake and state leaks; inject an interface instead",
-        "`object` members can't be called from a ViewModel's `init` block, so the test crashes before running",
-        "Objects are re-created for every test method, so the network call happens many times; cache it in a `companion object`",
-        "JUnit can't load Kotlin objects at all without `@JvmStatic` on every member"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "A direct reference to an `object` is a hidden, unreplaceable dependency: the test gets the real Retrofit client, and the singleton's state lives on across tests in the same JVM. Constructor injection of an interface still gives you one shared instance in the app (via the DI scope), and tests can pass a fake."
+      "explanation": "Leaf composables should take only the data they display and the callbacks they need. That keeps them reusable, previewable and testable without a ViewModel, and limits what can trigger their recomposition. The screen-level composable is the place to connect the ViewModel."
     }
   ]
 }

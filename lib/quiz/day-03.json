@@ -1,215 +1,102 @@
 {
   "day": 3,
-  "topic": "Null safety II: smart casts, is & as",
+  "topic": "Scope functions, extensions & DSL builders",
   "questions": [
     {
       "id": "d03q01",
       "type": "output",
-      "topic": "is check",
+      "topic": "apply and let",
       "difficulty": "Easy",
       "question": "What does this print?",
-      "code": "fun describe(x: Any) =\n    if (x is String) x.uppercase() else \"not a string\"\n\nfun main() {\n    println(describe(\"kt\"))\n    println(describe(42))\n}",
+      "code": "fun main() {\n    val a = StringBuilder(\"x\").apply { append(\"y\") }\n    val b = \"x\".let { it + \"y\" }.length\n    println(\"$a $b\")\n}",
       "options": [
-        "KT\nnot a string",
-        "kt\nnot a string",
-        "KT\n42",
-        "Compile error"
+        "xy 2",
+        "x 1",
+        "x 2",
+        "xy 1"
       ],
       "answer": [
         0
       ],
-      "explanation": "After `x is String` succeeds, `x` is smart cast to `String` inside that branch, so `uppercase()` is available without an explicit cast. `42` fails the check and takes the `else` branch."
+      "explanation": "`apply` runs the block on the receiver and returns the receiver, so `a` is the StringBuilder now holding \"xy\". `let` returns the lambda's result, \"xy\", whose length is 2. Neither function discards the change made in its block."
     },
     {
       "id": "d03q02",
       "type": "mcq",
-      "topic": "as",
+      "topic": "choosing a scope function",
       "difficulty": "Easy",
-      "question": "What happens when this code runs?",
-      "code": "val x: Any = \"42\"\nval n = x as Int\nprintln(n + 1)",
+      "question": "You want to log an object in the middle of a call chain without changing the value that flows through the chain. Which scope function fits best?",
       "options": [
-        "Throws ClassCastException",
-        "Prints 43",
-        "Throws NumberFormatException",
-        "Prints null"
+        "`also`",
+        "`with`",
+        "`run`",
+        "`let`"
       ],
       "answer": [
         0
       ],
-      "explanation": "`as` is an unsafe cast. It never converts a value, it only checks the runtime type. `x` holds a `String`, so the cast to `Int` throws `ClassCastException`. To parse the text you need `toInt()`, which is the only thing that would throw `NumberFormatException`."
+      "explanation": "`also` passes the object as `it` and returns the same object, so it is made for side effects such as logging or validation in a chain. `let` and `run` return the lambda's result, so a logging call at the end would replace the value with `Unit`. `with` is not an extension and does not chain."
     },
     {
       "id": "d03q03",
       "type": "output",
-      "topic": "as? elvis",
-      "difficulty": "Easy",
+      "topic": "static dispatch",
+      "difficulty": "Medium",
       "question": "What does this print?",
-      "code": "fun main() {\n    val a: Any = 42\n    println(a as? String ?: \"none\")\n}",
+      "code": "open class Shape\nclass Circle : Shape()\n\nfun Shape.name() = \"shape\"\nfun Circle.name() = \"circle\"\n\nfun main() {\n    val s: Shape = Circle()\n    println(s.name())\n}",
       "options": [
-        "none",
-        "42",
-        "null",
-        "Throws ClassCastException"
+        "shape",
+        "shape circle",
+        "circle",
+        "Circle"
       ],
       "answer": [
         0
       ],
-      "explanation": "`as?` is the safe cast: when the type doesn't match it returns `null` instead of throwing. The elvis operator then replaces that `null` with \"none\"."
+      "explanation": "Extension functions are resolved at compile time from the declared type of the expression, not the runtime type. `s` is declared as `Shape`, so `Shape.name()` is chosen even though the object is a `Circle`. Extensions do not override each other; only member functions are dispatched virtually."
     },
     {
       "id": "d03q04",
-      "type": "truefalse",
-      "topic": "type erasure",
+      "type": "output",
+      "topic": "member vs extension",
       "difficulty": "Medium",
-      "question": "This code compiles.",
-      "code": "fun main() {\n    val x: Any = listOf(\"a\", \"b\")\n    if (x is List<String>) println(x.size)\n}",
+      "question": "What does this print?",
+      "code": "class Box {\n    fun show() = \"member\"\n}\n\nfun Box.show() = \"extension\"\nfun Box.show(x: Int) = \"extension $x\"\n\nfun main() {\n    println(Box().show())\n    println(Box().show(1))\n}",
       "options": [
-        "True",
-        "False"
+        "member\nextension 1",
+        "extension\nextension 1",
+        "member\nmember",
+        "extension\nmember"
       ],
       "answer": [
-        1
+        0
       ],
-      "compiles": false,
-      "explanation": "Generic type arguments are erased at runtime, so the JVM can't check `List<String>`. The compiler reports \"cannot check for instance of erased type\". Use `x is List<*>` instead, or a `reified` type parameter in an inline function."
+      "explanation": "When a member and an extension have the same signature, the member always wins and the extension is shadowed (the compiler warns about it). An extension with a different signature is a separate overload, so `show(1)` calls the extension. Extensions can add overloads but cannot replace members."
     },
     {
       "id": "d03q05",
-      "type": "mcq",
-      "topic": "nothing type",
-      "difficulty": "Easy",
-      "question": "Inside an Activity's `onCreate`, what is the type of `id`?",
-      "code": "val id = intent.getStringExtra(\"user_id\") ?: return",
+      "type": "output",
+      "topic": "also return value",
+      "difficulty": "Hard",
+      "question": "What does this print?",
+      "code": "fun main() {\n    var x = 1\n    val y = x.also { x = 10 }.let { it + x }\n    println(\"$x $y\")\n}",
       "options": [
-        "String",
-        "String?",
-        "Nothing",
-        "Unit"
+        "10 2",
+        "10 11",
+        "10 20",
+        "1 2"
       ],
       "answer": [
-        0
+        1
       ],
-      "explanation": "`return` is an expression of type `Nothing`, which is a subtype of every type. The common type of `String?`'s non-null part and `Nothing` is `String`, so `id` is non-null for the rest of the function. `Nothing` is only the type of the right-hand side, not of the whole expression."
+      "explanation": "`x.also { }` captures the current value of `x` (1) as its receiver and returns that value, even though the block changes the variable to 10. The `let` then gets `it = 1` and reads the variable `x`, which is now 10, so `y` is 11. `also` returns the object it was called on, not whatever the variable holds later."
     },
     {
       "id": "d03q06",
-      "type": "output",
-      "topic": "!is early return",
-      "difficulty": "Easy",
-      "question": "What does this print?",
-      "code": "fun f(x: Any): Int {\n    if (x !is String) return -1\n    return x.length\n}\n\nfun main() {\n    println(f(\"hey\"))\n    println(f(3))\n}",
-      "options": [
-        "3\n-1",
-        "3\n1",
-        "-1\n-1",
-        "Compile error"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Because the `!is` branch returns, the compiler knows that `x` must be a `String` on the lines after it, so `x.length` compiles. `3` is not a `String`, so it returns -1. Its digit count is never computed."
-    },
-    {
-      "id": "d03q07",
-      "type": "mcq",
-      "topic": "mutable property",
-      "difficulty": "Medium",
-      "question": "Why doesn't this compile?",
-      "code": "class Box {\n    var s: String? = \"hi\"\n}\n\nfun main() {\n    val b = Box()\n    if (b.s != null) println(b.s.length)\n}",
-      "options": [
-        "`s` is a `var` member, so it could change between the check and the use",
-        "Smart casts never work on class properties, only on local variables, even for a `val`",
-        "`!= null` checks can't produce smart casts. You need `is String`",
-        "`Box` must be a data class for its properties to be smart cast"
-      ],
-      "answer": [
-        0
-      ],
-      "compiles": false,
-      "explanation": "The compiler can't guarantee that a `var` member property keeps its value between the check and the use. Smart casts do work on stable `val` properties in the same module. Fix it by copying to a local (`val s = b.s`) or by using `b.s?.length`."
-    },
-    {
-      "id": "d03q08",
-      "type": "output",
-      "topic": "|| short-circuit",
-      "difficulty": "Easy",
-      "question": "What does this print?",
-      "code": "fun label(s: String?) =\n    if (s == null || s.length < 3) \"short\" else s.uppercase()\n\nfun main() {\n    println(label(null))\n    println(label(\"ab\"))\n    println(label(\"kotlin\"))\n}",
-      "options": [
-        "short\nshort\nKOTLIN",
-        "short\nAB\nKOTLIN",
-        "null\nshort\nKOTLIN",
-        "short\nshort\nkotlin"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`||` only evaluates its right side when `s == null` is false, so `s` is smart cast to `String` there. The `else` branch runs only when both conditions are false, which means `s` is non-null there too."
-    },
-    {
-      "id": "d03q09",
-      "type": "multi",
-      "topic": "smart cast limits",
-      "difficulty": "Medium",
-      "question": "After `if (obj.prop != null)`, in which cases is a smart cast of `obj.prop` to non-null IMPOSSIBLE? Select all that apply.",
-      "options": [
-        "`prop` is a `var` member property",
-        "`prop` is an `open val`",
-        "`prop` is a `val` with a custom getter",
-        "`prop` is a public `val` declared in a different module (e.g. a library)",
-        "`prop` is a plain `val` with no custom getter, declared in the same module",
-        "`prop` is a `private val` of the same class"
-      ],
-      "answer": [
-        0,
-        1,
-        2,
-        3
-      ],
-      "explanation": "A smart cast needs a stable value. A `var` can change, an `open` or custom getter may return something different on each call, and a library could later change a property from another module. A final `val` with a backing field in the same module is stable, so it can be smart cast."
-    },
-    {
-      "id": "d03q10",
-      "type": "output",
-      "topic": "as? numeric",
-      "difficulty": "Medium",
-      "question": "What does this print?",
-      "code": "fun main() {\n    val x: Any = 5L\n    println((x as? Int) ?: -1)\n}",
-      "options": [
-        "-1",
-        "5",
-        "null",
-        "Throws ClassCastException"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`x` holds a boxed `Long`, and a `Long` is not an `Int`. Casts never convert numbers, so `as?` returns `null` and the elvis operator produces -1. Use `(x as? Number)?.toInt()` to convert."
-    },
-    {
-      "id": "d03q11",
-      "type": "mcq",
-      "topic": "getSystemService",
-      "difficulty": "Easy",
-      "question": "`context.getSystemService(Context.CONNECTIVITY_SERVICE)` returns `Any!` (Java `Object`). Which line gives you a `ConnectivityManager?` without ever throwing?",
-      "options": [
-        "`val cm = context.getSystemService(name) as? ConnectivityManager`",
-        "`val cm = context.getSystemService(name) as ConnectivityManager`",
-        "`val cm = context.getSystemService(name) as ConnectivityManager?`",
-        "`val cm = context.getSystemService(name)!! as ConnectivityManager`"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Only `as?` yields `null` when the type is wrong or the value is null. `as ConnectivityManager?` allows null but still throws `ClassCastException` on a wrong type, and the other two throw on null. With core-ktx you can write `context.getSystemService<ConnectivityManager>()`."
-    },
-    {
-      "id": "d03q12",
       "type": "truefalse",
-      "topic": "captured var",
-      "difficulty": "Medium",
-      "question": "This code compiles, because `name` is a local variable checked right before use.",
-      "code": "fun main() {\n    var name: String? = \"Kotlin\"\n    val reset = { name = null }\n    if (name != null) println(name.length)\n    reset()\n}",
+      "topic": "extension visibility",
+      "difficulty": "Easy",
+      "question": "A top-level extension function declared outside a class can access that class's `private` members.",
       "options": [
         "True",
         "False"
@@ -217,154 +104,81 @@
       "answer": [
         1
       ],
-      "compiles": false,
-      "explanation": "Normally a local `var` can be smart cast. Here, though, it is assigned inside a lambda, and the lambda could run at any time, even on another thread. The compiler reports that `name` \"is mutated in a capturing closure\". A lambda that only reads `name` would not block the smart cast."
+      "explanation": "An extension is compiled to a static function that takes the receiver as a parameter, so it only sees what any outside code can see. It cannot access private or protected members. To reach private state you need a member function or an extension declared inside the class."
     },
     {
-      "id": "d03q13",
-      "type": "output",
-      "topic": "as nullable type",
-      "difficulty": "Medium",
-      "question": "What does this print?",
-      "code": "fun main() {\n    val n: Any? = null\n    val s = n as String?\n    println(s)\n}",
-      "options": [
-        "null",
-        "Throws NullPointerException",
-        "Throws ClassCastException",
-        "Compile error"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`null` is a valid value of the nullable type `String?`, so the cast succeeds and `s` is `null`. Casting `null` with `as String` (non-null target) would throw instead."
-    },
-    {
-      "id": "d03q14",
-      "type": "mcq",
-      "topic": "fragment listener",
-      "difficulty": "Medium",
-      "question": "A Fragment uses this code in `onAttach`. What happens if the host Activity does NOT implement `MyListener`?",
-      "code": "override fun onAttach(context: Context) {\n    super.onAttach(context)\n    listener = context as? MyListener\n        ?: throw IllegalStateException(\"$context must implement MyListener\")\n}",
-      "options": [
-        "It throws IllegalStateException with the custom message in `onAttach`",
-        "It throws ClassCastException when `as?` fails",
-        "`listener` is set to null, and the app crashes later when a callback is invoked",
-        "It doesn't compile, because `throw` can't be used as the right side of `?:`"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`as?` returns null on a type mismatch, never `ClassCastException`. The elvis operator then evaluates `throw`, which has type `Nothing`, so it is a valid right-hand side. The app fails fast in `onAttach` with a clear message, and `listener` can be a non-null type."
-    },
-    {
-      "id": "d03q15",
-      "type": "truefalse",
-      "topic": "requireNotNull",
-      "difficulty": "Medium",
-      "question": "This compiles: after `requireNotNull(s)` the compiler smart casts `s` to `String`, even though its return value is ignored.",
-      "code": "fun show(s: String?) {\n    requireNotNull(s)\n    println(s.length)\n}\n\nfun main() {\n    show(\"abc\")\n}",
-      "options": [
-        "True",
-        "False"
-      ],
-      "answer": [
-        0
-      ],
-      "compiles": true,
-      "explanation": "`requireNotNull` declares a contract saying it returns only if its argument is non-null. That lets the compiler smart cast `s` afterwards. The same applies to `checkNotNull`, `require(s != null)` and `check(s != null)`."
-    },
-    {
-      "id": "d03q16",
+      "id": "d03q07",
       "type": "multi",
-      "topic": "require vs check",
+      "topic": "scope function facts",
       "difficulty": "Medium",
-      "question": "Which of these calls throw `IllegalStateException`? Select all that apply.",
+      "question": "Which statements are true? Select all that apply.",
       "options": [
-        "`check(false)`",
-        "`checkNotNull(null)`",
-        "`error(\"boom\")`",
-        "`require(false)`",
-        "`requireNotNull(null)`"
+        "`with` is not an extension function; it takes the receiver as an argument",
+        "`also` returns the result of its lambda",
+        "`let` refers to the object as `this` inside the block",
+        "`apply` and `also` return the receiver object",
+        "`run` exists both as an extension (`x.run { }`) and as a non-extension (`run { }`)"
       ],
       "answer": [
         0,
-        1,
+        3,
+        4
+      ],
+      "explanation": "`apply` and `also` return the receiver; `let`, `run` and `with` return the lambda's result. `with(obj) { }` takes the object as a normal argument, and `run { }` without a receiver is just a block that returns a value. `let` and `also` use `it`; `apply`, `run` and `with` use `this`."
+    },
+    {
+      "id": "d03q08",
+      "type": "mcq",
+      "topic": "DslMarker",
+      "difficulty": "Hard",
+      "question": "In a type-safe HTML builder, `table { tr { tr { } } }` compiles because the inner block can still see the outer `table` receiver. How do you stop that?",
+      "options": [
+        "Declare each builder lambda parameter as `crossinline`, which removes implicit access to enclosing receivers",
+        "Make all builder functions `inline`, so the outer receiver is no longer in scope inside nested lambdas",
+        "Annotate the builder classes with your own `@DslMarker` annotation; outer receivers then need `this@label`",
+        "Make the builder classes `private`, so a nested block can only call functions on its own receiver"
+      ],
+      "answer": [
         2
       ],
-      "explanation": "The `check` family and `error()` signal an invalid object or program state, so they throw `IllegalStateException`. The `require` family validates arguments passed by the caller and throws `IllegalArgumentException`."
+      "explanation": "When implicit receivers come from classes that share a `@DslMarker` annotation, only the closest one can be used implicitly. Reaching an outer one needs an explicit label such as `this@table`, so mistakes like nested `tr` stop compiling. `inline` and `crossinline` control inlining and returns, not which receivers are visible."
     },
     {
-      "id": "d03q17",
+      "id": "d03q09",
       "type": "mcq",
-      "topic": "platform types",
-      "difficulty": "Hard",
-      "question": "A Java method `public String getName()` has no nullability annotations and returns null at runtime. What happens in Kotlin?",
-      "code": "val user = JavaUser()\nval a = user.getName()      // line 1\nval b: String = user.getName() // line 2",
+      "topic": "lambda with receiver",
+      "difficulty": "Medium",
+      "question": "Why is `init` declared as `HTML.() -> Unit` instead of `(HTML) -> Unit`?",
+      "code": "fun html(init: HTML.() -> Unit): HTML {\n    val h = HTML()\n    h.init()\n    return h\n}",
       "options": [
-        "Line 1 types `a` as `String!`, and line 2 throws NPE right away",
-        "Both lines fail to compile until you add `?` or `!!`",
-        "Both lines succeed, and the crash happens only when `b.length` is called",
-        "Line 1 is inferred as `String?`, and line 2 is a compile error"
+        "A receiver lambda can access the private members of `HTML`, which a regular lambda cannot",
+        "`(HTML) -> Unit` cannot be called with a trailing lambda, so the builder syntax would not work",
+        "Inside the lambda `this` is the HTML, so callers write `body { }` without a parameter name",
+        "A receiver lambda is always inlined by the compiler, so it avoids allocating a function object"
       ],
       "answer": [
-        0
+        2
       ],
-      "explanation": "Unannotated Java types become platform types (`String!`). Kotlin lets you treat them as either nullable or non-null and does not check nullability at compile time. When you assign one to a declared non-null type, Kotlin inserts a runtime null check, so line 2 throws NPE right there. `a` stays `String!`, which can blow up much later. That delay is why it's safer to declare such values as `String?` explicitly."
+      "explanation": "A function type with receiver makes the argument the implicit `this` inside the lambda, which is what makes builder code read like a DSL. Trailing lambda syntax works for any function type, so that is not the reason. Receiver lambdas follow normal visibility rules, so they cannot see private members."
     },
     {
-      "id": "d03q18",
-      "type": "output",
-      "topic": "unchecked cast",
-      "difficulty": "Hard",
-      "question": "What does this print?",
-      "code": "fun main() {\n    val x: Any = listOf(1, 2, 3)\n    val strs = x as List<String>\n    println(strs.size)\n}",
-      "options": [
-        "3",
-        "Throws ClassCastException",
-        "Compile error",
-        "0"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Because of type erasure, the runtime can only check `x is List`, so the cast succeeds with just an \"unchecked cast\" warning. Calling `size` never touches the elements. The `ClassCastException` would happen only when an element is used as a `String`, for example `val s: String = strs[0]`."
-    },
-    {
-      "id": "d03q19",
+      "id": "d03q10",
       "type": "mcq",
-      "topic": "k2 smart cast",
+      "topic": "extension properties",
       "difficulty": "Hard",
-      "question": "What happens when this is compiled with Kotlin 2.x (the K2 compiler) and run?",
-      "code": "fun main() {\n    val x: Any = \"Kotlin\"\n    val isStr = x is String\n    if (isStr) println(x.length)\n}",
+      "question": "Why does this declaration not compile?",
+      "code": "val String.firstChar: Char = this[0]",
       "options": [
-        "It compiles and prints 6",
-        "Compile error: unresolved reference `length`, because the check isn't inside the `if`",
-        "It compiles but throws ClassCastException",
-        "It compiles only if `isStr` is declared `const`"
+        "Extension properties must be declared `var`, because they are compiled to a getter and setter pair",
+        "`this` cannot be used in an extension property; the receiver is only available in extension functions",
+        "Extension properties are only allowed on classes you own, and `String` is a final class from the stdlib",
+        "Extension properties have no backing field, so they can't have an initializer; use a getter instead"
       ],
       "answer": [
-        0
+        3
       ],
-      "compiles": true,
-      "explanation": "K2 keeps track of what a local `val` holding a type check implies, so `if (isStr)` smart casts `x` to `String`. The old K1 compiler rejected this code, which is why many older answers online say it fails."
-    },
-    {
-      "id": "d03q20",
-      "type": "output",
-      "topic": "k2 smart cast",
-      "difficulty": "Hard",
-      "question": "What does this print with kotlinc 2.x (K2)?",
-      "code": "interface Named { val name: String }\nclass Cat(override val name: String) : Named\nclass Dog(override val name: String) : Named\n\nfun main() {\n    val x: Any = Cat(\"Tom\")\n    if (x is Cat || x is Dog) println(x.name)\n}",
-      "options": [
-        "Tom",
-        "Compile error",
-        "Cat",
-        "Throws ClassCastException"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "After `x is Cat || x is Dog`, K2 smart casts `x` to the closest common supertype, `Named`, so `x.name` resolves and prints \"Tom\". K1 couldn't do this and reported an unresolved reference."
+      "explanation": "An extension cannot add state to an existing class, so there is no field to initialize. The fix is `val String.firstChar: Char get() = this[0]`, which is computed on every access. `this` is available in extension property getters, and extensions work on final classes such as `String`.",
+      "compiles": false
     }
   ]
 }

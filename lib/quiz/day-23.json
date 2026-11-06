@@ -1,294 +1,119 @@
 {
   "day": 23,
-  "topic": "Scopes & structured concurrency: Job & SupervisorJob",
+  "topic": "Slot table & positional memoization",
   "questions": [
     {
       "id": "d23q01",
-      "type": "output",
-      "topic": "parent waits for children",
+      "type": "mcq",
+      "topic": "remember identity",
       "difficulty": "Easy",
-      "question": "What does this print?",
-      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking {\n    val job = launch {\n        launch {\n            delay(100)\n            println(\"child\")\n        }\n        println(\"parent body done\")\n    }\n    job.join()\n    println(\"joined\")\n}",
+      "question": "How does remember find the same stored value on the next recomposition?",
       "options": [
-        "parent body done\nchild\njoined",
-        "parent body done\njoined\nchild",
-        "parent body done\njoined",
-        "child\nparent body done\njoined"
+        "By the name of the variable it is assigned to",
+        "By hashing the value returned from the lambda",
+        "By the call's position in the group structure",
+        "By a unique ID the developer must pass in on every single call"
       ],
       "answer": [
-        0
+        2
       ],
-      "explanation": "A parent job is not complete until all its children complete, even after its own body has finished. So `job.join()` waits for the inner `launch`, and \"joined\" comes last."
+      "explanation": "This is positional memoization: the value is stored in the slot table at the position of the call, inside groups keyed by source location. On recomposition the same call site reaches the same slot. Variable names don't exist at runtime, and keys are optional extras, not the base mechanism."
     },
     {
       "id": "d23q02",
-      "type": "mcq",
-      "topic": "structured concurrency",
+      "type": "truefalse",
+      "topic": "gap buffer",
       "difficulty": "Easy",
-      "question": "Which statement best describes what structured concurrency guarantees?",
+      "question": "The slot table stores groups and remembered values in flat arrays organised as a gap buffer, which makes inserting near the current position cheap.",
       "options": [
-        "Each coroutine lives in a scope that waits for its children and gets their failures",
-        "Coroutines in the same scope always run sequentially in the order they were launched",
-        "Coroutines launched in a scope always run on the same thread as the scope's creator",
-        "A coroutine that throws is silently restarted by its parent scope"
+        "True",
+        "False"
       ],
       "answer": [
         0
       ],
-      "explanation": "Structured concurrency ties a coroutine's lifetime to its scope: no coroutine is leaked, the parent waits for its children, and errors are not lost because they propagate up. It says nothing about ordering or threads, and nothing is retried automatically."
+      "explanation": "The slot table is a gap buffer: a flat array with a movable empty region. Composition walks it in order, so inserts usually happen at the current spot and only require moving the gap. Moving the gap far away is costly, which is fine because UI changes tend to be local."
     },
     {
       "id": "d23q03",
-      "type": "multi",
-      "topic": "context elements",
-      "difficulty": "Easy",
-      "question": "Which of these are `CoroutineContext` elements that can be combined with `+`? Select all that apply.",
+      "type": "mcq",
+      "topic": "conditional groups",
+      "difficulty": "Medium",
+      "question": "`show` flips from false to true. What happens to `count`?",
+      "code": "@Composable\nfun Screen(show: Boolean) {\n    if (show) {\n        Header()\n    }\n    val count = remember { mutableStateOf(0) }\n    Counter(count)\n}",
       "options": [
-        "`Job()`",
-        "`Dispatchers.IO`",
-        "`CoroutineName(\"sync\")`",
-        "`CoroutineStart.LAZY`",
-        "`CoroutineScope(Dispatchers.IO)`"
+        "It resets to 0 because Header now takes the slot it used to occupy",
+        "It keeps its value, as the if branch is wrapped in its own group",
+        "It throws, since the slot table detects a changed number of calls",
+        "It keeps its value, but only if Header is marked @Stable or @Immutable"
       ],
       "answer": [
-        0,
-        1,
-        2
+        1
       ],
-      "explanation": "`Job`, `CoroutineDispatcher` and `CoroutineName` all implement `CoroutineContext.Element`. `CoroutineStart.LAZY` is a separate `start` parameter of `launch`/`async`, and a `CoroutineScope` is not an element. It only wraps a context."
+      "explanation": "The compiler wraps the if body in its own group, so turning it on inserts a group at that spot without shifting the identity of the code after it. The remember below keeps matching its old slot. Stability affects skipping, not slot identity."
     },
     {
       "id": "d23q04",
       "type": "mcq",
-      "topic": "cancel parent",
-      "difficulty": "Easy",
-      "question": "A coroutine launched with `scope.launch { }` has started three child coroutines with `launch`, and all of them are suspended in `delay`. What happens when you call `cancel()` on the parent job?",
+      "topic": "loops without keys",
+      "difficulty": "Medium",
+      "question": "Each ItemRow remembers its own `expanded` flag. A new item is inserted at the top of `items`. What happens to the expanded state?",
+      "code": "@Composable\nfun ItemList(items: List<Item>) {\n    Column {\n        for (item in items) {\n            ItemRow(item) // remembers its own expanded flag\n        }\n    }\n}",
       "options": [
-        "The parent and all three children are cancelled",
-        "Only the parent is cancelled, and the children keep running until they finish",
-        "The parent waits for the children to finish normally and then cancels itself",
-        "Nothing happens until the children call `cancel()` themselves"
+        "State follows each item correctly because Item is a data class",
+        "All rows lose their remembered state and start out collapsed again",
+        "State stays at each index, so rows show their neighbour's state",
+        "Compose throws because the number of loop iterations changed"
       ],
       "answer": [
-        0
+        2
       ],
-      "explanation": "Cancellation flows down the Job hierarchy: cancelling a parent cancels every child (and their children). That is why cancelling a scope in `onCleared`/`onDestroy` stops all the work started from it."
+      "explanation": "Without keys, loop iterations are matched by position, so the remembered state at index 0 now belongs to the new item and everything is shifted by one. Wrapping the body in key(item.id) lets the runtime match groups by identity and move state with the item."
     },
     {
       "id": "d23q05",
-      "type": "output",
-      "topic": "context inheritance",
-      "difficulty": "Easy",
-      "question": "What does this print?",
-      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking(CoroutineName(\"root\")) {\n    launch {\n        println(coroutineContext[CoroutineName]?.name)\n    }.join()\n    launch(CoroutineName(\"a\") + CoroutineName(\"b\")) {\n        println(coroutineContext[CoroutineName]?.name)\n    }.join()\n}",
+      "type": "multi",
+      "topic": "key()",
+      "difficulty": "Medium",
+      "question": "Which statements about the key() composable and lazy item keys are true? Select all that apply.",
       "options": [
-        "root\nb",
-        "root\na",
-        "null\nb",
-        "root\nroot"
+        "key(id) lets the runtime match groups by identity, so state moves when items reorder",
+        "key() makes its content skip recomposition while the key value is unchanged",
+        "Changing the value passed to key() at a call site resets the state remembered inside",
+        "LazyColumn item keys must be unique; a duplicate key throws at runtime",
+        "Values passed to key() are saved across process death automatically"
       ],
       "answer": [
-        0
+        0,
+        2,
+        3
       ],
-      "explanation": "A child inherits its parent's context, so the first `launch` sees \"root\". In `a + b`, both elements have the same key `CoroutineName`, so the right-hand one replaces the left, and the element passed to `launch` overrides the inherited one."
+      "explanation": "key() gives a group an identity beyond its position: same key means same group (even if moved), a new key means a new group with fresh state. LazyColumn needs unique keys and crashes on duplicates. key() has nothing to do with skipping, and it doesn't save anything to a Bundle."
     },
     {
       "id": "d23q06",
-      "type": "truefalse",
-      "topic": "cancel child",
-      "difficulty": "Easy",
-      "question": "Calling `cancel()` on a child job also cancels its parent and its siblings.",
+      "type": "mcq",
+      "topic": "remember keys",
+      "difficulty": "Hard",
+      "question": "`items` is an ArrayList that is mutated in place (add/remove) and then the composable recomposes with the same list. What does `sorted` hold?",
+      "code": "@Composable\nfun Sorted(items: ArrayList<String>) {\n    val sorted = remember(items) { items.sorted() }\n    Text(sorted.joinToString())\n}",
       "options": [
-        "True",
-        "False"
+        "A freshly sorted copy, because remember deep-compares lists",
+        "A stale result, as the key is the same instance and so equal",
+        "A freshly sorted copy, because mutation changes the list's hashCode",
+        "It throws, since mutable collections can't be remember keys"
       ],
       "answer": [
         1
       ],
-      "explanation": "False. Cancelling a child (a `CancellationException`) is treated as normal and is not propagated up, so the parent and siblings keep running. Only a failure with a real exception cancels the parent in a regular Job hierarchy."
+      "explanation": "remember stores the key and compares the new one with the old one using equals. Here both are the same object, so they're trivially equal and the lambda isn't re-run, leaving a stale result. Use immutable lists (a new instance per change) or snapshot state such as mutableStateListOf."
     },
     {
       "id": "d23q07",
-      "type": "mcq",
-      "topic": "CoroutineScope factory",
-      "difficulty": "Medium",
-      "question": "A repository creates `val scope = CoroutineScope(Dispatchers.IO)` without passing any `Job`. What happens?",
-      "options": [
-        "`CoroutineScope()` adds a `Job()` automatically, so `scope.cancel()` cancels its coroutines",
-        "The scope has no Job, so `scope.cancel()` throws `IllegalStateException`",
-        "Each `launch` in this scope becomes a top-level coroutine that can't be cancelled through the scope",
-        "The scope uses a `SupervisorJob()` by default"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`CoroutineScope(context)` adds a plain `Job()` when the context has none, so the scope can be cancelled and acts as the parent of its coroutines. It is a regular `Job`, not a `SupervisorJob`. Among the scope factories, `MainScope()` is the one that uses a `SupervisorJob()`."
-    },
-    {
-      "id": "d23q08",
-      "type": "output",
-      "topic": "coroutineScope waits",
-      "difficulty": "Easy",
-      "question": "What does this print?",
-      "code": "import kotlinx.coroutines.*\n\nsuspend fun work() = coroutineScope {\n    launch { delay(50); println(\"A\") }\n    launch { delay(10); println(\"B\") }\n    println(\"C\")\n}\n\nfun main() = runBlocking {\n    work()\n    println(\"D\")\n}",
-      "options": [
-        "C\nB\nA\nD",
-        "C\nD\nB\nA",
-        "A\nB\nC\nD",
-        "C\nA\nB\nD"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`coroutineScope` suspends until its body and all its children complete. \"C\" prints first, then B (10 ms), then A (50 ms), and only after that does `work()` return so \"D\" prints."
-    },
-    {
-      "id": "d23q09",
-      "type": "mcq",
-      "topic": "custom scope lifecycle",
-      "difficulty": "Medium",
-      "question": "A custom view presenter has `private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)` and starts a polling loop in it, but never calls `scope.cancel()`. The user leaves the screen. What happens?",
-      "code": "class PricePresenter(private val view: PriceView) {\n    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)\n\n    fun start() {\n        scope.launch {\n            while (true) { view.show(api.price()); delay(5_000) }\n        }\n    }\n}",
-      "options": [
-        "The loop keeps running and holds the view, leaking it until the process dies",
-        "The loop stops automatically because `Dispatchers.Main` is tied to the Activity lifecycle",
-        "The `SupervisorJob` cancels the loop when the view is detached",
-        "The loop is garbage-collected together with the presenter as soon as the screen closes"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "A hand-made scope knows nothing about lifecycles. Neither `Dispatchers.Main` nor `SupervisorJob` cancels anything on its own, and a running coroutine is reachable from the dispatcher, so it isn't collected. Call `scope.cancel()` in `onDestroy`/`onCleared` (or the presenter's detach) to end the work."
-    },
-    {
-      "id": "d23q10",
-      "type": "output",
-      "topic": "job states",
-      "difficulty": "Medium",
-      "question": "What does this print?",
-      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking {\n    val job = launch { delay(100) }\n    println(\"${job.isActive} ${job.isCompleted}\")\n    job.cancel()\n    println(\"${job.isActive} ${job.isCancelled}\")\n    job.join()\n    println(\"${job.isCancelled} ${job.isCompleted}\")\n}",
-      "options": [
-        "true false\nfalse true\ntrue true",
-        "true false\nfalse true\nfalse true",
-        "false false\nfalse true\ntrue true",
-        "true false\ntrue true\ntrue true"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "A launched job is active right away. After `cancel()` it is no longer active and `isCancelled` is true. Once it has finished, `isCompleted` is also true, and `isCancelled` stays true because a cancelled job counts as completed but stays marked as cancelled."
-    },
-    {
-      "id": "d23q11",
       "type": "truefalse",
-      "topic": "dispatcher keeps parent",
+      "topic": "remember lifetime",
       "difficulty": "Medium",
-      "question": "In a ViewModel, `viewModelScope.launch(Dispatchers.Default) { ... }` is still a child of `viewModelScope` and is cancelled when the ViewModel is cleared.",
-      "options": [
-        "True",
-        "False"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "True. The context you pass is merged with the scope's context. Only the dispatcher is replaced, and the scope's Job is still the parent. Only passing a `Job` (such as `Job()` or `SupervisorJob()`) replaces the parent and breaks the link."
-    },
-    {
-      "id": "d23q12",
-      "type": "mcq",
-      "topic": "job.children",
-      "difficulty": "Medium",
-      "question": "`parent` launched two coroutines, and each of them launched one more coroutine. All are still running. What does `parent.children.count()` return?",
-      "options": [
-        "2, because `children` holds only direct children",
-        "4, because `children` includes every descendant",
-        "0, because `children` is filled in only once the jobs complete",
-        "1, because `children` returns the most recent child only"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`Job.children` is a `Sequence<Job>` of the job's direct children. Grandchildren are children of those children, so you'd have to walk the tree to reach them."
-    },
-    {
-      "id": "d23q13",
-      "type": "output",
-      "topic": "supervisorScope",
-      "difficulty": "Medium",
-      "question": "What does this print to stdout? (Assume any uncaught exception only goes to stderr.)",
-      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking {\n    supervisorScope {\n        launch {\n            delay(10)\n            throw IllegalStateException(\"boom\")\n        }\n        launch {\n            delay(50)\n            println(\"sibling done\")\n        }\n    }\n    println(\"after scope\")\n}",
-      "options": [
-        "sibling done\nafter scope",
-        "after scope",
-        "after scope\nsibling done",
-        "sibling done"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "In `supervisorScope` a failing child does not cancel its siblings or the scope, so the second child still prints. The scope still waits for all its children, so \"after scope\" comes last."
-    },
-    {
-      "id": "d23q14",
-      "type": "multi",
-      "topic": "child failure",
-      "difficulty": "Medium",
-      "question": "Inside `coroutineScope { }`, one child `launch` throws an `IOException` while two siblings are still running. Which statements are true? Select all that apply.",
-      "options": [
-        "The running siblings are cancelled",
-        "The `coroutineScope` call rethrows the `IOException` to its caller",
-        "The scope waits for the cancelled siblings to finish before it rethrows",
-        "The siblings keep running and the exception is reported only after they finish",
-        "The `coroutineScope` call returns normally because the child failed, not the scope"
-      ],
-      "answer": [
-        0,
-        1,
-        2
-      ],
-      "explanation": "In a regular Job hierarchy a failing child cancels its parent, which cancels the other children. The scope completes only after all children have finished (including their cancellation), and then `coroutineScope` rethrows the original exception."
-    },
-    {
-      "id": "d23q15",
-      "type": "mcq",
-      "topic": "viewModelScope SupervisorJob",
-      "difficulty": "Medium",
-      "question": "Why is `viewModelScope` built on a `SupervisorJob` rather than a plain `Job`?",
-      "options": [
-        "So that one failed child doesn't cancel the scope and all the other jobs in it",
-        "So that coroutines survive `onCleared()` and keep running after the ViewModel is destroyed",
-        "So that exceptions thrown in child coroutines are swallowed and never crash the app",
-        "So that coroutines run on `Dispatchers.Main` by default"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "With a plain `Job`, one failing `launch` would cancel the scope, and every later `launch` in that ViewModel would be cancelled immediately. A `SupervisorJob` isolates failures between children, but an uncaught exception still reaches the exception handler and can crash the app. The Main dispatcher comes from a separate element."
-    },
-    {
-      "id": "d23q16",
-      "type": "output",
-      "topic": "coroutineScope failure",
-      "difficulty": "Medium",
-      "question": "What does this print?",
-      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking {\n    try {\n        coroutineScope {\n            launch { delay(10); throw IllegalStateException(\"boom\") }\n            launch { delay(100); println(\"sibling done\") }\n        }\n    } catch (e: IllegalStateException) {\n        println(\"caught ${e.message}\")\n    }\n    println(\"end\")\n}",
-      "options": [
-        "caught boom\nend",
-        "sibling done\ncaught boom\nend",
-        "caught boom\nsibling done\nend",
-        "end"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "The failing child cancels the `coroutineScope`, which cancels the sibling before its `delay` ends, so \"sibling done\" never prints. `coroutineScope` then rethrows the exception, and the surrounding `try/catch` catches it."
-    },
-    {
-      "id": "d23q17",
-      "type": "truefalse",
-      "topic": "supervision depth",
-      "difficulty": "Hard",
-      "question": "Inside `supervisorScope`, a child does `launch { launch { throw Exception() }; launch { delay(1000) } }`. Because of the supervisor, the failing grandchild does not cancel its sibling.",
+      "question": "Values stored with plain remember survive a configuration change such as rotation, as long as the Activity doesn't declare configChanges.",
       "options": [
         "True",
         "False"
@@ -296,63 +121,60 @@
       "answer": [
         1
       ],
-      "explanation": "False. Only the direct children of a supervisor are supervised. The grandchildren's parent is a regular child Job, so the failure cancels that child and its other children. The supervisor only stops the failure from going any higher."
+      "explanation": "Rotation recreates the Activity, which builds a brand-new composition and slot table, so remembered values are gone. rememberSaveable (via saved instance state) or a ViewModel is needed to keep them. remember only survives recomposition within the same composition."
     },
     {
-      "id": "d23q18",
-      "type": "multi",
-      "topic": "breaking the parent link",
-      "difficulty": "Hard",
-      "question": "`scope` is a normal `CoroutineScope` with a Job. Which of these coroutines are NOT cancelled when `scope.cancel()` is called? Select all that apply.",
-      "options": [
-        "`scope.launch(Job()) { delay(10_000) }`",
-        "`scope.launch(SupervisorJob()) { delay(10_000) }`",
-        "`scope.launch(Dispatchers.IO) { delay(10_000) }`",
-        "`scope.launch(CoroutineName(\"x\")) { delay(10_000) }`",
-        "`GlobalScope.launch { delay(10_000) }`"
-      ],
-      "answer": [
-        0,
-        1,
-        4
-      ],
-      "explanation": "Passing a `Job()` or `SupervisorJob()` to `launch` makes that new job the coroutine's parent, so it is no longer a child of `scope`. `GlobalScope` has no Job at all. A dispatcher or a name only replaces that element, and the scope's Job stays the parent."
-    },
-    {
-      "id": "d23q19",
-      "type": "output",
-      "topic": "launch(SupervisorJob())",
-      "difficulty": "Hard",
-      "question": "A developer wants the two inner coroutines to fail independently. What does this print to stdout? (Assume any uncaught exception only goes to stderr.)",
-      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking {\n    val job = launch(SupervisorJob()) {\n        launch { delay(10); throw RuntimeException(\"boom\") }\n        launch { delay(50); println(\"B done\") }\n    }\n    job.join()\n    println(\"end\")\n}",
-      "options": [
-        "end",
-        "B done\nend",
-        "end\nB done",
-        "B done"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "The `SupervisorJob()` becomes the parent of the outer `launch`, but the inner coroutines are children of that outer coroutine's own regular Job. So the failure cancels the outer coroutine and \"B done\" never prints. The usual fix is `supervisorScope { }` or a scope that is built on a `SupervisorJob`."
-    },
-    {
-      "id": "d23q20",
+      "id": "d23q08",
       "type": "mcq",
-      "topic": "cancelled scope reuse",
+      "topic": "movable content",
       "difficulty": "Hard",
-      "question": "A screen-level helper calls `scope.cancel()` in `onStop()` and then `scope.launch { refresh() }` again in `onStart()`. What happens when the user comes back to the screen?",
-      "code": "class Refresher {\n    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)\n    fun onStart() { scope.launch { refresh() } }\n    fun onStop() { scope.cancel() }\n}",
+      "question": "A video player composable must move between a Column in portrait and a Row in landscape (the Activity handles configChanges) without losing its remembered state. What is the right tool?",
       "options": [
-        "`refresh()` never runs again, because a cancelled scope stays cancelled",
-        "`refresh()` runs normally, because `launch` reactivates the scope's Job",
-        "`scope.launch` throws `IllegalStateException` because the scope is cancelled",
-        "`refresh()` runs, because a `SupervisorJob` ignores `cancel()` calls"
+        "Wrap the player in key(\"player\") in both layouts",
+        "Store all of the player's state in rememberSaveable",
+        "Create it with movableContentOf and use it in both",
+        "Provide the player through a CompositionLocalProvider"
       ],
       "answer": [
-        0
+        2
       ],
-      "explanation": "A cancelled Job is final. Coroutines launched into it are cancelled right away, and no error is reported, so the bug fails silently. To pause and resume work, use `scope.coroutineContext.cancelChildren()` or create a new scope for each start."
+      "explanation": "movableContentOf lets a chunk of composition, with its slot table groups and remembered state, be moved to a different place in the tree. key() only matches groups among siblings under the same parent, so moving to a different parent still loses state. rememberSaveable would save values but rebuild the player."
+    },
+    {
+      "id": "d23q09",
+      "type": "multi",
+      "topic": "RememberObserver",
+      "difficulty": "Hard",
+      "question": "An object implementing RememberObserver is stored with remember. Which statements are true? Select all that apply.",
+      "options": [
+        "onRemembered is called as soon as the remember lambda returns, during composition",
+        "onForgotten is called when the call leaves the composition or its keys change",
+        "onAbandoned is called if the composition is discarded before it is applied",
+        "onRemembered is called once the composition holding it has been applied"
+      ],
+      "answer": [
+        1,
+        2,
+        3
+      ],
+      "explanation": "Callbacks follow the composition's commit: onRemembered fires after apply, not while the lambda runs, because the composition might still be thrown away. If it is, the object gets onAbandoned instead. onForgotten fires when it leaves, and this is how DisposableEffect and LaunchedEffect are built."
+    },
+    {
+      "id": "d23q10",
+      "type": "mcq",
+      "topic": "leaving composition",
+      "difficulty": "Easy",
+      "question": "A composable inside `if (show)` uses remember. `show` goes false and then true again. What happens to the remembered value?",
+      "options": [
+        "It is restored, because the slot table keeps hidden groups around",
+        "It is recomputed, since the group was removed with the branch",
+        "It is restored, but only if the remembered value is a State object",
+        "It stays in memory but the composable can't read it any more"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "When the branch leaves, its group and slots are removed from the slot table and the values are forgotten. Coming back inserts a new group, so remember runs its lambda again. To keep state across this, hoist it above the if or use rememberSaveable."
     }
   ]
 }

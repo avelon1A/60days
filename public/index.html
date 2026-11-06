@@ -300,7 +300,7 @@ pre.kt { background: var(--code-bg); }
           <div id="lb"></div>
         </section>
         <section class="card side">
-          <h2>Kotlin quiz board</h2>
+          <h2>Mobile quiz board</h2>
           <div id="qlb"></div>
         </section>
         <section class="card side">
@@ -314,7 +314,7 @@ pre.kt { background: var(--code-bg); }
             <li>Try for 30 minutes before opening the hint or solution</li>
             <li>Discussion opens once you solve a problem, so no spoilers</li>
             <li>Missed a day? Catch up, don't skip</li>
-            <li>20 Kotlin questions a day. One attempt, so no peeking at the IDE</li>
+            <li>10 mobile questions a day. One attempt, so no peeking</li>
           </ol>
         </section>
       </aside>
@@ -387,7 +387,7 @@ darkQuery.addEventListener("change", e => { if (!savedTheme()) applyTheme(e.matc
 
 let BANK = [];
 let SYL = { weeks: [], days: [] };
-const quizTopic = day => (SYL.days.find(x => x.day === day) || {}).topic || "Kotlin";
+const quizTopic = day => (SYL.days.find(x => x.day === day) || {}).topic || "Mobile";
 const S = { cur: 1, sel: 1, me: null, uid: null, users: {}, solves: {}, mine: {}, sols: {}, comments: {}, open: {}, drafts: {},
   tab: savedTab(), quizScores: {}, quiz: {}, qa: {}, qi: {}, qfilter: {}, roadOpen: {} };
 function savedTab() { try { return localStorage.getItem("sdp-tab") === "quiz" ? "quiz" : "dsa"; } catch { return "dsa"; } }
@@ -453,7 +453,7 @@ function renderHero() {
   const ring = el("div", { class: "ring" + (n === 3 ? " full" : ""), style: `--p:${Math.round(n / 3 * 100)}`, role: "img", "aria-label": `${n} of 3 solved` }, el("div", {}, `${n}/3`));
   $("hero").replaceChildren(
     el("div", { style: "min-width:0" },
-      el("div", { class: "eyebrow" }, `Week ${Math.min(9, Math.ceil(d.day / 7))} · ${S.tab === "quiz" ? "Kotlin · " + quizTopic(d.day) : d.topic}`),
+      el("div", { class: "eyebrow" }, `Week ${Math.min(9, Math.ceil(d.day / 7))} · ${S.tab === "quiz" ? "Mobile quiz · " + quizTopic(d.day) : d.topic}`),
       el("h1", {}, `Day ${d.day} `, el("small", {}, "/ 60")),
       el("div", { style: "font-size:13px;color:var(--muted);margin-top:2px" }, d.day === S.cur ? `Today · ${dateLabel(d.date)}` : d.day > S.cur ? `Preview · opens ${dateLabel(d.date)}, 6 AM` : dateLabel(d.date))),
     ring);
@@ -574,7 +574,7 @@ function renderTabs() {
   const a = myQuiz(S.sel), n = mySolved(S.sel).filter(Boolean).length;
   const mk = (id, label, badge) => el("button", { role: "tab", "aria-selected": S.tab === id ? "true" : "false", onclick: () => setTab(id) },
     label, badge ? el("span", { class: "badge" }, badge) : null);
-  $("tabs").replaceChildren(mk("dsa", "🧩 DSA", S.sel > S.cur ? null : `${n}/3`), mk("quiz", "🟣 Kotlin quiz", a ? `${a.score}/${a.total}` : null));
+  $("tabs").replaceChildren(mk("dsa", "🧩 DSA", S.sel > S.cur ? null : `${n}/3`), mk("quiz", "🟣 Mobile quiz", a ? `${a.score}/${a.total}` : null));
 }
 function setTab(t) { S.tab = t; try { localStorage.setItem("sdp-tab", t); } catch {} render(); }
 
@@ -601,13 +601,13 @@ function qempty(icon, text, extra) {
   return el("div", { class: "qempty" }, el("span", { class: "big", "aria-hidden": "true" }, icon), text, extra ? el("div", { style: "margin-top:12px" }, extra) : null);
 }
 function quizHead(day, right) {
-  return el("div", { class: "list-head" }, el("h2", {}, day === S.cur ? "Today's Kotlin quiz" : `Day ${day} Kotlin quiz`), right);
+  return el("div", { class: "list-head" }, el("h2", {}, day === S.cur ? "Today's mobile quiz" : `Day ${day} mobile quiz`), right);
 }
 
 function renderQuiz() {
   const day = S.sel, box = $("day");
   if (day > S.cur) return box.replaceChildren(quizHead(day, el("span", {}, `👀 Opens ${whenAt6(opensAt(day))}`)),
-    qempty("🔒", `${quizTopic(day)}. 20 questions open ${whenAt6(opensAt(day))}. Quizzes have no preview.`));
+    qempty("🔒", `${quizTopic(day)}. 10 questions open ${whenAt6(opensAt(day))}. Quizzes have no preview.`));
   const qz = S.quiz[day];
   if (!qz) loadQuiz(day);
   if (!qz || qz.loading) return box.replaceChildren(quizHead(day, null), qempty("⏳", "Loading questions…"));
@@ -673,7 +673,7 @@ async function submitQuiz(day) {
 function renderQuizResult(qz) {
   const day = qz.day, box = $("day"), a = qz.attempt, qs = qz.questions, f = S.qfilter[day] || "all";
   const pct = a.score / a.total, wrong = qs.filter(q => !q.correct).length;
-  const msg = pct === 1 ? "Perfect score. Kotlin wizard 🧙" : pct >= .8 ? "Strong. Review the misses below." : pct >= .5 ? "Decent. The explanations below are worth a read." : "Tough one. Read every explanation below.";
+  const msg = pct === 1 ? "Perfect score. Mobile wizard 🧙" : pct >= .8 ? "Strong. Review the misses below." : pct >= .5 ? "Decent. The explanations below are worth a read." : "Tough one. Read every explanation below.";
   const all = Object.entries(S.quizScores).filter(([id]) => S.users[id]).map(([, days]) => days[day]).filter(Boolean);
   const avg = all.length > 1 ? ` · Group average ${(all.reduce((s, x) => s + x.score, 0) / all.length).toFixed(1)} from ${all.length}` : "";
   const fbtn = (id, label) => el("button", { class: "pill-btn", "aria-pressed": f === id ? "true" : "false", onclick: () => { S.qfilter[day] = id; renderDay(); } }, label);
@@ -691,7 +691,7 @@ function renderQuizResult(qz) {
       el("button", { class: "dot " + (q.correct ? "ok" : "bad"), "aria-label": `Question ${k + 1}, ${q.correct ? "correct" : "wrong"}`, onclick: () => jump(q) }, k + 1))),
     ...qs.map((q, k) => ({ q, k })).filter(({ q }) => f === "all" || !q.correct).map(({ q, k }) => resultItem(q, k)),
     f === "wrong" && !wrong ? qempty("🎯", "Nothing wrong. Nice.") : null,
-    el("div", { class: "foot" }, day === S.cur ? `Tomorrow's 20 questions open ${whenAt6(opensAt(day + 1))}.` : "Missed days can still be taken. They count for points, not for your streak."));
+    el("div", { class: "foot" }, day === S.cur ? `Tomorrow's 10 questions open ${whenAt6(opensAt(day + 1))}.` : "Missed days can still be taken. They count for points, not for your streak."));
 }
 
 function resultItem(q, k) {
@@ -724,7 +724,7 @@ function renderQuizBoard() {
     return { id, pts: v.reduce((s, x) => s + x.score, 0), n: v.length, st: quizStreak(days) };
   }).filter(r => r.n).sort((a, b) => b.pts - a.pts || b.st - a.st || nameOf(a.id).localeCompare(nameOf(b.id)));
   rows.forEach((r, i) => { r.rank = i && rows[i - 1].pts === r.pts ? rows[i - 1].rank : i + 1; });
-  if (!rows.length) return $("qlb").replaceChildren(el("p", { class: "empty" }, "Take today's Kotlin quiz to get on the board."));
+  if (!rows.length) return $("qlb").replaceChildren(el("p", { class: "empty" }, "Take today's mobile quiz to get on the board."));
   $("qlb").replaceChildren(...rows.map(r => el("div", { class: "lb-row" + (r.id === S.uid ? " mine" : "") },
     el("span", { class: "rk r" + r.rank }, r.rank), avatar(r.id, nameOf(r.id)),
     el("span", { class: "nm" }, nameOf(r.id) + (r.id === S.uid ? " (you)" : ""),
@@ -749,7 +749,7 @@ function lcLink(id) { const n = S.lc[id]; return n ? el("a", { class: "lcl", hre
 
 function renderRoad() {
   const quiz = S.tab === "quiz", box = $("road");
-  $("roadT").textContent = quiz ? "Roadmap · Kotlin quiz" : "Roadmap · DSA";
+  $("roadT").textContent = quiz ? "Roadmap · Mobile quiz" : "Roadmap · DSA";
   const weeks = quiz && SYL.weeks.length ? SYL.weeks : WEEKS;
   const per = quiz ? 20 : 3;
   const dayScore = d => quiz ? (myQuiz(d) || {}).score || 0 : mySolved(d).filter(Boolean).length;

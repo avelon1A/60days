@@ -1,336 +1,117 @@
 {
   "day": 24,
-  "topic": "Dispatchers, withContext & main-safety",
+  "topic": "Recomposer, invalidation & the frame clock",
   "questions": [
     {
       "id": "d24q01",
-      "type": "output",
-      "topic": "withContext result",
+      "type": "mcq",
+      "topic": "batching",
       "difficulty": "Easy",
-      "question": "What does this print?",
-      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking {\n    println(\"A\")\n    val x = withContext(Dispatchers.Default) {\n        println(\"B\")\n        42\n    }\n    println(\"C $x\")\n}",
+      "question": "An onClick handler writes to two different State objects, both read by the same composable. How is that composable recomposed?",
       "options": [
-        "A\nB\nC 42",
-        "A\nC 42\nB",
-        "A\nC null\nB",
-        "B\nA\nC 42"
+        "Twice, synchronously, once inside each assignment",
+        "Once, synchronously, at the end of the click handler",
+        "Twice, on two consecutive frames",
+        "Once, in a single pass on the next frame"
       ],
       "answer": [
-        0
+        3
       ],
-      "explanation": "`withContext` suspends the caller until its block finishes and returns the block's last expression. So `B` prints on a `Default` thread, then the caller resumes with `x = 42`. It does not fire and forget the way `launch` does."
+      "explanation": "State writes only mark the reading scopes invalid; the Recomposer then waits for the next frame and recomposes all invalid scopes together. Assignments never run composition inline, so multiple writes in one event are batched into one pass."
     },
     {
       "id": "d24q02",
-      "type": "mcq",
-      "topic": "Dispatchers.Default",
+      "type": "truefalse",
+      "topic": "scoped invalidation",
       "difficulty": "Easy",
-      "question": "A ViewModel needs to sort and diff a 50,000-item list before showing it. Which dispatcher should that work run on?",
-      "code": "viewModelScope.launch {\n    val sorted = withContext(/* ? */) {\n        items.sortedBy { it.name }\n    }\n    _state.value = sorted\n}",
+      "question": "When a state value changes, Compose invalidates only the restartable scopes that read it, rather than recomposing the whole tree from the root.",
       "options": [
-        "`Dispatchers.Default`",
-        "`Dispatchers.IO`",
-        "`Dispatchers.Main`",
-        "`Dispatchers.Unconfined`"
+        "True",
+        "False"
       ],
       "answer": [
         0
       ],
-      "explanation": "Sorting and diffing are CPU-bound, and `Default` is the pool sized to the number of CPU cores, made for that kind of work. `IO` is for blocking calls that mostly wait. `Main` would freeze the UI."
+      "explanation": "Reads are recorded per recompose scope, so a change invalidates just those scopes, and children with unchanged inputs may be skipped. This is why where you read state matters: reading it higher up widens how much is recomposed."
     },
     {
       "id": "d24q03",
-      "type": "truefalse",
-      "topic": "sequential withContext",
-      "difficulty": "Easy",
-      "question": "In this snippet, `loadUser()` and `loadPosts()` run concurrently because each one is in its own `withContext` block.",
-      "code": "suspend fun loadScreen() {\n    val user = withContext(Dispatchers.IO) { loadUser() }\n    val posts = withContext(Dispatchers.IO) { loadPosts() }\n    show(user, posts)\n}",
+      "type": "mcq",
+      "topic": "read location",
+      "difficulty": "Medium",
+      "question": "Which scope is invalidated when `count` changes?",
+      "code": "@Composable\nfun Screen() {\n    var count by remember { mutableStateOf(0) }\n    Column {\n        Title()\n        Button(onClick = { count++ }) {\n            Text(\"Count: $count\")\n        }\n    }\n}",
       "options": [
-        "True",
-        "False"
+        "The Screen function, because `count` is declared there",
+        "The Button's content lambda, where `count` is read",
+        "Only Title, since it is the first child of the Column",
+        "The whole Activity content that was set by setContent"
       ],
       "answer": [
         1
       ],
-      "explanation": "`withContext` suspends the caller until its block completes, so the second call starts only after the first returns. To run them in parallel you need `async { }` for each, then `await()`."
+      "explanation": "With a `by` delegate the State is read where `count` is used, which is inside Button's content lambda. Composable lambdas get their own restart scope, so only that lambda re-runs. Declaring state somewhere does not subscribe that scope; reading it does."
     },
     {
       "id": "d24q04",
-      "type": "output",
-      "topic": "newSingleThreadContext",
-      "difficulty": "Easy",
-      "question": "What does this print? (The program runs on a thread named `main`.)",
-      "code": "import kotlinx.coroutines.*\n\n@OptIn(DelicateCoroutinesApi::class, ExperimentalCoroutinesApi::class)\nfun main() {\n    newSingleThreadContext(\"db\").use { db ->\n        runBlocking {\n            val name = withContext(db) { Thread.currentThread().name }\n            println(name)\n            println(Thread.currentThread().name)\n        }\n    }\n}",
+      "type": "mcq",
+      "topic": "inline layouts",
+      "difficulty": "Medium",
+      "question": "Why does reading state directly inside a Column { } block recompose the composable that contains the Column?",
       "options": [
-        "db\nmain",
-        "db\ndb",
-        "main\nmain",
-        "main\ndb"
+        "Column is an inline function, so its content has no restart scope of its own",
+        "Column is marked @NonSkippable, which forces its parent to recompose",
+        "Column copies every child's state reads up to the root composition",
+        "Column caches its children, so it must invalidate the parent to refresh them"
       ],
       "answer": [
         0
       ],
-      "explanation": "`newSingleThreadContext(\"db\")` creates a dispatcher backed by one thread named `db`, and the `withContext` block runs there. When the block finishes, the caller resumes in its own context, which is `runBlocking`'s `main` thread. `use` closes the context at the end."
+      "explanation": "Column, Row and Box are inline, so their content lambda is inlined into the caller and reads there belong to the caller's scope. Extracting the reading code into its own composable gives it a separate scope and narrows recomposition."
     },
     {
       "id": "d24q05",
-      "type": "mcq",
-      "topic": "main-safety",
-      "difficulty": "Easy",
-      "question": "By the main-safety convention, where should the `withContext(Dispatchers.IO)` for a blocking file read go?",
-      "code": "class NotesRepository(private val file: File) {\n    suspend fun readNotes(): String =\n        withContext(Dispatchers.IO) { file.readText() }\n}",
-      "options": [
-        "Inside the repository function that does the read",
-        "In every ViewModel that calls the repository, around each call",
-        "In the Activity, around the `viewModelScope.launch` block",
-        "Nowhere: suspend functions always run off the main thread automatically"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "A main-safe suspend function switches dispatchers itself, so callers never need to know which thread it needs. Marking a function `suspend` does not move it off the calling thread, so the switch has to be written somewhere, and the function doing the blocking work is the right place."
-    },
-    {
-      "id": "d24q06",
       "type": "multi",
-      "topic": "Dispatchers.IO",
+      "topic": "frame clock",
       "difficulty": "Medium",
-      "question": "Which of these belong on `Dispatchers.IO`?",
+      "question": "Which statements about MonotonicFrameClock are true? Select all that apply.",
       "options": [
-        "A blocking JDBC or SQLite query that is not a suspend function",
-        "Reading a large file with `File.readBytes()`",
-        "Applying a blur filter to a bitmap pixel by pixel",
-        "Updating a `TextView`'s text",
-        "A blocking OkHttp `call.execute()`"
-      ],
-      "answer": [
-        0,
-        1,
-        4
-      ],
-      "explanation": "`IO` is for calls that block a thread while waiting on disk or network: blocking DB queries, file reads, and synchronous HTTP. Pixel-by-pixel filtering is CPU-bound and belongs on `Default`. Touching a View must happen on `Main`."
-    },
-    {
-      "id": "d24q07",
-      "type": "mcq",
-      "topic": "ANR",
-      "difficulty": "Easy",
-      "question": "What happens when a user taps the button that runs this code?",
-      "code": "button.setOnClickListener {\n    lifecycleScope.launch {\n        Thread.sleep(6_000)\n        label.text = \"Done\"\n    }\n}",
-      "options": [
-        "The UI freezes for 6 seconds, and an ANR dialog may appear",
-        "Nothing visible, because code inside `launch` always runs on a background thread",
-        "The coroutine is moved to `Dispatchers.IO` automatically when it blocks",
-        "It throws `IllegalStateException` because blocking is not allowed in coroutines"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`lifecycleScope` runs on `Dispatchers.Main`, and `Thread.sleep` blocks that thread instead of suspending. Input events can't be handled while it's blocked, and after about 5 seconds the system raises an ANR. `launch` alone never changes threads. Use `delay`, or move blocking work to `Dispatchers.IO`."
-    },
-    {
-      "id": "d24q08",
-      "type": "output",
-      "topic": "withContext suspends caller",
-      "difficulty": "Medium",
-      "question": "What does this print?",
-      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking {\n    launch { println(\"L\") }\n    val r = withContext(Dispatchers.Default) {\n        delay(50)\n        println(\"W\")\n        1\n    }\n    println(\"R$r\")\n}",
-      "options": [
-        "L\nW\nR1",
-        "W\nR1\nL",
-        "W\nL\nR1",
-        "L\nR1\nW"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`launch` only queues `L` on `runBlocking`'s thread. When `withContext` suspends the parent, that thread is free and runs `L` while the block waits 50 ms on `Default`. Then `W` prints, and the parent resumes with the result 1."
-    },
-    {
-      "id": "d24q09",
-      "type": "truefalse",
-      "topic": "closing dispatchers",
-      "difficulty": "Easy",
-      "question": "A dispatcher made with `newSingleThreadContext` or `Executors.newSingleThreadExecutor().asCoroutineDispatcher()` should be closed when it is no longer needed, or its thread keeps running.",
-      "options": [
-        "True",
-        "False"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "These dispatchers own a real thread that is not shared with anything else. Unless you call `close()` (or use `use { }`), the thread leaks for the life of the process (and a non-daemon executor thread, like the one from `Executors`, also keeps the JVM from exiting). `Dispatchers.Default` and `Dispatchers.IO` are shared and must never be closed."
-    },
-    {
-      "id": "d24q10",
-      "type": "mcq",
-      "topic": "IO thread limit",
-      "difficulty": "Medium",
-      "question": "By default, how many threads can `Dispatchers.IO` use at the same time?",
-      "options": [
-        "64 or the number of CPU cores, whichever is larger",
-        "Exactly the number of CPU cores",
-        "Unlimited: it creates a new thread for each blocking call",
-        "1, so blocking calls are serialised"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`IO` is an elastic pool capped at `max(64, cores)` by default (the `kotlinx.coroutines.io.parallelism` system property changes it). A cap equal to the core count is `Default`'s sizing, which would be far too small for threads that mostly sit waiting on I/O."
-    },
-    {
-      "id": "d24q11",
-      "type": "output",
-      "topic": "Dispatchers.Unconfined",
-      "difficulty": "Medium",
-      "question": "What does this print?",
-      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking {\n    launch(Dispatchers.Unconfined) {\n        println(\"1\")\n        delay(10)\n        println(\"3\")\n    }\n    println(\"2\")\n}",
-      "options": [
-        "1\n2\n3",
-        "2\n1\n3",
-        "1\n3\n2",
-        "2\n3\n1"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "An `Unconfined` coroutine starts right away in the caller's thread, so `1` prints before `launch` returns. At `delay` it suspends, the parent prints `2`, and the child resumes later to print `3`. With the default dispatcher it would print `2` first."
-    },
-    {
-      "id": "d24q12",
-      "type": "mcq",
-      "topic": "Room & Retrofit",
-      "difficulty": "Medium",
-      "question": "`getUser` is a `suspend` function on a Room `@Dao`, and `fetchFeed` is a `suspend` function on a Retrofit interface. What is true about the code below?",
-      "code": "viewModelScope.launch {\n    val user = userDao.getUser(id)\n    val feed = api.fetchFeed(user.token)\n    _ui.value = UiState(user, feed)\n}",
-      "options": [
-        "It is already main-safe, so the `withContext(Dispatchers.IO)` here is redundant",
-        "It will crash with `NetworkOnMainThreadException` unless each call is wrapped in `withContext(Dispatchers.IO)`",
-        "Room's call is main-safe but Retrofit's is not, so only `fetchFeed` needs `withContext`",
-        "It only works if the ViewModel uses `Dispatchers.Unconfined`"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Room runs suspend DAO queries on its own executor, and Retrofit's suspend support calls the request asynchronously through OkHttp's thread pool. Both suspend without blocking the caller, so calling them from `viewModelScope` (Main) is fine. Wrapping them in `withContext(IO)` only adds a thread hop."
-    },
-    {
-      "id": "d24q13",
-      "type": "multi",
-      "topic": "withContext semantics",
-      "difficulty": "Medium",
-      "question": "Which statements about `withContext(ctx) { ... }` are true?",
-      "options": [
-        "It returns the value of the block's last expression",
-        "The calling coroutine suspends until the block completes",
-        "If `ctx` has the same dispatcher the caller is already on, no thread switch is needed",
-        "The block keeps running after the caller's scope is cancelled",
-        "It runs the block concurrently with the code after it, like `launch`"
-      ],
-      "answer": [
-        0,
-        1,
-        2
-      ],
-      "explanation": "`withContext` is a suspending, scoped call: the caller waits, gets the result back, and the block is a child that is cancelled together with the caller. When the dispatcher doesn't change, it skips the dispatch. To run something concurrently you need `launch` or `async`."
-    },
-    {
-      "id": "d24q14",
-      "type": "mcq",
-      "topic": "Main.immediate",
-      "difficulty": "Medium",
-      "question": "What is the difference between `Dispatchers.Main.immediate` and `Dispatchers.Main`?",
-      "options": [
-        "If already on the main thread, `Main.immediate` runs it inline instead of posting it to the queue",
-        "`Main.immediate` uses a separate high-priority UI thread",
-        "`Main.immediate` skips cancellation checks, so it is faster",
-        "`Main` runs on the main thread only while an Activity is visible, and `Main.immediate` runs all the time"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Both use the same main thread. `Main` always posts the continuation to the main Handler, so it runs only after the messages already queued. `Main.immediate` checks `isDispatchNeeded` and runs inline when it is already on the main thread, which avoids that extra round trip through the queue. `viewModelScope` and `lifecycleScope` use `Main.immediate`."
-    },
-    {
-      "id": "d24q15",
-      "type": "output",
-      "topic": "limitedParallelism",
-      "difficulty": "Hard",
-      "question": "What does this print?",
-      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking {\n    val serial = Dispatchers.Default.limitedParallelism(1)\n    var counter = 0\n    coroutineScope {\n        repeat(1000) {\n            launch(serial) { counter++ }\n        }\n    }\n    println(counter)\n}",
-      "options": [
-        "1000",
-        "A number below 1000 that changes from run to run",
-        "0",
-        "It throws `ConcurrentModificationException`"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`limitedParallelism(1)` makes a view of `Default` that runs at most one of its tasks at a time, with a happens-before guarantee between them. So the plain `counter++` never races, even though the tasks may run on different pool threads. With plain `Dispatchers.Default`, updates could be lost."
-    },
-    {
-      "id": "d24q16",
-      "type": "mcq",
-      "topic": "CPU work on IO",
-      "difficulty": "Medium",
-      "question": "Why is running a heavy CPU-bound computation on `Dispatchers.IO` instead of `Default` a bad idea?",
-      "options": [
-        "`IO` allows far more threads than cores, so CPU work oversubscribes the CPU",
-        "`IO` threads run at background priority, so CPU work on them is throttled by the OS",
-        "It throws an exception, because `IO` rejects tasks that don't block",
-        "Code on `IO` can't return a value from `withContext`"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "CPU-bound work can only run as fast as there are cores. `Default` caps parallelism at the core count, while `IO` lets up to 64 threads compete for the same cores. That also uses up `IO` threads that real blocking calls need. It still works, it's just inefficient."
-    },
-    {
-      "id": "d24q17",
-      "type": "multi",
-      "topic": "injecting dispatchers",
-      "difficulty": "Medium",
-      "question": "A team wants to unit-test `SyncRepository`, and the ViewModels that call it, without real background threads. Which practices help?",
-      "code": "class SyncRepository @Inject constructor(\n    private val api: SyncApi,\n    @IoDispatcher private val io: CoroutineDispatcher\n) {\n    suspend fun sync() = withContext(io) { api.pushBlocking() }\n}",
-      "options": [
-        "Inject a `CoroutineDispatcher` through the constructor, e.g. with a Hilt `@IoDispatcher` qualifier",
-        "In tests, pass a `TestDispatcher` (such as `StandardTestDispatcher`) to the constructor",
-        "Hard-code `withContext(Dispatchers.IO)` inside every method",
-        "Use `Dispatchers.setMain(testDispatcher)` in tests for code that runs on `Dispatchers.Main`",
-        "Use `GlobalScope` inside the repository so tests don't need a scope"
+        "withFrameNanos suspends until the next frame and passes that frame's time",
+        "On Android the clock used by Compose UI is driven by Choreographer",
+        "withFrameNanos returns immediately with System.nanoTime() of the call",
+        "Compose animations read frame times from the clock in their coroutine context",
+        "The Recomposer runs a separate pass for each state write, without a clock"
       ],
       "answer": [
         0,
         1,
         3
       ],
-      "explanation": "Injecting the dispatcher lets production use `IO` and tests use a `TestDispatcher` that controls virtual time. `viewModelScope` hard-codes `Dispatchers.Main.immediate`, so tests replace `Main` with `Dispatchers.setMain`. A hard-coded `Dispatchers.IO` can't be swapped out, and `GlobalScope` makes the work impossible to control."
+      "explanation": "The Recomposer and animations wait on the frame clock found in the coroutine context; on Android it is backed by Choreographer vsync. This is also why tests can control time through the test clock. Recomposition is frame-aligned and batched, not per write."
     },
     {
-      "id": "d24q18",
-      "type": "output",
-      "topic": "Unconfined resumption",
+      "id": "d24q06",
+      "type": "mcq",
+      "topic": "background writes",
       "difficulty": "Hard",
-      "question": "What does this print? (`runBlocking` runs on the thread named `main`.)",
-      "code": "import kotlinx.coroutines.*\nimport java.util.concurrent.Executors\n\nfun main() {\n    val worker = Executors.newSingleThreadExecutor { Thread(it, \"worker\") }\n        .asCoroutineDispatcher()\n    runBlocking {\n        launch(Dispatchers.Unconfined) {\n            println(Thread.currentThread().name)\n            withContext(worker) { delay(10) }\n            println(Thread.currentThread().name)\n        }\n    }\n    worker.close()\n}",
+      "question": "A coroutine on Dispatchers.Default sets `state.value = x` without any explicit snapshot. What happens?",
       "options": [
-        "main\nworker",
-        "main\nmain",
-        "worker\nworker",
-        "worker\nmain"
+        "It crashes with CalledFromWrongThreadException, as Views would",
+        "The write is lost unless it is wrapped in withContext(Dispatchers.Main)",
+        "It writes the global snapshot; a later apply notice invalidates readers",
+        "It immediately recomposes the readers on that background thread"
       ],
       "answer": [
-        0
+        2
       ],
-      "explanation": "`Unconfined` starts the coroutine in the caller's thread (`main`), but it has no thread of its own to return to. When `withContext(worker)` finishes on the `worker` thread, the continuation resumes right there. A confined dispatcher would have switched back to `main`."
+      "explanation": "Snapshot state is thread-safe: a write outside an explicit snapshot goes to the global snapshot. Compose arranges for global changes to be sent as apply notifications, the Recomposer maps the changed objects to the scopes that read them and schedules a frame. Recomposition then runs on the Recomposer's own thread, not the writer's."
     },
     {
-      "id": "d24q19",
+      "id": "d24q07",
       "type": "truefalse",
-      "topic": "IO elasticity",
-      "difficulty": "Hard",
-      "question": "`Dispatchers.IO.limitedParallelism(100)` can run 100 blocking calls at once, even though `Dispatchers.IO` itself is limited to 64 threads by default.",
+      "topic": "backwards writes",
+      "difficulty": "Medium",
+      "question": "Writing to a state object during composition, after that same state has already been read in the current composition, can cause an endless recomposition loop.",
       "options": [
         "True",
         "False"
@@ -338,24 +119,61 @@
       "answer": [
         0
       ],
-      "explanation": "`IO` is elastic: views made with `limitedParallelism` on it are not bounded by `IO`'s own 64-thread cap, and extra threads are created as needed. That is how you give one heavy blocking dependency its own budget without starving everything else. `limitedParallelism` on `Default`, by contrast, can never exceed `Default`'s core count."
+      "explanation": "This is a 'backwards write': the write invalidates a scope that has just read the old value, so it must run again, writes again, and so on, every frame. State should be written in event handlers or effects, not in the composable body."
     },
     {
-      "id": "d24q20",
+      "id": "d24q08",
       "type": "mcq",
-      "topic": "IO and Default share threads",
+      "topic": "deferred reads",
       "difficulty": "Hard",
-      "question": "A coroutine running on `Dispatchers.IO` calls `withContext(Dispatchers.Default) { parse(json) }`. What does kotlinx.coroutines do?",
+      "question": "A header follows scroll position. Why is `Modifier.offset { IntOffset(0, -scroll.value) }` cheaper than `Modifier.offset(y = (-scroll.value).dp)`?",
       "options": [
-        "It may stay on the same thread, since `Default` and `IO` share one thread pool",
-        "It always hands the block to a different thread and copies `json` to it",
-        "It throws, because you can't switch from `IO` to `Default` directly",
-        "It runs the block on the main thread, since `Default` means the default UI dispatcher"
+        "The lambda version runs on a background thread instead of the main thread",
+        "The lambda reads state in layout, so scrolling skips recomposition",
+        "The lambda version is cached, so it only runs on the first frame",
+        "The dp version allocates a Dp object, which triggers garbage collection"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "In the value version, scroll.value is read during composition, so every pixel of scroll recomposes the caller. In the lambda version the read happens inside the layout phase, so only the layout scope is invalidated and composition is skipped. Both run on the main thread every frame."
+    },
+    {
+      "id": "d24q09",
+      "type": "multi",
+      "topic": "invalidation causes",
+      "difficulty": "Hard",
+      "question": "Which of these can make a restartable composable scope recompose? Select all that apply.",
+      "options": [
+        "A State it read in its last composition changes",
+        "Its parent recomposes and passes a changed parameter",
+        "A state it never read is written to",
+        "A compositionLocalOf value it reads changes",
+        "invalidate() is called on the host ComposeView"
+      ],
+      "answer": [
+        0,
+        1,
+        3
+      ],
+      "explanation": "A scope reruns when something it read changes (state or a dynamic CompositionLocal) or when its caller reruns and its inputs differ. Writes to state it never read don't touch it. View.invalidate() only asks for a redraw of the View; it doesn't invalidate composition scopes."
+    },
+    {
+      "id": "d24q10",
+      "type": "mcq",
+      "topic": "derivedStateOf",
+      "difficulty": "Easy",
+      "question": "Why wrap `listState.firstVisibleItemIndex > 0` in `remember { derivedStateOf { ... } }` when deciding whether to show a scroll-to-top button?",
+      "options": [
+        "So readers recompose only when the Boolean result flips",
+        "So the value is saved across process death with the scroll position",
+        "So the comparison runs on a background thread off the main thread",
+        "Because firstVisibleItemIndex cannot be read in composition otherwise"
       ],
       "answer": [
         0
       ],
-      "explanation": "`Default` and `IO` are backed by the same scheduler, with separate limits on how many threads may be doing CPU work and how many may be doing blocking work. Switching between them often avoids a real thread hop. `Default` is the CPU pool, not the main thread."
+      "explanation": "Read directly, every change of the index invalidates the reader even though the Boolean stays the same. derivedStateOf only notifies its readers when its computed result changes. It doesn't save state or move work off the main thread."
     }
   ]
 }

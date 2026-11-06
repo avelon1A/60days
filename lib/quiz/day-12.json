@@ -1,50 +1,13 @@
 {
   "day": 12,
-  "topic": "reified generics & value classes",
+  "topic": "Flow basics: cold flows, operators & flowOn",
   "questions": [
     {
       "id": "d12q01",
-      "type": "output",
-      "topic": "T::class",
-      "difficulty": "Easy",
-      "question": "What does this print?",
-      "code": "inline fun <reified T> typeName() = T::class.simpleName\n\nfun main() {\n    println(typeName<String>())\n    println(typeName<Int>())\n}",
-      "options": [
-        "String\nInt",
-        "T\nT",
-        "kotlin.String\nkotlin.Int",
-        "null\nnull"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Because `T` is `reified` and the function is inlined, each call site substitutes the real type, so `T::class` is `String::class` and then `Int::class`. `simpleName` gives the short name without the package."
-    },
-    {
-      "id": "d12q02",
-      "type": "mcq",
-      "topic": "type erasure",
-      "difficulty": "Easy",
-      "question": "What happens when you compile this function?",
-      "code": "fun <T> isType(x: Any): Boolean = x is T\n\nfun main() {\n    println(isType<String>(\"hi\"))\n}",
-      "options": [
-        "Compile error: cannot check for instance of erased type `T`",
-        "It compiles and prints `true`",
-        "It compiles but throws `ClassCastException` at runtime when `T` is checked",
-        "It compiles with a warning and always returns `false`"
-      ],
-      "answer": [
-        0
-      ],
-      "compiles": false,
-      "explanation": "On the JVM, generic type arguments are erased at runtime, so a plain `T` has no class to check against. Making the function `inline` with `reified T` fixes it, because the real type is then pasted in at each call site."
-    },
-    {
-      "id": "d12q03",
       "type": "truefalse",
-      "topic": "reified requires inline",
+      "topic": "cold flows",
       "difficulty": "Easy",
-      "question": "A type parameter can be marked `reified` on a regular, non-`inline` function as long as the function is `private`.",
+      "question": "Assigning `val f = flow { ... }` to a variable runs the builder block immediately, and later collectors receive the values it produced.",
       "options": [
         "True",
         "False"
@@ -52,141 +15,159 @@
       "answer": [
         1
       ],
-      "explanation": "`reified` only works on type parameters of `inline` functions (and inline properties), whatever their visibility. Inlining is what lets the compiler replace `T` with the concrete type at each call site."
+      "explanation": "A `flow { }` is cold: building it only stores the block. The block runs from the start for each terminal operator, separately for every collector. Nothing is produced or cached at creation time."
+    },
+    {
+      "id": "d12q02",
+      "type": "output",
+      "topic": "cold flows",
+      "difficulty": "Easy",
+      "question": "What does this print?",
+      "code": "import kotlinx.coroutines.*\nimport kotlinx.coroutines.flow.*\n\nfun main() = runBlocking {\n    val f = flow {\n        println(\"start\")\n        emit(1)\n        emit(2)\n    }\n    println(\"built\")\n    f.collect { println(it) }\n    println(f.first())\n}",
+      "options": [
+        "built\nstart\n1\n2\nstart\n1",
+        "start\nbuilt\n1\n2\n1",
+        "built\nstart\n1\n2\n1",
+        "built\nstart\n1\n2\nstart\n1\n2"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Nothing runs when the flow is built, so built prints first. Each terminal operator re-runs the block, so start prints twice. `first()` takes the first value and then cancels the flow, so the second run prints only 1."
+    },
+    {
+      "id": "d12q03",
+      "type": "mcq",
+      "topic": "intermediate operators",
+      "difficulty": "Easy",
+      "question": "Right after this line runs, how many times has the body of the upstream `repo.items()` flow executed?",
+      "code": "val names = repo.items()\n    .map { it.name }\n    .filter { it.isNotBlank() }",
+      "options": [
+        "0: map and filter just build a new flow",
+        "1: map starts collecting the upstream flow",
+        "2: each operator collects the upstream once",
+        "1: filter is the terminal operator here"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`map` and `filter` are intermediate operators: they wrap the upstream and return another cold `Flow` without collecting anything. Work starts only when a terminal operator like `collect`, `first` or `toList` is called. Neither of these operators is terminal."
     },
     {
       "id": "d12q04",
       "type": "output",
-      "topic": "is T",
-      "difficulty": "Easy",
+      "topic": "sequential operators",
+      "difficulty": "Medium",
       "question": "What does this print?",
-      "code": "inline fun <reified T> List<Any>.only(): List<Any> =\n    filter { it is T }\n\nfun main() {\n    val items = listOf(1, \"a\", 2.5, \"b\", 3)\n    println(items.only<String>())\n    println(items.only<Int>())\n}",
+      "code": "import kotlinx.coroutines.*\nimport kotlinx.coroutines.flow.*\n\nfun main() = runBlocking {\n    flowOf(1, 2, 3)\n        .map { println(\"map $it\"); it * 2 }\n        .filter { println(\"filter $it\"); it > 2 }\n        .collect { println(\"got $it\") }\n}",
       "options": [
-        "[a, b]\n[1, 3]",
-        "[1, a, 2.5, b, 3]\n[1, a, 2.5, b, 3]",
-        "[a, b]\n[1, 2.5, 3]",
-        "[]\n[]"
+        "map 1\nfilter 2\nmap 2\nfilter 4\ngot 4\nmap 3\nfilter 6\ngot 6",
+        "map 1\nmap 2\nmap 3\nfilter 2\nfilter 4\nfilter 6\ngot 4\ngot 6",
+        "map 1\nfilter 2\ngot 2\nmap 2\nfilter 4\ngot 4\nmap 3\nfilter 6\ngot 6",
+        "map 1\nfilter 1\nmap 2\nfilter 2\ngot 4\nmap 3\nfilter 3\ngot 6"
       ],
       "answer": [
         0
       ],
-      "explanation": "With a reified `T`, `it is T` becomes a real `is String` / `is Int` check at each call site. `2.5` is a `Double`, not an `Int`, so it is filtered out of the second list. This is how stdlib `filterIsInstance<T>()` works."
+      "explanation": "A flow pushes each value through the whole chain before the next one is emitted, unlike a List where each operator finishes the whole collection first. So each value goes through map, then filter, then collect. The value 2 (from 1 * 2) fails `it > 2`, so there is no got 2."
     },
     {
       "id": "d12q05",
       "type": "mcq",
-      "topic": "typealias",
-      "difficulty": "Easy",
-      "question": "Given these declarations, what happens with the call `loadUser(orderId)`?",
-      "code": "typealias UserId = String\ntypealias OrderId = String\n\nfun loadUser(id: UserId) { /* ... */ }\n\nval orderId: OrderId = \"order-42\"\nloadUser(orderId)",
+      "topic": "flowOn",
+      "difficulty": "Medium",
+      "question": "This is collected from a coroutine on `Dispatchers.Main`. Which steps run on `Dispatchers.IO`?",
+      "code": "flow { emit(load()) }      // A\n    .map { parse(it) }     // B\n    .flowOn(Dispatchers.IO)\n    .map { format(it) }    // C\n    .collect { show(it) }  // D",
       "options": [
-        "It compiles, because both aliases are just `String`",
-        "Compile error: type mismatch, `OrderId` is not `UserId`",
-        "It compiles, but throws `ClassCastException` at runtime",
-        "It compiles with a warning about mixing aliases"
+        "A and B on IO; C and D in the collector's context",
+        "Only A on IO; B, C and D run in the collector's context",
+        "A, B, C and D all run on IO once flowOn is applied",
+        "C and D on IO; A and B in the collector's context"
       ],
       "answer": [
         0
       ],
-      "explanation": "A `typealias` is only another name for an existing type, so `UserId`, `OrderId` and `String` are the same type to the compiler. To get a real compile-time distinction, use `@JvmInline value class UserId(val value: String)`."
+      "explanation": "`flowOn` changes the context only of the operators above it (upstream); everything below it, including `collect`, stays in the collector's context. So the emitting block and the first `map` move to IO, while the second `map` and `collect` stay on Main. This is how flows keep context preservation: a flow can never change the collector's context."
     },
     {
       "id": "d12q06",
-      "type": "output",
-      "topic": "value class equality",
-      "difficulty": "Easy",
-      "question": "What does this print?",
-      "code": "@JvmInline\nvalue class Id(val v: Int)\n\nfun main() {\n    println(Id(1))\n    println(Id(1) == Id(1))\n    println(Id(1) == Id(2))\n}",
+      "type": "mcq",
+      "topic": "context preservation",
+      "difficulty": "Hard",
+      "question": "What happens when this flow is collected?",
+      "code": "fun items(): Flow<Item> = flow {\n    withContext(Dispatchers.IO) {\n        emit(db.load())\n    }\n}",
       "options": [
-        "Id(v=1)\ntrue\nfalse",
-        "1\ntrue\nfalse",
-        "Id(v=1)\nfalse\nfalse",
-        "Id\ntrue\nfalse"
+        "It throws IllegalStateException, since emitting from another context breaks the flow",
+        "It works, and the collector's lambda receives the value while running on Dispatchers.IO",
+        "It fails to compile because emit cannot be called from inside a withContext block",
+        "It deadlocks, since the collector waits on Main while emit waits on an IO thread"
       ],
       "answer": [
         0
       ],
-      "explanation": "Value classes get a generated `toString()` (like a data class) and `equals()` that compares the wrapped value. So two `Id(1)` instances are equal even though they are created separately."
+      "explanation": "The `flow { }` builder checks that `emit` is called from the same coroutine context as the collector; emitting inside `withContext` breaks that and throws `IllegalStateException` (\"Flow invariant is violated\"). The code compiles because the `FlowCollector` receiver is in scope inside the lambda. The fix is to drop `withContext` and add `.flowOn(Dispatchers.IO)`."
     },
     {
       "id": "d12q07",
-      "type": "mcq",
-      "topic": "value class rules",
-      "difficulty": "Easy",
-      "question": "Which value class declaration compiles on the JVM?",
+      "type": "multi",
+      "topic": "catch operator",
+      "difficulty": "Medium",
+      "question": "Which statements about the `catch` flow operator are true? Select all that apply.",
       "options": [
-        "`@JvmInline value class Name(val v: String) { val isBlank get() = v.isBlank() }`",
-        "`value class Name(val v: String)`",
-        "`@JvmInline value class Name(var v: String) { val isBlank get() = v.isBlank() }`",
-        "`@JvmInline value class Name(val first: String, val last: String)`"
+        "It catches exceptions thrown by operators placed above it",
+        "It does not catch an exception thrown inside the final `collect { }` block",
+        "It can call `emit` to send a fallback value downstream",
+        "It also catches exceptions from operators placed below it",
+        "After catching, the upstream flow resumes from its next value"
       ],
       "answer": [
-        0
+        0,
+        1,
+        2
       ],
-      "explanation": "On the JVM a value class needs `@JvmInline` and exactly one read-only `val` constructor property. Extra properties are allowed only if they have no backing field, like the computed `isBlank` getter."
+      "explanation": "`catch` only sees upstream exceptions, so failures in later operators or in `collect` pass through it; for those, move the work into `onEach` before `catch`. Inside `catch` you can `emit` a fallback or rethrow. The upstream has already completed with the error, so it does not resume; use `retry` if you want to re-run it."
     },
     {
       "id": "d12q08",
-      "type": "output",
-      "topic": "init validation",
-      "difficulty": "Medium",
-      "question": "What does this print?",
-      "code": "@JvmInline\nvalue class Email(val value: String) {\n    init {\n        require('@' in value) { \"invalid: $value\" }\n    }\n}\n\nfun main() {\n    println(Email(\"a@b.com\").value)\n    try {\n        Email(\"nope\")\n        println(\"created\")\n    } catch (e: IllegalArgumentException) {\n        println(e.message)\n    }\n}",
+      "type": "mcq",
+      "topic": "exception transparency",
+      "difficulty": "Hard",
+      "question": "Why does the flow documentation treat this pattern as a bug?",
+      "code": "flow {\n    try {\n        emit(fetch())\n    } catch (e: IOException) {\n        emit(-1)\n    }\n}",
       "options": [
-        "a@b.com\ninvalid: nope",
-        "a@b.com\ncreated",
-        "Email(value=a@b.com)\ninvalid: nope",
-        "a@b.com\nFailed requirement."
+        "emit runs downstream code, so the try also catches the collector's IOExceptions",
+        "emit is not a suspending call, so the try block can never catch an exception thrown by the upstream",
+        "A flow may only emit once per builder call, so the emit(-1) in the catch block throws immediately",
+        "Catch blocks inside flow { } run on another dispatcher, so emit(-1) breaks context preservation"
       ],
       "answer": [
         0
       ],
-      "explanation": "Value classes may have `init` blocks, and they run every time an instance is constructed, so `Email(\"nope\")` fails `require` before `created` is printed. The message comes from the lambda, not the default `Failed requirement.`."
+      "explanation": "`emit` calls straight into the downstream operators and collector, so a `try` around it also catches exceptions that belong to the consumer. Swallowing them and emitting again breaks exception transparency, and the flow throws `IllegalStateException` on that later emit. Use the `catch` operator, which only handles upstream failures."
     },
     {
       "id": "d12q09",
-      "type": "multi",
-      "topic": "boxing",
-      "difficulty": "Medium",
-      "question": "Given `@JvmInline value class Price(val cents: Int) : Comparable<Price>`, in which of these uses is `Price` boxed (a real wrapper object allocated)? Select all that apply.",
+      "type": "mcq",
+      "topic": "take & cancellation",
+      "difficulty": "Hard",
+      "question": "A flow is collected with `.take(2)`. What happens to the upstream `flow { }` block right after the second value is delivered?",
       "options": [
-        "Stored in a `List<Price>`",
-        "Declared as a nullable `Price?` parameter",
-        "Assigned to a variable of the interface type, e.g. `val c: Comparable<Price> = price`",
-        "Passed to `fun charge(price: Price)`",
-        "Stored in a local `val price: Price`"
+        "It's cancelled by an internal exception thrown from emit, so its finally blocks still run",
+        "It keeps running to completion, and take simply drops every value after the second one",
+        "It stays suspended forever at the third emit, since no collector ever asks for more values",
+        "It's moved into GlobalScope and finishes in the background without blocking the collector"
       ],
       "answer": [
-        0,
-        1,
-        2
+        0
       ],
-      "explanation": "Used as its own non-null type, `Price` is just an `Int` at runtime. It must be boxed when used as a generic type argument, as an interface type, or as `Price?`, because a primitive `int` can't hold null. A value class over a non-null reference type such as `String` is the exception: its nullable form is just `String?`, with no box."
+      "explanation": "`take` stops the upstream by throwing an internal `AbortFlowException` out of the next `emit`, which unwinds the producer like a cancellation. Any `finally` or `onCompletion` cleanup in the upstream still runs, and the abort is caught inside `take`, so the collector completes normally. The producer is never left running or suspended."
     },
     {
       "id": "d12q10",
-      "type": "output",
-      "topic": "as? T",
-      "difficulty": "Medium",
-      "question": "What does this print?",
-      "code": "inline fun <reified T> Any?.castOrNull(): T? = this as? T\n\nfun main() {\n    println(\"x\".castOrNull<Int>())\n    println(5.castOrNull<Int>())\n    println(null.castOrNull<String>())\n}",
-      "options": [
-        "null\n5\nnull",
-        "x\n5\nnull",
-        "null\nnull\nnull",
-        "Compile error: cannot cast to T"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "With a reified `T`, `as? T` becomes a real checked `as? Int` / `as? String` cast, so a `String` safely becomes `null`. With a non-reified `T` the cast would be unchecked and the bad value could slip through until it is used."
-    },
-    {
-      "id": "d12q11",
       "type": "truefalse",
-      "topic": "java interop",
+      "topic": "channelFlow",
       "difficulty": "Medium",
-      "question": "Java code can call a Kotlin `inline fun <reified T : Activity> Context.launch()` helper by passing the type, e.g. `ContextExtKt.<MainActivity>launch(context)`.",
+      "question": "Inside a `flow { }` builder you may call `emit` from several `launch`ed child coroutines (for example inside `coroutineScope { }`) to produce values concurrently.",
       "options": [
         "True",
         "False"
@@ -194,169 +175,7 @@
       "answer": [
         1
       ],
-      "explanation": "Reified functions only work because the Kotlin compiler inlines the body and substitutes the real type at each call site. Java can't do that, so these functions can't be called from Java. Expose an overload that takes a `Class<T>` instead."
-    },
-    {
-      "id": "d12q12",
-      "type": "mcq",
-      "topic": "startActivity helper",
-      "difficulty": "Medium",
-      "question": "Which body completes this common Android helper correctly?",
-      "code": "inline fun <reified T : Activity> Context.startActivity() {\n    // ???\n}\n\n// usage: context.startActivity<DetailActivity>()",
-      "options": [
-        "`startActivity(Intent(this, T::class.java))`",
-        "`startActivity(Intent(this, T::class))`",
-        "`startActivity(Intent(this, T.class))`",
-        "`startActivity(Intent(this, T::class.javaClass))`"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`Intent` needs a Java `Class<*>`, and `T::class.java` turns the reified `KClass` into one. `T::class` alone is a `KClass`, which `Intent` doesn't accept, and `T.class` is Java syntax."
-    },
-    {
-      "id": "d12q13",
-      "type": "output",
-      "topic": "nested generics",
-      "difficulty": "Medium",
-      "question": "What does this print?",
-      "code": "inline fun <reified T> describe() = T::class.simpleName\n\nfun main() {\n    println(describe<List<String>>())\n    println(describe<Map<String, Int>>())\n}",
-      "options": [
-        "List\nMap",
-        "List<String>\nMap<String, Int>",
-        "ArrayList\nLinkedHashMap",
-        "Compile error: reified T cannot be a generic type"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "You may pass a generic type like `List<String>` as a reified argument, but `T::class` is a `KClass`, and a class has no type arguments. Only `List` and `Map` are left. Use `typeOf<T>()` if you need the full `List<String>`."
-    },
-    {
-      "id": "d12q14",
-      "type": "mcq",
-      "topic": "identity ===",
-      "difficulty": "Medium",
-      "question": "What happens when you compile this?",
-      "code": "@JvmInline\nvalue class Token(val raw: String)\n\nfun main() {\n    val a = Token(\"abc\")\n    val b = Token(\"abc\")\n    println(a === b)\n}",
-      "options": [
-        "Compile error: `===` is prohibited for value classes",
-        "Prints `true`",
-        "Prints `false`",
-        "Prints `true` because both share the interned string \"abc\""
-      ],
-      "answer": [
-        0
-      ],
-      "compiles": false,
-      "explanation": "A value class has no stable identity, since it may or may not be boxed at any point, so the compiler rejects `===` on it. Use `==`, which compares the wrapped values."
-    },
-    {
-      "id": "d12q15",
-      "type": "multi",
-      "topic": "reified in libraries",
-      "difficulty": "Medium",
-      "question": "Which of these common APIs get the type from a reified type parameter, so you write the type in angle brackets without passing a `Class`? Select all that apply.",
-      "options": [
-        "`val vm: MainViewModel by viewModels()` (Activity KTX)",
-        "Koin's `get<UserRepository>()`",
-        "Stdlib `list.filterIsInstance<String>()`",
-        "`intent.getParcelableExtra(\"user\", User::class.java)` (API 33+)",
-        "`savedStateHandle.get<String>(\"id\")`"
-      ],
-      "answer": [
-        0,
-        1,
-        2
-      ],
-      "explanation": "`viewModels<VM>()`, Koin's `get<T>()` and `filterIsInstance<T>()` are inline reified functions that read `T::class` internally. The API 33 `getParcelableExtra` takes an explicit `Class<T>`, and `SavedStateHandle.get<T>` is a plain generic that does an unchecked cast."
-    },
-    {
-      "id": "d12q16",
-      "type": "output",
-      "topic": "typeOf / KType",
-      "difficulty": "Medium",
-      "question": "What does this print?",
-      "code": "import kotlin.reflect.typeOf\n\ninline fun <reified T> fullType() = typeOf<T>()\n\nfun main() {\n    println(fullType<Map<String, Int?>>())\n    println(fullType<String?>().isMarkedNullable)\n}",
-      "options": [
-        "kotlin.collections.Map<kotlin.String, kotlin.Int?>\ntrue",
-        "Map\ntrue",
-        "kotlin.collections.Map<kotlin.String, kotlin.Int>\nfalse",
-        "java.util.Map\nfalse"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Unlike `T::class`, `typeOf<T>()` returns a `KType` that keeps type arguments and nullability, including the `?` on `Int?`. Serialization libraries use this to know the full shape of `List<User>`-style types."
-    },
-    {
-      "id": "d12q17",
-      "type": "mcq",
-      "topic": "Gson TypeToken",
-      "difficulty": "Hard",
-      "question": "You need `gson.fromJson<List<User>>(json)` to return real `User` objects. Which extension does that?",
-      "options": [
-        "`inline fun <reified T> Gson.fromJson(json: String): T = fromJson(json, object : TypeToken<T>() {}.type)`",
-        "`fun <T> Gson.fromJson(json: String): T = fromJson(json, object : TypeToken<T>() {}.type)`",
-        "`inline fun <reified T : Any> Gson.fromJson(json: String): T = fromJson(json, T::class.java)`",
-        "`inline fun <reified T> Gson.fromJson(json: String): T = fromJson(json, List::class.java) as T`"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Inlining with a reified `T` makes the anonymous `TypeToken<List<User>>` subclass capture the full generic type, which Gson reads by reflection. Without `reified`, the token only sees `T`. `T::class.java` (or `List::class.java`) loses the `User` argument, so Gson builds `LinkedTreeMap`s that throw `ClassCastException` later."
-    },
-    {
-      "id": "d12q18",
-      "type": "output",
-      "topic": "is T with generics",
-      "difficulty": "Hard",
-      "question": "What does this print?",
-      "code": "inline fun <reified T> isA(x: Any) = x is T\n\nfun main() {\n    val ints: Any = listOf(1, 2)\n    println(isA<List<String>>(ints))\n    println(isA<Set<Int>>(ints))\n}",
-      "options": [
-        "true\nfalse",
-        "false\nfalse",
-        "true\ntrue",
-        "Throws ClassCastException"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`reified` gives you the class, but the list's type argument is still erased at runtime, so `x is T` with `T = List<String>` only checks `is List`. A `List<Int>` passes, which is why checking `T::class` or `is T` against generic types is a classic trap."
-    },
-    {
-      "id": "d12q19",
-      "type": "truefalse",
-      "topic": "name mangling",
-      "difficulty": "Hard",
-      "question": "Java can call the Kotlin function `fun findUser(id: UserId): User`, where `UserId` is a `@JvmInline value class` wrapping `String`, as `findUser(\"u1\")`.",
-      "options": [
-        "True",
-        "False"
-      ],
-      "answer": [
-        1
-      ],
-      "explanation": "Functions with value class parameters compile to a mangled JVM name like `findUser-<hash>(String)`. This avoids clashes with a `findUser(String)` overload and stops Java skipping validation. To expose it to Java, annotate it with `@JvmName(\"findUser\")`."
-    },
-    {
-      "id": "d12q20",
-      "type": "mcq",
-      "topic": "reified propagation",
-      "difficulty": "Hard",
-      "question": "A teammate wraps a reified helper in a generic repository function. What happens when you compile this?",
-      "code": "inline fun <reified T> keyFor(): String =\n    T::class.simpleName ?: \"unknown\"\n\nfun <T> cacheKey(): String = keyFor<T>()\n\nfun main() {\n    println(cacheKey<String>())\n}",
-      "options": [
-        "Compile error: cannot use `T` as reified type parameter",
-        "Prints `String`, since `T` is inferred from `cacheKey`'s call site",
-        "Prints `unknown`",
-        "Prints `Object`"
-      ],
-      "answer": [
-        0
-      ],
-      "compiles": false,
-      "explanation": "A reified type argument must be a concrete type known at the call site, or another reified parameter. Inside `cacheKey`, `T` is erased, so the compiler refuses. Make `cacheKey` `inline` with `reified T` too."
+      "explanation": "`flow { }` is sequential and not thread-safe: emitting from another coroutine breaks context preservation and throws `IllegalStateException`. For concurrent producers use `channelFlow { }` (or `callbackFlow`), where children call `send` on a channel that is safe to share."
     }
   ]
 }

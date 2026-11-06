@@ -1,358 +1,179 @@
 {
   "day": 8,
-  "topic": "Scope functions I: let, also & apply",
+  "topic": "Coroutine basics: suspend, builders & dispatchers",
   "questions": [
     {
       "id": "d08q01",
       "type": "output",
-      "topic": "let return value",
+      "topic": "launch ordering",
       "difficulty": "Easy",
       "question": "What does this print?",
-      "code": "fun main() {\n    val n = \"hello\".let { it.length }\n    println(n)\n}",
+      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking {\n    launch { println(\"B\") }\n    println(\"A\")\n}",
       "options": [
-        "5",
-        "hello",
-        "kotlin.Unit",
-        "true"
+        "A\nB",
+        "A",
+        "B",
+        "B\nA"
       ],
       "answer": [
         0
       ],
-      "explanation": "`let` returns whatever its lambda returns. The last expression is `it.length`, so `n` is the `Int` 5, not the original string."
+      "explanation": "`launch` schedules the new coroutine and returns right away; it does not run it in place. `runBlocking` uses a single thread, so its own body keeps going and prints \"A\" first. When the body finishes, `runBlocking` waits for its child, which then prints \"B\"."
     },
     {
       "id": "d08q02",
-      "type": "mcq",
-      "topic": "apply receiver",
-      "difficulty": "Easy",
-      "question": "Inside this `apply` block, what does `color` refer to?",
-      "code": "val paint = Paint().apply {\n    color = Color.RED\n    strokeWidth = 4f\n    isAntiAlias = true\n}",
+      "type": "output",
+      "topic": "delay ordering",
+      "difficulty": "Medium",
+      "question": "What does this print?",
+      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking {\n    launch { delay(200); println(\"slow\") }\n    launch { delay(100); println(\"fast\") }\n    println(\"start\")\n}",
       "options": [
-        "The `color` property of the new `Paint`, accessed through `this`",
-        "A `color` property of the enclosing View, because `apply` has no receiver",
-        "Nothing: inside `apply` you must write `it.color`",
-        "A new local variable named `color`"
+        "start\nslow\nfast",
+        "fast\nslow\nstart",
+        "slow\nfast\nstart",
+        "start\nfast\nslow"
       ],
       "answer": [
-        0
+        3
       ],
-      "explanation": "`apply` runs the block with the object as its receiver (`this`), so unqualified `color` and `strokeWidth` resolve to the `Paint`'s own properties. `it` is not available in `apply`."
+      "explanation": "Both coroutines are only scheduled when launched, so \"start\" prints first. `delay` suspends without blocking the thread, so both delays run at the same time on the single `runBlocking` thread. The 100 ms one resumes first, then the 200 ms one; launch order does not decide the output here."
     },
     {
       "id": "d08q03",
-      "type": "truefalse",
-      "topic": "also uses it",
-      "difficulty": "Easy",
-      "question": "Inside an `also { }` block, the receiver object is available as `this`, just like in `apply`.",
+      "type": "output",
+      "topic": "lazy async",
+      "difficulty": "Hard",
+      "question": "What does this print?",
+      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking {\n    val a = async(start = CoroutineStart.LAZY) { println(\"a\"); 1 }\n    val b = async { println(\"b\"); 2 }\n    println(\"sum ${a.await() + b.await()}\")\n}",
       "options": [
-        "True",
-        "False"
+        "sum 3\na\nb",
+        "a\nb\nsum 3",
+        "a\nsum 1\nb",
+        "b\na\nsum 3"
+      ],
+      "answer": [
+        3
+      ],
+      "explanation": "`b` is scheduled when it is created, but `a` is lazy and does not start until `a.await()`. At that point `a` is queued behind `b`, and the main coroutine suspends. The event loop runs `b` first, then `a`, and finally resumes the sum. A lazy `async` that nobody starts would never run."
+    },
+    {
+      "id": "d08q04",
+      "type": "mcq",
+      "topic": "suspend",
+      "difficulty": "Easy",
+      "question": "Which statement about marking a function `suspend` is true?",
+      "options": [
+        "It makes the function run on `Dispatchers.IO` unless another dispatcher is given",
+        "It lets the function suspend; it does not move work to a background thread by itself",
+        "It makes blocking calls inside the function, like `Thread.sleep`, non-blocking",
+        "It makes the function start a new coroutine on the caller's scope each time it is called"
       ],
       "answer": [
         1
       ],
-      "explanation": "`also` passes the object as the lambda parameter `it` (which you can rename, e.g. `also { user -> }`). It is `apply` that makes the object `this`."
-    },
-    {
-      "id": "d08q04",
-      "type": "output",
-      "topic": "apply return value",
-      "difficulty": "Easy",
-      "question": "What does this print?",
-      "code": "fun main() {\n    val list = mutableListOf(1).apply { add(2) }\n    println(list)\n}",
-      "options": [
-        "[1, 2]",
-        "true",
-        "[1]",
-        "kotlin.Unit"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`apply` always returns its receiver, so `list` is the mutable list after `add(2)`. The `Boolean` returned by `add` is ignored."
+      "explanation": "`suspend` only means the function can pause and resume later, and that it must be called from a coroutine or another suspend function. It runs on whatever dispatcher the caller is using. Blocking calls inside it still block the thread; you need `withContext(Dispatchers.IO)` or a suspending API to avoid that."
     },
     {
       "id": "d08q05",
       "type": "mcq",
-      "topic": "also for logging",
-      "difficulty": "Easy",
-      "question": "In a ViewModel you want to log the filtered list in the middle of this chain without changing what flows into `map`. What should replace `???`?",
-      "code": "val names = repo.users()\n    .filter { it.active }\n    ???\n    .map { it.name }",
+      "topic": "Default vs IO",
+      "difficulty": "Medium",
+      "question": "Why should parsing a large JSON payload use `Dispatchers.Default` rather than `Dispatchers.IO`?",
       "options": [
-        "`.also { Log.d(TAG, \"users=$it\") }`",
-        "`.let { Log.d(TAG, \"users=$it\") }`",
-        "`.apply { Log.d(TAG, \"users=$it\") }`",
-        "`.also { Log.d(TAG, \"users=$this\") }`"
+        "Dispatchers.IO cannot run suspend functions, only plain blocking Java calls",
+        "Parsing is CPU-bound; Default has about one thread per core, which suits CPU work",
+        "Dispatchers.IO is single-threaded, so parsing there would block all other network calls",
+        "Dispatchers.Default runs on the main thread, so the parsed result can update the UI directly"
       ],
       "answer": [
-        0
+        1
       ],
-      "explanation": "`also` returns the receiver unchanged and exposes it as `it`, which is exactly a side effect in the middle of a chain. The `let` version makes the chain the `Int` returned by `Log.d`, `apply` has no `it`, and `$this` inside `also` is the ViewModel, not the list."
+      "explanation": "Default is sized to the number of CPU cores, which is the right amount of parallelism for CPU work. IO allows many more threads (64 by default) because those threads mostly wait on blocking I/O; running CPU work there can create more busy threads than cores. Neither dispatcher is the main thread, and IO is not single-threaded."
     },
     {
       "id": "d08q06",
-      "type": "output",
-      "topic": "?.let on null",
-      "difficulty": "Easy",
-      "question": "What does this print?",
-      "code": "fun main() {\n    val name: String? = null\n    println(name?.let { \"Hi $it\" })\n}",
+      "type": "truefalse",
+      "topic": "IO and Default threads",
+      "difficulty": "Medium",
+      "question": "Switching from `Dispatchers.Default` to `withContext(Dispatchers.IO)` often does not move the coroutine to a different thread, because the two dispatchers share one thread pool.",
       "options": [
-        "null",
-        "Hi null",
-        "Hi ",
-        "kotlin.Unit"
+        "True",
+        "False"
       ],
       "answer": [
         0
       ],
-      "explanation": "With `?.`, the `let` call is skipped entirely when the receiver is null and the whole expression is `null`. The lambda never runs, so `\"Hi null\"` is never built."
+      "explanation": "Dispatchers.IO and Dispatchers.Default share the same pool of threads and only have different limits on how many run at once. Switching between them often continues on the same thread with no real thread switch. The limits still apply, so the switch still matters for how much parallel work is allowed."
     },
     {
       "id": "d08q07",
-      "type": "mcq",
-      "topic": "also return value",
-      "difficulty": "Easy",
-      "question": "In a ViewModel: `val saved = repository.newDraft().also { _draft.value = it }`. What is `saved`?",
+      "type": "multi",
+      "topic": "launch vs async",
+      "difficulty": "Medium",
+      "question": "Which statements about `launch` and `async` are true? Select all that apply.",
       "options": [
-        "The draft returned by `newDraft()`",
-        "`Unit`, because the lambda ends with an assignment",
-        "It doesn't compile: assignments are not expressions",
-        "The `_draft` state holder"
+        "`runBlocking` is the recommended way to call suspend functions from a ViewModel",
+        "`async` without `await` is the recommended way to fire and forget work",
+        "`launch` blocks the calling thread until its body finishes",
+        "`launch` returns a `Job`; `async` returns a `Deferred<T>`, which is also a `Job`",
+        "With the default start mode, both schedule their coroutine right away without waiting for `join` or `await`"
       ],
       "answer": [
-        0
+        3,
+        4
       ],
-      "explanation": "`also` ignores whatever its lambda produces and returns the receiver, so `saved` is the draft. An assignment as the last statement of a lambda is fine, it just makes the lambda return `Unit`, which `also` throws away."
+      "explanation": "`Deferred` extends `Job` and adds `await()` for the result. Both builders start eagerly by default. `launch` does not block anything; it returns a Job right away. For fire-and-forget work use `launch`, since an unawaited `async` hides its result and can hide errors. `runBlocking` blocks the thread and belongs in `main` or tests, not in a ViewModel."
     },
     {
       "id": "d08q08",
-      "type": "output",
-      "topic": "also swap",
-      "difficulty": "Medium",
-      "question": "What does this print?",
-      "code": "fun main() {\n    var a = 1\n    var b = 2\n    a = b.also { b = a }\n    println(\"$a $b\")\n}",
+      "type": "mcq",
+      "topic": "sleep vs delay",
+      "difficulty": "Easy",
+      "question": "Two coroutines are launched inside `runBlocking` on its single thread. Each one waits 1 second and then prints. About how long does it take if they use `Thread.sleep(1000)` versus `delay(1000)`?",
       "options": [
-        "2 1",
-        "2 2",
-        "1 1",
-        "1 2"
+        "About 2 seconds with both, because there is only one thread",
+        "About 2 seconds with Thread.sleep, about 1 second with delay",
+        "About 1 second with both, because coroutines always run in parallel",
+        "About 1 second with Thread.sleep, about 2 seconds with delay"
       ],
       "answer": [
-        0
+        1
       ],
-      "explanation": "`b.also { ... }` evaluates to the old `b` (2) before the block runs, then the block sets `b = a` (1), then that saved 2 is assigned to `a`. Hence the classic swap idiom."
+      "explanation": "`Thread.sleep` blocks the only thread, so the second coroutine cannot start its wait until the first finishes. `delay` suspends and frees the thread, so both waits overlap. Coroutines are concurrent, not automatically parallel."
     },
     {
       "id": "d08q09",
-      "type": "multi",
-      "topic": "also vs apply",
-      "difficulty": "Medium",
-      "question": "When is `also` a better fit than `apply`? Select all that apply.",
+      "type": "mcq",
+      "topic": "Main.immediate",
+      "difficulty": "Hard",
+      "question": "On Android, what is the difference between `Dispatchers.Main` and `Dispatchers.Main.immediate`?",
       "options": [
-        "Inside an Activity, the block needs `this` to still mean the Activity",
-        "The block mostly passes the object as an argument to other functions, e.g. `cache.put(it)`",
-        "You want the block's last expression to be the result",
-        "The block mostly assigns the object's own properties"
+        "`immediate` cannot be cancelled, so code started with it always finishes even if the scope is cancelled",
+        "`immediate` makes `delay()` return at once, which is used to speed up UI tests",
+        "`immediate` uses a higher-priority thread than the main thread, so UI updates skip the frame queue",
+        "If already on the main thread, `immediate` runs the code at once instead of posting it to the queue"
       ],
       "answer": [
-        0,
-        1
+        3
       ],
-      "explanation": "`also` keeps the outer `this` untouched and names the object `it`, which reads well when the object is an argument. Assigning many properties reads better with `apply`'s implicit `this`, and neither function returns the block's result: that is `let`."
+      "explanation": "`Dispatchers.Main` always posts the work to the main Handler, even if the caller is already on the main thread, which delays it by at least one queue turn. `Main.immediate` skips that post when it is already on the main thread. `viewModelScope` and `lifecycleScope` use it to avoid needless delays and flicker. It is still the same main thread and follows normal cancellation."
     },
     {
       "id": "d08q10",
-      "type": "output",
-      "topic": "let returning Unit",
-      "difficulty": "Medium",
-      "question": "What does this print?",
-      "code": "fun main() {\n    val r = \"kotlin\".let { println(it.length) }\n    println(r)\n}",
-      "options": [
-        "6\nkotlin.Unit",
-        "6\nkotlin",
-        "6\n6",
-        "6\nnull"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "The lambda's last expression is `println(...)`, which returns `Unit`, and `let` returns the lambda's result. So `r` is `Unit`, which prints as `kotlin.Unit`; returning the receiver is what `also` does."
-    },
-    {
-      "id": "d08q11",
       "type": "mcq",
-      "topic": "let with var property",
-      "difficulty": "Medium",
-      "question": "`user` is a mutable `var` property of a Fragment. Why does `user?.let { render(it) }` compile when `if (user != null) render(user)` does not?",
-      "code": "class ProfileFragment : Fragment() {\n    private var user: User? = null\n\n    fun bind() {\n        if (user != null) render(user)   // error\n        user?.let { render(it) }         // OK\n    }\n}",
-      "options": [
-        "`let` gets the value read once as a non-null `it`, unaffected by later changes",
-        "`?.let` locks the property so other threads can't modify it during the block",
-        "The compiler skips nullability checks inside inline lambdas",
-        "`let` copies the `User` object, so `it` is a defensive clone"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "A mutable property can change between the null check and the use, so it can't be smart cast. `?.let` reads it once and passes that reference as a non-null `User` parameter. Nothing is locked or copied, `it` is the same object."
-    },
-    {
-      "id": "d08q12",
-      "type": "truefalse",
-      "topic": "?.let smart cast",
-      "difficulty": "Medium",
-      "question": "For `val user: User? = repo.find(id)`, the type of `it` inside `user?.let { ... }` is the non-nullable `User`.",
-      "options": [
-        "True",
-        "False"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`?.` only calls `let` when `user` is non-null, so `let` is invoked on a `User` and its parameter is typed `User`. That is why you can write `it.name` without `?.` inside."
-    },
-    {
-      "id": "d08q13",
-      "type": "output",
-      "topic": "nested it shadowing",
-      "difficulty": "Medium",
-      "question": "What does this print?",
-      "code": "fun main() {\n    val a = 1\n    val r = a.let { (it + 1).let { it * 10 } + it }\n    println(r)\n}",
-      "options": [
-        "21",
-        "22",
-        "20",
-        "30"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Inside the inner `let`, `it` is 2, so it yields 20. The `+ it` sits outside the inner lambda, so it refers to the outer `it` (1), giving 21. Shadowing `it` compiles (the IDE only flags it), which is why naming nested parameters is recommended."
-    },
-    {
-      "id": "d08q14",
-      "type": "mcq",
-      "topic": "?.let with elvis",
-      "difficulty": "Medium",
-      "question": "`name` on `User` is a non-null `String`. What is the type of `names`?",
-      "code": "val response: Response<UsersDto> = api.getUsers()\nval names = response.body()?.let { body ->\n    body.users.map { it.name }\n} ?: emptyList()",
-      "options": [
-        "`List<String>`",
-        "`List<String>?`",
-        "`List<String?>`",
-        "`Any`"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`body()?.let { ... }` is `List<String>?` (null when the body is null), and `?: emptyList()` removes the null case, so `names` is `List<String>`. Without the elvis it would stay nullable."
-    },
-    {
-      "id": "d08q15",
-      "type": "output",
-      "topic": "chaining",
-      "difficulty": "Medium",
-      "question": "What does this print?",
-      "code": "fun main() {\n    val sb = StringBuilder()\n    val n = sb.apply { append(\"x\") }\n        .also { println(\"len=${it.length}\") }\n        .let { it.append(\"yz\").length }\n    println(\"$n $sb\")\n}",
-      "options": [
-        "len=1\n3 xyz",
-        "len=1\n3 x",
-        "len=0\n3 xyz",
-        "len=1\n2 xyz"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`apply` appends \"x\" and returns the same builder, `also` logs its length (1), and `let` appends \"yz\" to that same object and returns its length 3. All three operate on one `StringBuilder`, so `sb` is \"xyz\"."
-    },
-    {
-      "id": "d08q16",
-      "type": "truefalse",
-      "topic": "?.apply",
-      "difficulty": "Medium",
-      "question": "`config?.apply { retries = 3 }` skips the block when `config` is null, and the whole expression evaluates to `null`.",
-      "options": [
-        "True",
-        "False"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Safe-call works with any scope function: if `config` is null, `apply` is never called and the result is `null`; otherwise it configures and returns `config`."
-    },
-    {
-      "id": "d08q17",
-      "type": "output",
-      "topic": "?.let ?: pitfall",
+      "topic": "suspend compilation",
       "difficulty": "Hard",
-      "question": "What does this print?",
-      "code": "fun log(s: String): String? {\n    println(\"log $s\")\n    return null\n}\n\nfun main() {\n    val user: String? = \"ann\"\n    user?.let { log(it) } ?: run { println(\"no user\") }\n}",
+      "question": "How does the Kotlin compiler implement a `suspend` function on the JVM?",
       "options": [
-        "log ann\nno user",
-        "log ann",
-        "no user",
-        "log ann\nnull"
+        "It keeps a copy of the whole call stack on the heap and restores it when the function resumes",
+        "It runs the body on a separate Java thread and blocks the caller with a lock until that thread finishes",
+        "It adds a `Continuation` parameter and compiles the body into a resumable state machine",
+        "It turns each suspend call into a callback passed to `Dispatchers.Default`, which then calls the rest of the body"
       ],
       "answer": [
-        0
+        2
       ],
-      "explanation": "The elvis checks the result of the whole `user?.let { ... }` expression, not whether `user` was null. `log` returns `null`, so the `let` evaluates to null and the fallback runs too. Use `if (user != null) ... else ...` when both branches must be exclusive."
-    },
-    {
-      "id": "d08q18",
-      "type": "mcq",
-      "topic": "this inside apply",
-      "difficulty": "Hard",
-      "question": "What happens with this code in an Activity?",
-      "code": "class MainActivity : AppCompatActivity() {\n    fun openDetail() {\n        val intent = Intent().apply {\n            setClass(this, DetailActivity::class.java)\n        }\n        startActivity(intent)\n    }\n}",
-      "options": [
-        "Compile error: inside `apply`, `this` is the `Intent`; use `this@MainActivity`",
-        "It works: `this` falls back to `MainActivity` because an `Intent` is not a `Context`",
-        "It compiles but crashes with `ActivityNotFoundException`",
-        "It works because `this` in a lambda always means the enclosing class"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "In `apply`, bare `this` is always the innermost receiver, the `Intent`; Kotlin never picks a different receiver based on the expected type. `setClass(Context, Class)` therefore gets an `Intent` and fails to compile, and the fix is the labeled `this@MainActivity`."
-    },
-    {
-      "id": "d08q19",
-      "type": "output",
-      "topic": "apply implicit receiver",
-      "difficulty": "Hard",
-      "question": "What does this print?",
-      "code": "class Label { var text = \"\" }\n\nclass Screen {\n    var text = \"Home\"\n    var title = \"Home\"\n    fun header() = Label().apply {\n        title = \"Profile\"\n        text = title\n    }\n}\n\nfun main() {\n    val s = Screen()\n    val l = s.header()\n    println(\"${s.title} ${l.text}\")\n}",
-      "options": [
-        "Profile Profile",
-        "Home Profile",
-        "Home Home",
-        "Profile Home"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`Label` has no `title`, so inside `apply` the unqualified `title = \"Profile\"` silently resolves to the outer `Screen.title`. `text` exists on `Label` (innermost receiver wins), so the label gets the now-changed `Screen.title`. The outer object being modified by accident is the classic `apply` bug."
-    },
-    {
-      "id": "d08q20",
-      "type": "multi",
-      "topic": "bundle setup",
-      "difficulty": "Hard",
-      "question": "In a Fragment factory, which of these give `args` a `Bundle` that contains the key `\"id\"`? Select all that apply.",
-      "options": [
-        "`val args = Bundle().apply { putInt(\"id\", 1) }`",
-        "`val args = Bundle().also { it.putInt(\"id\", 1) }`",
-        "`val args = Bundle().let { it.putInt(\"id\", 1) }`",
-        "`val args = Bundle().apply { it.putInt(\"id\", 1) }`",
-        "`val args = Bundle().let { it.putInt(\"id\", 1); it }`"
-      ],
-      "answer": [
-        0,
-        1,
-        4
-      ],
-      "explanation": "`apply` and `also` return the bundle, and the last `let` explicitly returns `it`. The plain `let` returns what `putInt` returns (`Unit`), so `args` is `Unit`, and `apply` has no `it`, so that line doesn't compile."
+      "explanation": "This is continuation-passing style: the caller passes a `Continuation`, and the body becomes a state machine that saves its locals in that object at each suspension point. When it suspends, it returns `COROUTINE_SUSPENDED`, and the thread is free. No extra thread is used and the whole stack is not copied, which is why coroutines are cheap."
     }
   ]
 }

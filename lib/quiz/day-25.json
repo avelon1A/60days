@@ -1,66 +1,117 @@
 {
   "day": 25,
-  "topic": "Cancellation, timeouts & cooperative cancellation",
+  "topic": "Snapshot system: mutableStateOf, isolation & observers",
   "questions": [
     {
       "id": "d25q01",
-      "type": "output",
-      "topic": "finally on cancel",
+      "type": "mcq",
+      "topic": "tracked state",
       "difficulty": "Easy",
-      "question": "What does this print?",
-      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking {\n    val job = launch {\n        try {\n            repeat(5) { i ->\n                println(\"tick $i\")\n                delay(100)\n            }\n        } finally {\n            println(\"cleanup\")\n        }\n    }\n    delay(250)\n    job.cancelAndJoin()\n    println(\"done\")\n}",
+      "question": "Why does changing a plain `var` inside a composable not update the UI, while changing a mutableStateOf value does?",
       "options": [
-        "tick 0\ntick 1\ntick 2\ncleanup\ndone",
-        "tick 0\ntick 1\ntick 2\ndone",
-        "tick 0\ntick 1\ntick 2\ntick 3\ntick 4\ncleanup\ndone",
-        "tick 0\ntick 1\ntick 2\ndone\ncleanup"
+        "Plain vars are copied into the UI once at compile time",
+        "Its reads and writes are tracked by the snapshot system",
+        "Plain vars can only be changed on a background thread",
+        "mutableStateOf forces a full Activity redraw on every change"
       ],
       "answer": [
-        0
+        1
       ],
-      "explanation": "The job is cancelled while it is suspended in `delay`, so `delay` throws `CancellationException` and the `finally` block runs. `cancelAndJoin()` waits for the job to finish, `finally` included, so \"cleanup\" is printed before \"done\"."
+      "explanation": "Compose can only react to what it can observe: reads of snapshot state are recorded against the reading scope, and writes notify those scopes. A plain var is invisible to the runtime and is also re-initialised on recomposition unless remembered."
     },
     {
       "id": "d25q02",
-      "type": "mcq",
-      "topic": "cooperative",
+      "type": "truefalse",
+      "topic": "mutable contents",
       "difficulty": "Easy",
-      "question": "What does it mean that coroutine cancellation is cooperative?",
+      "question": "Calling `list.value.add(item)` on a `mutableStateOf(mutableListOf<Item>())` triggers recomposition of composables that read `list.value`.",
       "options": [
-        "`cancel()` only marks the job; the coroutine stops when its code next checks for cancellation",
-        "`cancel()` interrupts the thread running the coroutine, the same way `Thread.interrupt()` does",
-        "`cancel()` stops the coroutine at whatever instruction it is running, wherever that is",
-        "A coroutine can only be cancelled if it was launched with a `SupervisorJob`"
+        "True",
+        "False"
       ],
       "answer": [
-        0
+        1
       ],
-      "explanation": "Cancelling sets the job's state to cancelling. Nothing stops until the coroutine reaches a check (`delay`, `yield`, `ensureActive()`, `isActive`, ...). The thread is not interrupted, and the code is never killed partway through."
+      "explanation": "Only assigning `.value` counts as a snapshot write; mutating the object inside doesn't. Either assign a new list (`list.value = list.value + item`) or use mutableStateListOf, whose operations are snapshot-aware."
     },
     {
       "id": "d25q03",
-      "type": "output",
-      "topic": "cpu loop",
+      "type": "mcq",
+      "topic": "isolation",
       "difficulty": "Medium",
-      "question": "The worker never suspends. What does this print?",
-      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking {\n    val job = launch(Dispatchers.Default) {\n        var i = 0\n        var next = System.currentTimeMillis()\n        while (i < 5) {\n            if (System.currentTimeMillis() >= next) {\n                println(\"work ${i++}\")\n                next += 100\n            }\n        }\n    }\n    delay(150)\n    job.cancelAndJoin()\n    println(\"done\")\n}",
+      "question": "What are the two printed values A and B?",
+      "code": "val state = mutableStateOf(1)\nval snap = Snapshot.takeMutableSnapshot()\nsnap.enter { state.value = 2 }\nprintln(state.value) // A\nsnap.apply()\nprintln(state.value) // B\nsnap.dispose()",
       "options": [
-        "work 0\nwork 1\nwork 2\nwork 3\nwork 4\ndone",
-        "work 0\nwork 1\ndone",
-        "work 0\nwork 1\nwork 2\ndone",
-        "done"
+        "A = 2, B = 2",
+        "A = 1, B = 1",
+        "A = 2, B = 1",
+        "A = 1, B = 2"
       ],
       "answer": [
-        0
+        3
       ],
-      "explanation": "Cancellation is cooperative. The loop never suspends and never checks `isActive`, so `cancel()` only flags the job and the loop runs to the end. `cancelAndJoin()` then waits for it, so \"done\" comes last."
+      "explanation": "Writes made inside a mutable snapshot are isolated until it is applied, so code outside still sees 1. apply() publishes the changes, after which reads see 2. This isolation is what lets composition run without exposing half-finished state."
     },
     {
       "id": "d25q04",
+      "type": "mcq",
+      "topic": "mutation policy",
+      "difficulty": "Medium",
+      "question": "`state` holds a data class. Code runs `state.value = state.value.copy()` without changing any field. With the default mutableStateOf, what happens?",
+      "options": [
+        "Readers recompose, because copy() returns a new instance",
+        "Nothing is invalidated, since the new value equals the old one",
+        "It throws, since copy() of the current value is a no-op write",
+        "Readers recompose twice, once for the read and once for the write"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "mutableStateOf defaults to structuralEqualityPolicy, so a write that is == to the current value is not treated as a change. referentialEqualityPolicy would notify on any new instance. This is one reason data classes with proper equals work well as state."
+    },
+    {
+      "id": "d25q05",
+      "type": "multi",
+      "topic": "snapshot-aware types",
+      "difficulty": "Medium",
+      "question": "Reading which of these inside a composable will cause recomposition when it changes, with no extra conversion? Select all that apply.",
+      "options": [
+        "A list created with mutableStateListOf",
+        "A MutableStateFlow's value property",
+        "A map created with mutableStateMapOf",
+        "The value of a derivedStateOf",
+        "An ArrayList held in a remember"
+      ],
+      "answer": [
+        0,
+        2,
+        3
+      ],
+      "explanation": "SnapshotStateList/Map and derived state are snapshot objects, so reads are tracked. A StateFlow is not snapshot state; reading .value is a one-off read that won't recompose, so it needs collectAsState/collectAsStateWithLifecycle. A plain ArrayList is invisible to Compose."
+    },
+    {
+      "id": "d25q06",
+      "type": "mcq",
+      "topic": "read observers",
+      "difficulty": "Hard",
+      "question": "How does the runtime know which state objects a composable read during composition?",
+      "options": [
+        "The compiler lists every state a function references in its bytecode",
+        "It compares every state value before and after each frame is drawn",
+        "Composition runs in a snapshot whose read observer records each read",
+        "Every State holds a strong list of composables, added at declaration"
+      ],
+      "answer": [
+        2
+      ],
+      "explanation": "The Recomposer composes inside a mutable snapshot with a read observer; each state read calls it, and the runtime links that object to the current recompose scope. Static analysis can't know which branches run, and diffing every value each frame would be far too expensive."
+    },
+    {
+      "id": "d25q07",
       "type": "truefalse",
-      "topic": "delay throws",
-      "difficulty": "Easy",
-      "question": "If a coroutine is cancelled while it is suspended in `delay(5_000)`, `delay` resumes right away by throwing a `CancellationException`, without waiting out the 5 seconds.",
+      "topic": "composition snapshot",
+      "difficulty": "Medium",
+      "question": "Composition runs inside a mutable snapshot, so state writes made during composition are not visible to other threads until that snapshot is applied.",
       "options": [
         "True",
         "False"
@@ -68,293 +119,61 @@
       "answer": [
         0
       ],
-      "explanation": "All suspending functions in kotlinx.coroutines are cancellable. `delay` is woken up at once and throws `CancellationException`, which unwinds the coroutine through its `finally` blocks."
-    },
-    {
-      "id": "d25q05",
-      "type": "mcq",
-      "topic": "viewModelScope",
-      "difficulty": "Easy",
-      "question": "A `viewModelScope.launch { repo.sync() }` is suspended in a network call when the user leaves the screen and the ViewModel is cleared. What happens?",
-      "options": [
-        "The coroutine gets a `CancellationException` at its suspension point and stops",
-        "The coroutine keeps running until `sync()` returns, and only then is the scope cancelled",
-        "The app crashes because the coroutine outlived its ViewModel",
-        "The coroutine is paused and resumes if the user comes back to the screen"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "When the ViewModel is cleared, `viewModelScope` is cancelled, which cancels every coroutine in it. A cancellable suspend call (such as a Retrofit `suspend` function) throws `CancellationException`, and the work stops quietly. Nothing crashes, and nothing is paused to resume later."
-    },
-    {
-      "id": "d25q06",
-      "type": "multi",
-      "topic": "isActive / ensureActive / yield",
-      "difficulty": "Medium",
-      "question": "A coroutine runs a long CPU-bound loop with no suspension points, so `cancel()` doesn't stop it. Which changes make the loop respond to cancellation? Select all that apply.",
-      "code": "launch(Dispatchers.Default) {\n    for (frame in frames) {\n        applyFilter(frame) // pure CPU work\n    }\n}",
-      "options": [
-        "Check `isActive` in the loop condition",
-        "Call `ensureActive()` on each iteration",
-        "Call `yield()` on each iteration",
-        "Call `Thread.sleep(1)` on each iteration",
-        "Wrap the loop body in `try { } catch (e: Exception) { }`"
-      ],
-      "answer": [
-        0,
-        1,
-        2
-      ],
-      "explanation": "`isActive` lets you exit the loop yourself, `ensureActive()` throws `CancellationException` if the job is cancelled, and `yield()` checks for cancellation and also lets other coroutines run. `Thread.sleep` is a blocking JVM call that knows nothing about the job, and a broad `catch` only makes cancellation easier to swallow."
-    },
-    {
-      "id": "d25q07",
-      "type": "output",
-      "topic": "swallowed cancellation",
-      "difficulty": "Hard",
-      "question": "What does this print?",
-      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking {\n    val job = launch {\n        repeat(3) { i ->\n            try {\n                delay(100)\n                println(\"step $i\")\n            } catch (e: Exception) {\n                println(\"caught\")\n            }\n        }\n        println(\"loop end\")\n    }\n    delay(150)\n    job.cancelAndJoin()\n    println(\"done\")\n}",
-      "options": [
-        "step 0\ncaught\ncaught\nloop end\ndone",
-        "step 0\ncaught\ndone",
-        "step 0\ncaught\nloop end\ndone",
-        "step 0\ndone"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`catch (e: Exception)` also catches `CancellationException`, so the coroutine keeps going. The cancel at 150 ms hits iteration 1's `delay`, which is caught. The job stays cancelled, so iteration 2's `delay` throws at once and is caught as well. After that, \"loop end\" still runs. Rethrow `CancellationException`, or catch only specific exceptions."
+      "explanation": "The Recomposer takes a mutable snapshot for each composition pass and applies it when the pass succeeds. Writes inside are isolated until then, and if the pass is abandoned they're discarded. That is part of why side effects belong in effect APIs."
     },
     {
       "id": "d25q08",
       "type": "mcq",
-      "topic": "cancel vs cancelAndJoin",
-      "difficulty": "Easy",
-      "question": "What is the difference between `job.cancel()` and `job.cancelAndJoin()`?",
+      "topic": "conflicts",
+      "difficulty": "Hard",
+      "question": "Two mutable snapshots write different values to the same state, then both are applied. With the default policy, what are `ra` and `rb`?",
+      "code": "val s = mutableStateOf(0)\nval a = Snapshot.takeMutableSnapshot()\nval b = Snapshot.takeMutableSnapshot()\na.enter { s.value = 1 }\nb.enter { s.value = 2 }\nval ra = a.apply()\nval rb = b.apply()",
       "options": [
-        "`cancel()` returns at once; `cancelAndJoin()` also waits until the job has fully finished",
-        "`cancel()` is cooperative, while `cancelAndJoin()` force-stops the job even inside a CPU loop",
-        "`cancelAndJoin()` cancels the job and every other coroutine in the same scope",
-        "There is no difference. `cancelAndJoin()` is a deprecated alias"
+        "Both succeed, and the state ends up holding 2 since b applied last",
+        "Both fail, since neither snapshot saw the other's write",
+        "ra succeeds; rb fails because the policy can't merge the write",
+        "ra fails and rb succeeds, as the newest snapshot always wins"
       ],
       "answer": [
-        0
+        2
       ],
-      "explanation": "`cancel()` is a non-suspending request, so the job may still be running its cleanup when the call returns. `cancelAndJoin()` is `cancel()` followed by `join()`. It doesn't force anything either: a non-cooperative job still runs to completion, and `cancelAndJoin()` just waits for it."
+      "explanation": "The first apply succeeds. The second finds the state changed since b was taken, so it asks the mutation policy to merge; structuralEqualityPolicy can't merge 1 and 2, so b's apply returns a Failure. Custom policies can override merge to resolve such conflicts."
     },
     {
       "id": "d25q09",
-      "type": "output",
-      "topic": "withTimeoutOrNull",
-      "difficulty": "Easy",
-      "question": "What does this print?",
-      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking {\n    val a = withTimeoutOrNull(100) {\n        delay(500)\n        \"data\"\n    }\n    println(a ?: \"fallback\")\n    val b = withTimeoutOrNull(500) {\n        delay(50)\n        \"data\"\n    }\n    println(b)\n}",
+      "type": "multi",
+      "topic": "SnapshotStateObserver",
+      "difficulty": "Hard",
+      "question": "Which statements about SnapshotStateObserver are true? Select all that apply.",
       "options": [
-        "fallback\ndata",
-        "data\ndata",
-        "fallback\nfallback",
-        "null\ndata"
+        "It re-runs the observed block automatically every time a read state changes",
+        "Compose UI uses it to track state reads during layout and draw",
+        "observeReads records the state objects read inside the given block for a scope",
+        "It relies on snapshot apply notifications to learn which objects changed"
       ],
       "answer": [
-        0
+        1,
+        2,
+        3
       ],
-      "explanation": "The first block needs 500 ms but only gets 100, so `withTimeoutOrNull` returns `null` and the elvis prints \"fallback\". The second block finishes in 50 ms, well within its 500 ms limit, so its value is returned."
+      "explanation": "SnapshotStateObserver ties reads to a scope and, when an apply notification includes one of those objects, calls the onChanged callback for that scope. It doesn't re-run your block; the caller decides what to do, such as requesting re-layout or redraw. Compose UI uses it so layout and draw reads don't need recomposition."
     },
     {
       "id": "d25q10",
-      "type": "truefalse",
-      "topic": "blocking calls",
+      "type": "mcq",
+      "topic": "snapshotFlow",
       "difficulty": "Easy",
-      "question": "Calling `job.cancel()` interrupts a `Thread.sleep(5_000)` that is running inside the coroutine, so the job stops immediately.",
+      "question": "What does snapshotFlow { pagerState.currentPage } give you?",
       "options": [
-        "True",
-        "False"
+        "A hot SharedFlow that replays every page change to new collectors",
+        "A cold Flow that emits whenever the result of the block changes",
+        "A State that can be read directly in a composable",
+        "A Flow that emits once per frame whether or not the page changed"
       ],
       "answer": [
         1
       ],
-      "explanation": "Cancellation doesn't interrupt threads. `Thread.sleep` blocks the thread for the full 5 seconds and the coroutine only notices the cancellation at its next check. Use `delay` instead, or `runInterruptible` to wrap blocking code that should be interrupted."
-    },
-    {
-      "id": "d25q11",
-      "type": "mcq",
-      "topic": "NonCancellable",
-      "difficulty": "Medium",
-      "question": "After cancellation, this job prints \"closing\" but never \"closed\". Why, and what is the usual fix?",
-      "code": "val job = launch {\n    try {\n        delay(1_000)\n    } finally {\n        println(\"closing\")\n        delay(100) // e.g. flush to server\n        println(\"closed\")\n    }\n}\ndelay(50)\njob.cancelAndJoin()",
-      "options": [
-        "The cancelled job makes `delay` in `finally` throw. Wrap it in `withContext(NonCancellable)`",
-        "`finally` blocks don't run on cancellation. Move the cleanup into a `catch (e: CancellationException)` block",
-        "`println` can't be called after cancellation. Use a logger instead",
-        "The `delay` is skipped because `finally` code runs on a different thread. Replace it with `Thread.sleep(100)`"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`finally` does run, but the job is cancelled, so any cancellable suspend call in it throws straight away. `withContext(NonCancellable)` runs the cleanup in a context that ignores the cancellation, so suspending calls there complete normally."
-    },
-    {
-      "id": "d25q12",
-      "type": "output",
-      "topic": "cancelled scope",
-      "difficulty": "Medium",
-      "question": "What does this print?",
-      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking {\n    val scope = CoroutineScope(Job())\n    scope.cancel()\n    val job = scope.launch {\n        println(\"running\")\n    }\n    println(job.isCancelled)\n    job.join()\n    println(\"end\")\n}",
-      "options": [
-        "true\nend",
-        "running\nfalse\nend",
-        "false\nrunning\nend",
-        "Throws IllegalStateException"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "A scope whose `Job` is cancelled can't run new work. `launch` doesn't throw: it returns a child that is cancelled straight away, so the block never runs. This is why a cancelled `viewModelScope` silently ignores new `launch` calls."
-    },
-    {
-      "id": "d25q13",
-      "type": "mcq",
-      "topic": "runCatching",
-      "difficulty": "Hard",
-      "question": "This polling loop runs in a ViewModel. What happens after the user leaves the screen and `viewModelScope` is cancelled?",
-      "code": "viewModelScope.launch {\n    while (true) {\n        runCatching {\n            _prices.value = api.fetchPrices()\n            delay(5_000)\n        }.onFailure { Log.w(TAG, \"poll failed\", it) }\n    }\n}",
-      "options": [
-        "It never ends: `runCatching` swallows each `CancellationException` and the loop spins",
-        "The loop stops at the next `delay` because `viewModelScope` was cancelled",
-        "The app crashes with an uncaught `CancellationException`",
-        "`runCatching` rethrows `CancellationException` automatically, so the coroutine ends cleanly"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`runCatching` catches every `Throwable`, `CancellationException` included. `while (true)` never checks `isActive`, so the cancelled coroutine keeps calling suspend functions that fail at once, and it never finishes. Use `while (isActive)`, or rethrow `CancellationException` from the failure branch."
-    },
-    {
-      "id": "d25q14",
-      "type": "multi",
-      "topic": "withTimeout",
-      "difficulty": "Medium",
-      "question": "Which statements about `withTimeout` and `withTimeoutOrNull` are true? Select all that apply.",
-      "options": [
-        "`withTimeout` throws `TimeoutCancellationException` when the time runs out",
-        "`TimeoutCancellationException` is a subclass of `CancellationException`",
-        "If the block can itself return `null`, a `null` from `withTimeoutOrNull` doesn't tell you whether it timed out",
-        "When the timeout fires, the block keeps running in the background and only its result is thrown away",
-        "`TimeoutCancellationException` can't be caught with try/catch because it is a `CancellationException`"
-      ],
-      "answer": [
-        0,
-        1,
-        2
-      ],
-      "explanation": "On timeout the block is cancelled (cooperatively, like any cancellation) and `withTimeout` throws `TimeoutCancellationException`, a `CancellationException` subclass that you can catch like any other exception. `withTimeoutOrNull` uses `null` to mean a timeout, which is ambiguous when the block can also return `null`."
-    },
-    {
-      "id": "d25q15",
-      "type": "output",
-      "topic": "invokeOnCompletion",
-      "difficulty": "Medium",
-      "question": "What does this print?",
-      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking {\n    val a = launch { delay(10) }\n    a.invokeOnCompletion { println(\"a: $it\") }\n    val b = launch { delay(1_000) }\n    b.invokeOnCompletion { cause ->\n        println(\"b: ${cause is CancellationException}\")\n    }\n    delay(50)\n    b.cancel()\n    joinAll(a, b)\n    println(\"done\")\n}",
-      "options": [
-        "a: null\nb: true\ndone",
-        "a: null\ndone",
-        "a: null\nb: false\ndone",
-        "b: true\na: null\ndone"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`invokeOnCompletion` runs when the job finishes and receives the cause. `a` completes normally after 10 ms, so its cause is `null`. `b` is cancelled at 50 ms, so its cause is a `CancellationException`. `joinAll` waits for both jobs before \"done\"."
-    },
-    {
-      "id": "d25q16",
-      "type": "mcq",
-      "topic": "suspendCancellableCoroutine",
-      "difficulty": "Medium",
-      "question": "This wraps a location callback. What happens if the calling coroutine is cancelled while it waits for a fix?",
-      "code": "suspend fun FusedLocationProviderClient.awaitFix(): Location =\n    suspendCancellableCoroutine { cont ->\n        val cb = object : LocationCallback() {\n            override fun onLocationResult(r: LocationResult) {\n                removeLocationUpdates(this)\n                cont.resume(r.lastLocation!!)\n            }\n        }\n        requestLocationUpdates(request, cb, Looper.getMainLooper())\n        cont.invokeOnCancellation { removeLocationUpdates(cb) }\n    }",
-      "options": [
-        "The caller gets `CancellationException` at once, and the handler unregisters the callback",
-        "The caller keeps waiting until the next location arrives, then throws",
-        "The callback is removed automatically even without `invokeOnCancellation`",
-        "Nothing happens. A coroutine suspended in `suspendCancellableCoroutine` can't be cancelled"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`suspendCancellableCoroutine` makes the suspension point cancellable: on cancel, the caller is resumed with `CancellationException` at once, and the `invokeOnCancellation` handler runs. The coroutine library can't know how to unregister your listener, so without the handler the callback and anything it references would leak."
-    },
-    {
-      "id": "d25q17",
-      "type": "truefalse",
-      "topic": "await",
-      "difficulty": "Medium",
-      "question": "If a `Deferred` from `async` is cancelled before it finishes, calling `await()` on it throws a `CancellationException` instead of returning a value.",
-      "options": [
-        "True",
-        "False"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "A cancelled `Deferred` has no result, so `await()` throws `CancellationException`. Like `delay` and `withContext`, `await` also throws if the coroutine calling it is cancelled while it waits."
-    },
-    {
-      "id": "d25q18",
-      "type": "mcq",
-      "topic": "Room transaction",
-      "difficulty": "Medium",
-      "question": "The user leaves the screen while this transaction is suspended in `api.fetchItems()`, and `viewModelScope` is cancelled. What happens to the database?",
-      "code": "viewModelScope.launch {\n    db.withTransaction {\n        dao.deleteAll()\n        val fresh = api.fetchItems() // suspends on the network\n        dao.insertAll(fresh)\n    }\n}",
-      "options": [
-        "The transaction rolls back, so neither the delete nor the insert is committed",
-        "The delete is committed and the insert is lost, leaving the table empty",
-        "Room ignores cancellation inside `withTransaction`, so both statements always commit",
-        "The database is left locked until the app restarts"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`withTransaction` commits only if the block completes normally. Here `api.fetchItems()` throws `CancellationException`, which escapes the block and ends the transaction without marking it successful, so SQLite rolls back the delete too. (Holding a transaction open across a network call is a bad idea anyway: fetch first, then write.) If the write must finish even after the user leaves, run it in an application-level scope or wrap it in `withContext(NonCancellable)`."
-    },
-    {
-      "id": "d25q19",
-      "type": "multi",
-      "topic": "callback wrapping",
-      "difficulty": "Hard",
-      "question": "You wrap an OkHttp `Call` with `suspendCancellableCoroutine`, calling `enqueue` and resuming from `onResponse`/`onFailure`. Which statements are true? Select all that apply.",
-      "options": [
-        "If the coroutine is cancelled, the caller gets `CancellationException` right away without waiting for OkHttp's callback",
-        "The HTTP request keeps running unless you call `call.cancel()` from `invokeOnCancellation`",
-        "Calling `cont.resume(response)` after the coroutine was cancelled crashes with `IllegalStateException`",
-        "Using `suspendCoroutine` instead would cancel the request automatically",
-        "The `invokeOnCancellation` handler also runs when the call succeeds and resumes normally"
-      ],
-      "answer": [
-        0,
-        1
-      ],
-      "explanation": "The continuation is cancellable, so the caller isn't kept waiting, but OkHttp knows nothing about coroutines and only stops the request if you call `call.cancel()` in `invokeOnCancellation`. A plain `resume` on an already cancelled continuation is ignored (it doesn't crash), `suspendCoroutine` can't be cancelled at all, and the handler only runs on cancellation."
-    },
-    {
-      "id": "d25q20",
-      "type": "mcq",
-      "topic": "job states",
-      "difficulty": "Hard",
-      "question": "Right after `job.cancel()` returns, before the job has finished its `NonCancellable` cleanup, what does the `println` print?",
-      "code": "val job = launch {\n    try {\n        delay(1_000)\n    } finally {\n        withContext(NonCancellable) { delay(100) }\n    }\n}\ndelay(10)\njob.cancel()\nprintln(\"${job.isActive} ${job.isCancelled} ${job.isCompleted}\")",
-      "options": [
-        "false true false",
-        "false true true",
-        "true true false",
-        "false false false"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "After `cancel()` the job is in the Cancelling state: no longer active, `isCancelled` is true, but it hasn't completed because its `finally` block is still running. It becomes Cancelled (`isCompleted == true`) only when the cleanup finishes."
+      "explanation": "snapshotFlow runs the block, records the state it read, and re-runs it when those states change, emitting only results that differ from the previous one. It is cold and starts per collector. It is the usual bridge from Compose state to Flow operators inside LaunchedEffect."
     }
   ]
 }

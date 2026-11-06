@@ -1,30 +1,30 @@
 {
   "day": 40,
-  "topic": "Navigation: back stack, arguments & deep links",
+  "topic": "SQLite internals: B-trees, WAL, transactions & indexes",
   "questions": [
     {
       "id": "d40q01",
       "type": "mcq",
-      "topic": "type-safe routes",
+      "topic": "index cost",
       "difficulty": "Easy",
-      "question": "In current Navigation Compose, which is the type-safe way to declare a Profile destination that needs a user id?",
+      "question": "Why shouldn't you add an index on every column of a frequently written table?",
       "options": [
-        "`sealed class Screen(val route: String)` with `object Profile : Screen(\"profile/{id}\")`",
-        "`@Parcelize data class Profile(val id: String) : Parcelable`",
-        "`@Serializable data class Profile(val id: String)` with `composable<Profile> { }`",
-        "`const val PROFILE_ROUTE = \"profile/{id}\"` plus a `navArgument(\"id\")`"
+        "SQLite allows only one index per table",
+        "Indexes are rebuilt from scratch on every app start",
+        "Indexes make SELECT queries slower when there are more than two",
+        "Every insert, update and delete must also update each index, costing write time and space"
       ],
       "answer": [
-        2
+        3
       ],
-      "explanation": "Since Navigation 2.8 routes are `@Serializable` classes or objects: `composable<Profile>` registers the destination and `navigate(Profile(\"42\"))` passes the args, all checked by the compiler. String routes with `{id}` placeholders still work but are the old, error-prone style, and `@Parcelize` isn't what the route system uses."
+      "explanation": "Each index is its own B-tree that must be kept in sync with the table, so writes do extra work per index and the file grows. Indexes only pay off for columns that queries actually filter, join or sort on."
     },
     {
       "id": "d40q02",
       "type": "truefalse",
-      "topic": "navigate pushes",
+      "topic": "batched transactions",
       "difficulty": "Easy",
-      "question": "`navController.navigate(Profile(\"42\"))` pushes a new entry on top of the back stack, so pressing Back pops it and shows the previous screen again.",
+      "question": "Wrapping 1,000 inserts in one explicit transaction is usually much faster than running them as 1,000 auto-committed statements.",
       "options": [
         "True",
         "False"
@@ -32,82 +32,84 @@
       "answer": [
         0
       ],
-      "explanation": "`navigate` always adds a new `NavBackStackEntry` on top unless you change that with options such as `popUpTo` or `launchSingleTop`. System Back (handled by `NavHost`) pops the top entry and the screen below it shows again with its state."
+      "explanation": "Without an explicit transaction each statement is its own transaction, with its own journal work and sync to storage. Grouping them pays that commit cost once, often making bulk inserts dramatically faster."
     },
     {
       "id": "d40q03",
-      "type": "output",
-      "topic": "launchSingleTop",
+      "type": "mcq",
+      "topic": "table storage",
       "difficulty": "Easy",
-      "question": "This plain-Kotlin model mimics how `launchSingleTop` treats the back stack. What does it print?",
-      "code": "fun main() {\n    val stack = mutableListOf(\"Home\", \"Feed\")\n    fun navigate(dest: String, singleTop: Boolean = false) {\n        if (singleTop && stack.last() == dest) return\n        stack += dest\n    }\n    navigate(\"Feed\")\n    navigate(\"Feed\", singleTop = true)\n    navigate(\"Profile\", singleTop = true)\n    println(stack.joinToString(\" > \"))\n}",
+      "question": "How does SQLite physically store an ordinary table (one with a rowid)?",
       "options": [
-        "Home > Feed > Feed > Profile",
-        "Home > Feed > Profile",
-        "Home > Feed > Feed > Feed > Profile",
-        "Home > Feed > Feed"
+        "As a hash table keyed by the primary key",
+        "As separate files for each column",
+        "As rows appended to the file in insertion order, with no ordering",
+        "As a B-tree keyed by rowid, with row data stored in its leaf pages"
       ],
       "answer": [
-        0
+        3
       ],
-      "explanation": "The first `navigate(\"Feed\")` has no single-top flag, so a second `Feed` is pushed. The single-top call finds `Feed` already on top and does nothing, and `Profile` isn't on top, so it's pushed. `launchSingleTop` only avoids duplicating the *top* entry; it doesn't remove copies further down."
+      "explanation": "Each rowid table is a B-tree whose key is the rowid, so lookups by rowid are a tree search. Secondary indexes are separate B-trees keyed by the indexed columns plus the rowid. SQLite does not use hash tables or column storage."
     },
     {
       "id": "d40q04",
       "type": "mcq",
-      "topic": "BackHandler",
-      "difficulty": "Easy",
-      "question": "An edit screen uses the code below. `hasUnsavedChanges` is `false` and the user presses Back. What happens?",
-      "code": "BackHandler(enabled = hasUnsavedChanges) {\n    showDiscardDialog = true\n}",
+      "topic": "WAL",
+      "difficulty": "Medium",
+      "question": "What is the main concurrency advantage of WAL mode over the rollback journal?",
       "options": [
-        "The discard dialog is shown anyway",
-        "Nothing happens; Back is swallowed",
-        "Normal back navigation pops the screen",
-        "The app exits even if there are screens below"
+        "Transactions no longer need locks",
+        "Multiple writers can commit at the same time",
+        "Readers can keep reading while a writer is writing, because changes go to a separate log file",
+        "Writes skip the disk entirely until the app closes"
       ],
       "answer": [
         2
       ],
-      "explanation": "A disabled `BackHandler` doesn't take part in back handling, so the event falls through to the next callback, which is `NavHost` popping the screen. Only while `enabled` is `true` does it consume Back and show the dialog."
+      "explanation": "In WAL mode a writer appends to the -wal file while readers see a consistent snapshot from the database plus the log, so reads and a write proceed together. There is still only one writer at a time, and checkpoints later copy the log back into the database file."
     },
     {
       "id": "d40q05",
-      "type": "truefalse",
-      "topic": "navcontroller in composables",
-      "difficulty": "Easy",
-      "question": "The recommended pattern is to pass `navController` down into every screen and child composable so each one can call `navigate` itself.",
-      "options": [
-        "True",
-        "False"
-      ],
-      "answer": [
-        1
-      ],
-      "explanation": "Screens should take event lambdas such as `onOpenProfile: (String) -> Unit` and only the `NavHost` setup touches `navController`. That keeps screens previewable and testable without a real NavHost, and keeps the navigation logic in one place."
-    },
-    {
-      "id": "d40q06",
       "type": "mcq",
-      "topic": "safe args",
-      "difficulty": "Easy",
-      "question": "In a legacy Fragment app using the Navigation component, what does the Safe Args Gradle plugin give you?",
+      "topic": "composite index",
+      "difficulty": "Medium",
+      "question": "Given the index below, which query can use it to seek directly to matching rows?",
+      "code": "CREATE INDEX idx_orders_user_date ON orders(user_id, created_at);",
       "options": [
-        "Generated `Directions` and `Args` classes for type-safe arguments, read with `by navArgs()`",
-        "Automatic encryption of Bundle arguments passed between fragments",
-        "A way to pass any object between fragments without a size limit",
-        "Automatic deep link handling with no `<nav-graph>` manifest entries"
+        "`SELECT * FROM orders WHERE user_id = ? AND created_at > ?`",
+        "`SELECT * FROM orders WHERE created_at > ?`",
+        "`SELECT * FROM orders WHERE created_at = ? OR user_id = ?`",
+        "`SELECT * FROM orders ORDER BY created_at`"
       ],
       "answer": [
         0
       ],
-      "explanation": "Safe Args generates code from the navigation XML: `HomeFragmentDirections.actionHomeToProfile(id)` to navigate and `ProfileFragmentArgs` (via `by navArgs()`) to read. The arguments still travel in a Bundle, so size limits and deep-link manifest setup still apply."
+      "explanation": "A composite index is sorted by its first column, then the second, so it can seek when the leftmost column is constrained, and here the range on `created_at` narrows it further. Filtering or sorting on `created_at` alone does not match the index's leading column, so it usually scans instead."
+    },
+    {
+      "id": "d40q06",
+      "type": "multi",
+      "topic": "query plans",
+      "difficulty": "Medium",
+      "question": "On a large table, which `EXPLAIN QUERY PLAN` lines suggest a query needs a better index? Select all that apply.",
+      "options": [
+        "`SEARCH orders USING INTEGER PRIMARY KEY (rowid=?)`",
+        "`USE TEMP B-TREE FOR ORDER BY`",
+        "`SCAN orders` for a query that filters on a selective column",
+        "`SEARCH orders USING COVERING INDEX idx_orders_user_date (user_id=?)`"
+      ],
+      "answer": [
+        1,
+        2
+      ],
+      "explanation": "A scan reads every row, and a temp B-tree for ORDER BY means SQLite has to sort results itself instead of reading them in index order. A search using a covering index or the rowid is already the efficient path."
     },
     {
       "id": "d40q07",
       "type": "truefalse",
-      "topic": "navigation 3",
-      "difficulty": "Easy",
-      "question": "In Navigation 3 the back stack is ordinary state your code owns (a list of keys): you navigate by adding to it and go back by removing from it, and `NavDisplay` renders it.",
+      "topic": "checkpoint starvation",
+      "difficulty": "Medium",
+      "question": "In WAL mode, a read transaction that stays open for a long time can prevent checkpoints from completing, so the -wal file keeps growing.",
       "options": [
         "True",
         "False"
@@ -115,238 +117,61 @@
       "answer": [
         0
       ],
-      "explanation": "Navigation 3 flips the model: instead of asking a `NavController` to push and pop, you keep a back stack list (e.g. from `rememberNavBackStack`) and mutate it yourself. `NavDisplay` observes that list and shows the matching entries."
+      "explanation": "A checkpoint cannot overwrite database pages that an open reader's snapshot still needs, and the log cannot restart while that reader exists. Long-lived cursors or forgotten transactions therefore grow the WAL and slow reads that must search it."
     },
     {
       "id": "d40q08",
-      "type": "multi",
-      "topic": "pass ids not objects",
-      "difficulty": "Medium",
-      "question": "Why should you navigate with `Profile(userId)` rather than putting the whole `User` object (with avatar bytes and post list) into the route? Pick all that apply.",
+      "type": "mcq",
+      "topic": "covering index",
+      "difficulty": "Hard",
+      "question": "With an index on `users(email, name)`, why is `SELECT name FROM users WHERE email = ?` faster than `SELECT * FROM users WHERE email = ?`?",
       "options": [
-        "Route arguments are saved in the saved-state Bundle, so big objects bloat it and can trigger `TransactionTooLargeException` when the app goes to the background",
-        "The destination should load the user from the repository, its single source of truth, so it never shows a stale copy",
-        "A small id fits naturally in a deep link URL like `/profile/42`, while a whole object can't",
-        "Navigation clears all arguments on rotation, so only ids survive",
-        "Type-safe routes can only contain `String` properties"
+        "SQLite caches narrow queries in memory",
+        "The index already contains `name`, so SQLite answers from the index without looking up the table row",
+        "The first query is compiled once and the second on every call",
+        "`SELECT *` always forces a full table scan"
       ],
       "answer": [
-        0,
-        1,
-        2
+        1
       ],
-      "explanation": "Arguments are persisted with the back stack for process death, so they must stay small, and a copied object goes stale the moment the data changes elsewhere. Arguments do survive rotation, and routes support Int, Boolean, enums and more (plus custom `NavType`s), so those two are false."
+      "explanation": "When every needed column is in the index, it is a covering index and SQLite skips the second lookup into the table B-tree by rowid. `SELECT *` still uses the index to find the row, but then has to fetch the rest of the columns from the table."
     },
     {
       "id": "d40q09",
-      "type": "mcq",
-      "topic": "login back stack",
-      "difficulty": "Medium",
-      "question": "The back stack is just `[Login]`. After a successful login you go to Home, and pressing Back on Home must exit the app instead of returning to Login. Which call do you use?",
-      "options": [
-        "`navController.navigate(Home) { popUpTo(Login) }`",
-        "`navController.navigate(Home) { launchSingleTop = true }`",
-        "`navController.navigate(Home) { restoreState = true }`",
-        "`navController.navigate(Home) { popUpTo(Login) { inclusive = true } }`"
-      ],
-      "answer": [
-        3
-      ],
-      "explanation": "`popUpTo(Login)` pops everything above Login, and `inclusive = true` pops Login itself too, so the stack ends up as just `[Home]`. Without `inclusive`, Login stays underneath and Back returns to it; `launchSingleTop` and `restoreState` don't remove anything."
-    },
-    {
-      "id": "d40q10",
-      "type": "output",
-      "topic": "popUpTo target",
-      "difficulty": "Medium",
-      "question": "This plain-Kotlin model mimics `navigate(dest) { popUpTo(x) { inclusive = ... } }`. What does it print?",
-      "code": "fun main() {\n    val stack = ArrayDeque(listOf(\"Splash\", \"Login\", \"Otp\"))\n    fun navigate(dest: String, popUpTo: String, inclusive: Boolean) {\n        while (stack.last() != popUpTo) stack.removeLast()\n        if (inclusive) stack.removeLast()\n        stack.addLast(dest)\n    }\n    navigate(\"Home\", popUpTo = \"Login\", inclusive = true)\n    println(stack)\n}",
-      "options": [
-        "[Splash, Home]",
-        "[Home]",
-        "[Splash, Login, Home]",
-        "[Splash, Login, Otp, Home]"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Entries above `Login` (`Otp`) are popped, `inclusive = true` pops `Login` too, then `Home` is pushed, leaving `Splash` underneath. A real app would `popUpTo` the start destination or the whole auth graph so Back from Home can't reach Splash either."
-    },
-    {
-      "id": "d40q11",
-      "type": "mcq",
-      "topic": "savedstatehandle args",
-      "difficulty": "Medium",
-      "question": "How should `ProfileViewModel` read the `id` from the `Profile` route it was opened with?",
-      "code": "@HiltViewModel\nclass ProfileViewModel @Inject constructor(\n    savedStateHandle: SavedStateHandle,\n    private val repo: UserRepository\n) : ViewModel() {\n    private val id: String = TODO()\n}",
-      "options": [
-        "`savedStateHandle.toRoute<Profile>().id`",
-        "Inject `NavController` and call `currentBackStackEntry!!.toRoute<Profile>().id`",
-        "`requireArguments().getString(\"id\")`",
-        "`savedStateHandle.get<Profile>(\"route\")!!.id`"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "The destination's arguments are placed in the ViewModel's `SavedStateHandle`, and `toRoute<Profile>()` decodes them back into the route class. ViewModels must not hold a `NavController` (it's tied to the UI and would leak), `requireArguments()` is a Fragment API, and the route isn't stored as one object under a `\"route\"` key."
-    },
-    {
-      "id": "d40q12",
       "type": "multi",
-      "topic": "deep link setup",
-      "difficulty": "Medium",
-      "question": "Tapping `https://example.com/profile/42` in another app should open your Profile screen. Which steps are needed? Pick all that apply.",
+      "topic": "locking",
+      "difficulty": "Hard",
+      "question": "Which statements about SQLite locking and `SQLITE_BUSY` are true? Select all that apply.",
       "options": [
-        "Add `deepLinks = listOf(navDeepLink<Profile>(basePath = \"https://example.com/profile\"))` to `composable<Profile>`",
-        "Add an `<intent-filter>` with the `VIEW` action, `DEFAULT` and `BROWSABLE` categories and the https scheme and host to the Activity hosting the `NavHost`",
-        "Apply the Safe Args Gradle plugin",
-        "Create a separate Activity for each deep-linked destination",
-        "Parse `intent.data` yourself in `onCreate` and call `navigate` with the parsed id"
-      ],
-      "answer": [
-        0,
-        1
-      ],
-      "explanation": "The manifest filter gets the Intent delivered to your Activity, and the `navDeepLink` tells the graph which destination matches and how to extract `id`. `NavController` handles the launch Intent automatically when the graph is set, so manual parsing, Safe Args or one Activity per screen aren't needed."
-    },
-    {
-      "id": "d40q13",
-      "type": "mcq",
-      "topic": "bottom nav state",
-      "difficulty": "Medium",
-      "question": "In a bottom-nav app the user scrolls the Feed tab, opens a post, switches to the Profile tab and then taps Feed again. They should land back on the post with the scroll position kept, and tabs shouldn't pile up on the back stack. Which options go inside `navController.navigate(tab) { }`?",
-      "options": [
-        "`popUpTo(navController.graph.findStartDestination().id) { inclusive = true }` and `launchSingleTop = true`",
-        "`launchSingleTop = true` and `restoreState = true`, with no `popUpTo`",
-        "`popUpTo(navController.graph.findStartDestination().id) { saveState = true }`, `launchSingleTop = true` and `restoreState = true`",
-        "No options; `NavHost` keeps each tab's stack automatically"
-      ],
-      "answer": [
-        2
-      ],
-      "explanation": "`popUpTo(start) { saveState = true }` pops the current tab's screens but saves their state, `restoreState = true` brings back the saved stack of the tab you return to, and `launchSingleTop` avoids duplicate copies when a tab is re-selected. Without `popUpTo` with `saveState`, nothing is saved for `restoreState` to restore and the stack keeps growing."
-    },
-    {
-      "id": "d40q14",
-      "type": "truefalse",
-      "topic": "app links verification",
-      "difficulty": "Medium",
-      "question": "For Android App Links, `android:autoVerify=\"true\"` makes the system fetch `https://<host>/.well-known/assetlinks.json`, which must list your package name and the SHA-256 fingerprint of the certificate the app is signed with.",
-      "options": [
-        "True",
-        "False"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Verification proves you own the domain: the site's `assetlinks.json` must name your package and signing-cert fingerprint. A common gotcha is that with Play App Signing the fingerprint must be Play's app signing key, not your local upload key, or verification fails for store installs."
-    },
-    {
-      "id": "d40q15",
-      "type": "mcq",
-      "topic": "returning a result",
-      "difficulty": "Medium",
-      "question": "`Editor` opens a `ColorPicker` screen, and the picked colour must come back to `Editor` when the picker closes. What is the recommended approach?",
-      "options": [
-        "`navController.navigate(Editor(color = hex))` from the picker",
-        "Set the result on `previousBackStackEntry?.savedStateHandle`, then `popBackStack()`",
-        "Launch the picker with `startActivityForResult` and read `onActivityResult`",
-        "Write the colour into a `companion object` field and read it in Editor's `onResume`"
-      ],
-      "answer": [
-        1
-      ],
-      "explanation": "The previous entry's `SavedStateHandle` is a per-destination store that survives process death, and Editor collects its own entry's `savedStateHandle` with `getStateFlow(\"color\", ...)`. Navigating to `Editor` again would push a second Editor on top instead of returning, and a static field is lost on process death."
-    },
-    {
-      "id": "d40q16",
-      "type": "multi",
-      "topic": "predictive back",
-      "difficulty": "Medium",
-      "question": "Which statements about back handling in a Compose app with predictive back enabled are true? Pick all that apply.",
-      "options": [
-        "`NavHost` already pops the back stack on system Back, so a screen needs no `BackHandler` just to go back",
-        "Overriding `Activity.onBackPressed()` is deprecated and isn't called with predictive back; use `OnBackPressedDispatcher` callbacks or `BackHandler`",
-        "`PredictiveBackHandler` gives you a `Flow` of back-gesture progress so you can animate custom UI as the user swipes",
-        "An enabled `BackHandler` handles Back and `NavHost` still pops the screen as well",
-        "Predictive back only works with Fragment navigation, not Compose"
+        "In WAL mode, only one writer can hold the write lock at a time",
+        "Starting a write transaction with `BEGIN IMMEDIATE` takes the write lock up front, avoiding a failed read-to-write upgrade later",
+        "WAL mode allows several connections to write at the same moment",
+        "In rollback journal mode, committing a write needs an exclusive lock that blocks readers briefly",
+        "Android's `SQLiteDatabase` gives every query its own database file, so locks never conflict"
       ],
       "answer": [
         0,
         1,
-        2
-      ],
-      "explanation": "Back events go to the most recently added enabled callback, so an enabled `BackHandler` consumes the event and `NavHost` doesn't also pop. Navigation Compose supports predictive back animations itself, so the Fragment-only claim is false."
-    },
-    {
-      "id": "d40q17",
-      "type": "mcq",
-      "topic": "app links fallback",
-      "difficulty": "Hard",
-      "question": "On Android 12+, your app has an `https` intent-filter for `example.com`, but `assetlinks.json` verification failed and the user never approved the domain in settings. They tap a `https://example.com/profile/42` link in a chat app. What happens?",
-      "options": [
-        "Your app opens directly on the Profile screen",
-        "A chooser dialog asks whether to open it in your app or the browser",
-        "The link opens in the user's default browser",
-        "Nothing happens because the intent can't be resolved"
-      ],
-      "answer": [
-        2
-      ],
-      "explanation": "Since Android 12, generic web intents only go to an app that is verified for that domain (or that the user approved by hand). Otherwise they open in the default browser. The chooser dialog is the pre-Android 12 behaviour, which is why it's the tempting answer. Custom-scheme links like `myapp://` aren't affected."
-    },
-    {
-      "id": "d40q18",
-      "type": "mcq",
-      "topic": "graph-scoped viewmodel",
-      "difficulty": "Hard",
-      "question": "Every screen in the checkout flow gets its ViewModel like this. When is the shared `CheckoutViewModel` cleared?",
-      "code": "navigation<Checkout>(startDestination = Cart) {\n    composable<Cart> { entry ->\n        val parent = remember(entry) {\n            navController.getBackStackEntry<Checkout>()\n        }\n        val vm: CheckoutViewModel = hiltViewModel(parent)\n        CartScreen(vm)\n    }\n    // Shipping and Payment do the same\n}",
-      "options": [
-        "When the `Cart` screen is popped, even if Shipping is still showing",
-        "When the whole `Checkout` graph is popped off the back stack",
-        "Only when the Activity finishes",
-        "On every configuration change"
-      ],
-      "answer": [
-        1
-      ],
-      "explanation": "`hiltViewModel(parent)` scopes the ViewModel to the graph's back stack entry, so Cart, Shipping and Payment share one instance, and it's cleared when the `Checkout` graph entry leaves the back stack. Calling `hiltViewModel()` with no argument would scope it to each screen's own entry, so screens wouldn't share it."
-    },
-    {
-      "id": "d40q19",
-      "type": "mcq",
-      "topic": "deep link back stack",
-      "difficulty": "Hard",
-      "question": "The app isn't running. The user taps a notification whose PendingIntent opens the deep link `https://example.com/profile/42` in a new task (built with `TaskStackBuilder`). The graph's start destination is `Home`. Profile opens. What does Back do?",
-      "options": [
-        "Exits to the launcher, since Profile is the only screen",
-        "Returns to the notification shade",
-        "Crashes, because `Home` was never composed",
-        "Shows `Home`, from a synthetic back stack built from the start destination"
-      ],
-      "answer": [
         3
       ],
-      "explanation": "When a deep link starts a new task, Navigation clears the task and builds the back stack from the start destination of each graph level down to the target, so Back from Profile goes to Home as if the user had got there normally. `Home` is created on demand when it's shown, so nothing crashes."
+      "explanation": "Rollback journal commits need exclusive access, and WAL still serializes writers. A deferred transaction that reads first and writes later can fail with busy when another connection already writes, which `BEGIN IMMEDIATE` avoids. WAL does not allow concurrent writers, and Android uses connection pools to one database file, not separate files."
     },
     {
-      "id": "d40q20",
+      "id": "d40q10",
       "type": "mcq",
-      "topic": "navDeepLink pattern",
+      "topic": "bulk import",
       "difficulty": "Hard",
-      "question": "Which URL pattern does this `navDeepLink` match?",
-      "code": "@Serializable\ndata class Search(val query: String, val page: Int = 1)\n\ncomposable<Search>(\n    deepLinks = listOf(\n        navDeepLink<Search>(basePath = \"https://example.com/search\")\n    )\n) { /* ... */ }",
+      "question": "Importing 500,000 rows into a table with four secondary indexes is still slow, even inside one transaction. What is the most effective change?",
       "options": [
-        "`https://example.com/search?query={query}&page={page}`",
-        "`https://example.com/search/{query}?page={page}`",
-        "`https://example.com/search/{query}/{page}`",
-        "Only `https://example.com/search`; arguments have to be added by hand"
+        "Drop or delay the secondary indexes, load the rows, then create the indexes afterwards",
+        "Split the import into 500,000 separate transactions",
+        "Switch the database to WAL mode before the import",
+        "Add a fifth index on the rowid"
       ],
       "answer": [
-        1
+        0
       ],
-      "explanation": "`navDeepLink<T>(basePath)` derives the pattern from the route class: properties without defaults become path segments and properties with defaults become query parameters. So `/search/kotlin` matches with `page = 1`, and `?page=3` is optional."
+      "explanation": "Every inserted row is placed into five B-trees, and the index inserts land in scattered pages. Building an index after the data is loaded lets SQLite sort the keys once and build the tree efficiently. More transactions add commit cost, and WAL mainly helps concurrency, not bulk insert work."
     }
   ]
 }

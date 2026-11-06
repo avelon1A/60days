@@ -1,353 +1,177 @@
 {
   "day": 35,
-  "topic": "Intents, services, broadcast receivers & WorkManager",
+  "topic": "Choreographer, VSYNC, SurfaceFlinger & jank analysis with Perfetto",
   "questions": [
     {
       "id": "d35q01",
       "type": "mcq",
-      "topic": "implicit intent",
+      "topic": "frame budget",
       "difficulty": "Easy",
-      "question": "A screen shares a link with this code. What kind of intent is `send`?",
-      "code": "val send = Intent(Intent.ACTION_SEND).apply {\n    type = \"text/plain\"\n    putExtra(Intent.EXTRA_TEXT, link)\n}\nstartActivity(Intent.createChooser(send, null))",
+      "question": "On a 120 Hz display, roughly how long does the app have to produce each frame?",
       "options": [
-        "An implicit intent, resolved by matching its action and MIME type against intent filters",
-        "An explicit intent, because it carries an `EXTRA_TEXT` extra with the exact data to share",
-        "An explicit intent, because `createChooser` picks the exact target component",
-        "A `PendingIntent`, because another app will execute it"
+        "About 16 ms",
+        "About 8 ms",
+        "About 4 ms",
+        "About 12 ms"
       ],
       "answer": [
-        0
+        1
       ],
-      "explanation": "An intent is explicit only when it names a target component (e.g. `Intent(context, DetailActivity::class.java)`). `send` names only `ACTION_SEND` and a type, so it is implicit and resolved against intent filters. Extras and the chooser wrapper don't change that."
+      "explanation": "The budget is one refresh period: 1000 ms / 120 is about 8.3 ms. The familiar 16 ms figure only applies at 60 Hz, which is why code that was fine on older phones can jank on high refresh rate screens."
     },
     {
       "id": "d35q02",
       "type": "truefalse",
-      "topic": "intentservice",
+      "topic": "Choreographer thread",
       "difficulty": "Easy",
-      "question": "`IntentService` is still the recommended way for a modern app to run a one-off background task off the main thread.",
+      "question": "`Choreographer.getInstance()` is tied to the calling thread's Looper, so frame callbacks posted through it run on that thread, usually the main thread.",
       "options": [
         "True",
         "False"
       ],
       "answer": [
-        1
+        0
       ],
-      "explanation": "`IntentService` was deprecated in API 30. Since Android 8 background execution limits it can't be reliably started from the background anyway. Use WorkManager for deferrable work, or a coroutine for work tied to a screen."
+      "explanation": "Choreographer is a per-Looper instance, and its callbacks are delivered on that Looper's thread. In practice that is the main thread, which is why slow frame callbacks delay input and drawing."
     },
     {
       "id": "d35q03",
-      "type": "multi",
-      "topic": "package visibility",
-      "difficulty": "Medium",
-      "question": "On an app targeting Android 11+, `intent.resolveActivity(packageManager)` returns `null` for a `geo:` map intent even though Google Maps is installed, so the \"Open in Maps\" button is hidden. Which changes make the feature work correctly?",
+      "type": "mcq",
+      "topic": "frame phases",
+      "difficulty": "Easy",
+      "question": "When a VSYNC signal arrives, in which order does Choreographer run its main callback types for that frame?",
       "options": [
-        "Declare a `<queries>` element in the manifest with an `<intent>` matching the `geo:` VIEW intent",
-        "Skip the check: call `startActivity(intent)` directly and catch `ActivityNotFoundException`",
-        "Add `FLAG_ACTIVITY_NEW_TASK` to the intent before calling `resolveActivity`",
-        "Request the runtime permission for package visibility before resolving",
-        "Make the intent explicit by setting the Maps activity class name you expect"
+        "Animation, then traversal, then input",
+        "Input, then animation, then traversal (measure/layout/draw)",
+        "Input, then traversal, then animation",
+        "Traversal (measure/layout/draw), then input, then animation"
       ],
       "answer": [
-        0,
         1
       ],
-      "explanation": "Android 11 package visibility hides other apps from `PackageManager` queries unless you declare them in `<queries>`, so `resolveActivity` returns `null`. Launching the implicit intent still works without `<queries>`, so try/catch is also valid. There is no runtime permission for this, and hard-coding another app's class name is brittle."
+      "explanation": "Choreographer processes input first so the frame reflects the latest touch, then animations update values, then the traversal measures, lays out and draws using those values. Running animations after drawing would show stale positions."
     },
     {
       "id": "d35q04",
-      "type": "output",
-      "topic": "backoff",
+      "type": "mcq",
+      "topic": "triple buffering",
       "difficulty": "Medium",
-      "question": "This models WorkManager's exponential backoff (30 s initial delay, doubling each attempt, capped at 5 hours). What does it print?",
-      "code": "const val MAX_BACKOFF = 5 * 60 * 60L\n\nfun backoffSeconds(attempt: Int, initial: Long = 30): Long =\n    minOf(initial shl (attempt - 1), MAX_BACKOFF)\n\nfun main() {\n    println((1..4).map { backoffSeconds(it) })\n    println(backoffSeconds(11))\n}",
+      "question": "What does triple buffering buy an app, and what does it cost?",
       "options": [
-        "[30, 60, 120, 240]\n18000",
-        "[30, 60, 90, 120]\n330",
-        "[30, 60, 120, 240]\n30720",
-        "[60, 120, 240, 480]\n18000"
+        "It removes the need for VSYNC, at the cost of screen tearing",
+        "It lets the app start the next frame while one buffer is shown and one is queued, at the cost of latency and memory",
+        "It doubles the frame rate, at the cost of higher GPU temperature",
+        "It lets two threads draw the same frame, at the cost of thread contention"
       ],
       "answer": [
-        0
+        1
       ],
-      "explanation": "Attempt `n` waits `30 shl (n - 1)`, so attempts 1..4 give 30, 60, 120, 240 (doubling, not linear). Attempt 11 would be 30 * 1024 = 30720 s, but `minOf` caps it at 18000 s (5 h), like WorkManager's maximum backoff."
+      "explanation": "With a third buffer the app is not blocked waiting for the display to release a buffer, so an occasional slow frame can be absorbed. The trade-off is that a queued buffer adds a frame of input-to-display latency and needs extra memory. It does not raise the refresh rate."
     },
     {
       "id": "d35q05",
       "type": "mcq",
-      "topic": "activity result api",
-      "difficulty": "Easy",
-      "question": "Which is the current way for an Activity or Fragment to let the user pick a photo and receive the result?",
+      "topic": "SurfaceFlinger",
+      "difficulty": "Medium",
+      "question": "What is SurfaceFlinger's job in the frame pipeline?",
       "options": [
-        "Register `registerForActivityResult(PickVisualMedia())` and call `launch(...)` on the launcher",
-        "Call `startActivityForResult(intent, REQUEST_CODE)` and override `onActivityResult`",
-        "Send a broadcast with `ACTION_PICK` and listen for the reply in a receiver",
-        "Create a `PendingIntent` for the gallery and read the result from `Intent` extras in `onResume`"
+        "Compositing buffers from all visible surfaces into the final image for the display, using the hardware composer or the GPU",
+        "Running inside each app process to pace its Choreographer",
+        "Decoding images for apps before they are drawn",
+        "Running each app's measure and layout passes"
       ],
       "answer": [
         0
       ],
-      "explanation": "The Activity Result API (`registerForActivityResult` with a typed contract) replaced `startActivityForResult`/`onActivityResult`, which are deprecated. It gives you a typed callback without request codes. In Compose the equivalent is `rememberLauncherForActivityResult`."
+      "explanation": "SurfaceFlinger is a system process that takes the latest buffers from the status bar, your app's window and other layers and composes them for each display refresh. It does not run app code; apps render their own buffers and queue them to it."
     },
     {
       "id": "d35q06",
       "type": "multi",
-      "topic": "pendingintent",
+      "topic": "thread states",
       "difficulty": "Medium",
-      "question": "Which statements about `PendingIntent` are correct?",
+      "question": "A Perfetto trace shows a 30 ms `Choreographer#doFrame` slice, but your code inside it should take 5 ms. Which main thread states during that slice would explain the extra wall time? Select all that apply.",
       "options": [
-        "When targeting Android 12+, creating one without `FLAG_IMMUTABLE` or `FLAG_MUTABLE` throws `IllegalArgumentException`",
-        "`FLAG_MUTABLE` is needed when the receiving side must fill in data, such as a notification's inline reply",
-        "When it's sent, the wrapped intent runs with the creating app's identity and permissions, even if that app's process has died",
-        "`FLAG_IMMUTABLE` still lets the holder replace the target component, just not the extras",
-        "`FLAG_UPDATE_CURRENT` alone satisfies the Android 12 mutability requirement"
+        "Running: executing on a CPU core",
+        "Sleeping: blocked on a lock or a binder reply",
+        "Runnable: the thread was ready but waiting for a CPU",
+        "Uninterruptible sleep: waiting on I/O such as a page fault or disk read"
       ],
       "answer": [
-        0,
         1,
-        2
+        2,
+        3
       ],
-      "explanation": "Since Android 12 you must state the mutability explicitly, and `FLAG_IMMUTABLE` should be the default. Use `FLAG_MUTABLE` only when the other side must fill in the intent, e.g. `RemoteInput` replies. An immutable PendingIntent can't be changed at all. `FLAG_UPDATE_CURRENT` controls updating extras, not mutability."
+      "explanation": "Wall time beyond your CPU work is time the thread spent not running: waiting for a core, blocked on I/O, or waiting on a lock or IPC. Each points to a different fix, such as reducing background contention or moving I/O off the main thread. Running time is your code itself, which you said was short."
     },
     {
       "id": "d35q07",
-      "type": "mcq",
-      "topic": "periodic work",
-      "difficulty": "Easy",
-      "question": "What happens with this request?",
-      "code": "val request = PeriodicWorkRequestBuilder<SyncWorker>(5, TimeUnit.MINUTES)\n    .build()\nWorkManager.getInstance(context).enqueue(request)",
+      "type": "truefalse",
+      "topic": "JankStats",
+      "difficulty": "Medium",
+      "question": "JankStats reports per-frame timing and lets you attach UI state, such as 'scrolling feed', so you can see what the app was doing when a frame was janky.",
       "options": [
-        "It is clamped to the 15-minute minimum and runs roughly every 15 minutes",
-        "It runs every 5 minutes exactly as requested",
-        "`build()` throws `IllegalArgumentException` because the interval is too short",
-        "It runs once and is never repeated"
+        "True",
+        "False"
       ],
       "answer": [
         0
       ],
-      "explanation": "`PeriodicWorkRequest` has a minimum repeat interval of 15 minutes. A shorter interval doesn't throw: WorkManager logs a warning and uses 15 minutes. For anything more frequent while the user is looking at the screen, use a coroutine loop."
+      "explanation": "JankStats delivers frame data with a jank flag and the current state values you register through its metrics state holder. That attribution is what makes production jank data actionable, instead of just a global percentage."
     },
     {
       "id": "d35q08",
-      "type": "truefalse",
-      "topic": "exported",
-      "difficulty": "Easy",
-      "question": "On an app targeting Android 12+, an `<activity>` that has an `<intent-filter>` but no explicit `android:exported` attribute makes the app fail to build or install.",
-      "options": [
-        "True",
-        "False"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Since Android 12, any activity, service or receiver with an intent filter must declare `android:exported` explicitly. Otherwise the build fails (manifest merger error) and the APK can't be installed. Before that, the system silently assumed `true`, which caused accidental exposure."
-    },
-    {
-      "id": "d35q09",
       "type": "mcq",
-      "topic": "launch flags",
-      "difficulty": "Medium",
-      "question": "The back stack is A → B → C (all `standard` launch mode). From C you call `startActivity` for A with `FLAG_ACTIVITY_CLEAR_TOP or FLAG_ACTIVITY_SINGLE_TOP`. What happens?",
+      "topic": "frame timeline",
+      "difficulty": "Hard",
+      "question": "In Perfetto's frame timeline, your app's frame finished within its expected window, but the actual frame was still late and the jank type is attributed to SurfaceFlinger. What is the right conclusion?",
       "options": [
-        "B and C finish, and the existing A gets `onNewIntent()`",
-        "B and C are finished, and A is destroyed and recreated with the new intent",
-        "A new instance of A is pushed on top: A → B → C → A",
-        "Only C is finished, giving A → B → A"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`CLEAR_TOP` finishes everything above the existing A. Adding `SINGLE_TOP` makes A, now on top, reuse its instance and get `onNewIntent()`. With `CLEAR_TOP` alone and `standard` launch mode, A itself would also be finished and recreated."
-    },
-    {
-      "id": "d35q10",
-      "type": "truefalse",
-      "topic": "bound service",
-      "difficulty": "Medium",
-      "question": "A service started with `startService()` and later bound by an Activity is destroyed as soon as that Activity calls `unbindService()`.",
-      "options": [
-        "True",
-        "False"
+        "Your `onDraw()` is too slow and should be optimized first",
+        "The delay came from composition on the system side, so optimizing your app's frame work will not fix this frame",
+        "The trace is wrong because the app always owns the frame deadline",
+        "The app missed VSYNC because it posted too many frame callbacks"
       ],
       "answer": [
         1
       ],
-      "explanation": "A service that is both started and bound stays alive until it is stopped (`stopSelf()`/`stopService()`) AND all clients have unbound. Only a service that is purely bound (created by `bindService`) is destroyed when its last client unbinds."
+      "explanation": "The frame timeline compares expected and actual timelines for both the app and SurfaceFlinger and labels who missed the deadline. If the app was on time and the jank is attributed to SurfaceFlinger, the cause is in composition or the system, so app-side optimization will not help that frame."
     },
     {
-      "id": "d35q11",
+      "id": "d35q09",
       "type": "multi",
-      "topic": "implicit broadcasts",
-      "difficulty": "Medium",
-      "question": "An app targeting Android 8+ declares a `<receiver>` in its manifest. Which broadcasts can still reach it when the app isn't running?",
+      "topic": "deadline misses",
+      "difficulty": "Hard",
+      "question": "Which of these can make a frame miss its deadline even though `Choreographer#doFrame` itself is short? Select all that apply.",
       "options": [
-        "`ACTION_BOOT_COMPLETED`",
-        "`ACTION_LOCALE_CHANGED`",
-        "An explicit broadcast sent to that receiver's component (or with `setPackage`)",
-        "`ACTION_POWER_CONNECTED`",
-        "`ConnectivityManager.CONNECTIVITY_ACTION`"
+        "The GPU is still busy with earlier work, so the RenderThread waits for a free buffer",
+        "Long RenderThread work in `DrawFrame`, such as syncing large display lists or uploading textures",
+        "A low-priority background thread doing work on an otherwise idle multi-core device",
+        "A long `Handler` message runs on the main thread just before VSYNC, so `doFrame` starts late",
+        "Calling `postFrameCallback` once from a click listener"
       ],
       "answer": [
         0,
         1,
-        2
+        3
       ],
-      "explanation": "Since Android 8, manifest-declared receivers can't get most implicit broadcasts. A short exemption list includes boot completed and locale changed, and explicit broadcasts are unaffected. Power connected isn't exempt. Connectivity changes need a context-registered receiver or a `NetworkCallback`, or WorkManager constraints."
+      "explanation": "The deadline covers the whole pipeline: when `doFrame` starts, RenderThread work and GPU completion. A message hogging the main thread delays the frame start even if the frame itself is short. Background work on an idle device and a single frame callback do not affect the main pipeline."
     },
     {
-      "id": "d35q12",
+      "id": "d35q10",
       "type": "mcq",
-      "topic": "receiver export flags",
-      "difficulty": "Medium",
-      "question": "An app targeting Android 14 registers a receiver at runtime for its own custom action `com.example.SYNC_DONE`, which only the app itself sends. How should it register?",
-      "options": [
-        "`ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)`",
-        "`ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_EXPORTED)`, so the system can deliver it",
-        "`context.registerReceiver(receiver, filter)` with no flag, since flags only apply to manifest receivers",
-        "Use `LocalBroadcastManager`, the recommended in-app event bus"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "From Android 14, a context-registered receiver for non-system broadcasts must pass `RECEIVER_EXPORTED` or `RECEIVER_NOT_EXPORTED`. Without one, registration throws `SecurityException`. For in-app-only events choose `NOT_EXPORTED` so other apps can't send it. `LocalBroadcastManager` is deprecated, and a `Flow` is the usual replacement."
-    },
-    {
-      "id": "d35q13",
-      "type": "output",
-      "topic": "unique work",
-      "difficulty": "Medium",
-      "question": "This toy model mimics `enqueueUniqueWork` with `ExistingWorkPolicy`. What does it print?",
-      "code": "enum class Policy { KEEP, REPLACE, APPEND }\n\nval queue = mutableMapOf<String, MutableList<String>>()\n\nfun enqueueUnique(name: String, policy: Policy, work: String) {\n    val existing = queue[name]\n    when {\n        existing == null -> queue[name] = mutableListOf(work)\n        policy == Policy.KEEP -> {}\n        policy == Policy.REPLACE -> queue[name] = mutableListOf(work)\n        policy == Policy.APPEND -> existing += work\n    }\n}\n\nfun main() {\n    listOf(Policy.KEEP to \"a\", Policy.KEEP to \"b\", Policy.APPEND to \"c\",\n        Policy.REPLACE to \"d\", Policy.APPEND to \"e\")\n        .forEach { (p, w) -> enqueueUnique(\"sync\", p, w) }\n    println(queue)\n}",
-      "options": [
-        "{sync=[d, e]}",
-        "{sync=[a, c, d, e]}",
-        "{sync=[b, c, d, e]}",
-        "{sync=[e]}"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`KEEP` ignores \"b\" because \"sync\" already exists, `APPEND` adds \"c\", `REPLACE` throws away the existing chain and leaves only \"d\", and the final `APPEND` adds \"e\". Real WorkManager behaves the same way for those three policies."
-    },
-    {
-      "id": "d35q14",
-      "type": "mcq",
-      "topic": "foreground service type",
+      "topic": "binder on main",
       "difficulty": "Hard",
-      "question": "An app targeting Android 14 runs a location-tracking foreground service. It has a notification and calls `startForeground()` on time, but the call crashes. What is missing?",
+      "question": "During scroll jank, Perfetto shows a 40 ms `binder transaction` slice on the main thread, nested under `onBindViewHolder`. What is the most likely cause?",
       "options": [
-        "A `foregroundServiceType=\"location\"` on the `<service>` plus `FOREGROUND_SERVICE_LOCATION`",
-        "A call to `startForeground()` from `onBind()` instead of `onStartCommand()`",
-        "`FLAG_IMMUTABLE` on the notification's content `PendingIntent`",
-        "`START_STICKY` returned from `onStartCommand()`, which Android 14 requires for location"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "From Android 14, every foreground service must declare a `foregroundServiceType` and hold the matching `FOREGROUND_SERVICE_<TYPE>` permission. Without the type, `startForeground()` throws `MissingForegroundServiceTypeException`. `START_STICKY` only affects restarts after the process is killed."
-    },
-    {
-      "id": "d35q15",
-      "type": "mcq",
-      "topic": "background fgs start",
-      "difficulty": "Hard",
-      "question": "An app targeting Android 12+ receives a normal-priority FCM data message while in the background and calls `startForegroundService()` to upload a file. What happens, and what is the recommended fix?",
-      "options": [
-        "It throws `ForegroundServiceStartNotAllowedException`. Enqueue expedited WorkManager work instead",
-        "It works because `startForeground()` is called within a few seconds of starting",
-        "The service starts, but the system hides its notification until the app returns to the foreground",
-        "The system queues the start and runs the service the next time the user opens the app"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Since Android 12, apps generally can't start foreground services from the background. Only listed exemptions are allowed, such as handling a high-priority FCM message. The documented replacement for short, urgent work is `setExpedited(...)` on a `OneTimeWorkRequest`. Calling `startForeground()` quickly doesn't help, because the start itself is refused."
-    },
-    {
-      "id": "d35q16",
-      "type": "mcq",
-      "topic": "chaining",
-      "difficulty": "Medium",
-      "question": "What happens to `process` and `upload` if `DownloadWorker` returns `Result.failure()`?",
-      "code": "WorkManager.getInstance(context)\n    .beginWith(download)\n    .then(process)\n    .then(upload)\n    .enqueue()",
-      "options": [
-        "They are never run and are marked `FAILED` too",
-        "They run anyway, with empty input `Data`",
-        "They stay `ENQUEUED` until `download` is retried manually",
-        "WorkManager retries `download` with backoff, then continues the chain"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "In a chain, a failed or cancelled work request makes all of its dependents fail or cancel as well. Backoff and retry happen only when the worker returns `Result.retry()`, not `failure()`. On success, each worker's output `Data` becomes the next one's input."
-    },
-    {
-      "id": "d35q17",
-      "type": "multi",
-      "topic": "choosing an api",
-      "difficulty": "Easy",
-      "question": "Which tasks are a good fit for WorkManager?",
-      "options": [
-        "Uploading crash logs only when the device is on an unmetered network",
-        "A nightly backup of the local Room database that must happen even if the app is never opened",
-        "Playing a podcast while the screen is off and the user controls it from the notification",
-        "Loading the list of products for the screen the user is currently looking at"
-      ],
-      "answer": [
-        0,
-        1
-      ],
-      "explanation": "WorkManager is for deferrable work that must be guaranteed to run, with constraints like network type, and it survives app exit and reboot. User-visible ongoing work such as playback belongs in a foreground service (`mediaPlayback` type). Data for the visible screen should be loaded with a coroutine in `viewModelScope`."
-    },
-    {
-      "id": "d35q18",
-      "type": "mcq",
-      "topic": "register timing",
-      "difficulty": "Hard",
-      "question": "What happens when the user taps the button?",
-      "code": "override fun onCreate(savedInstanceState: Bundle?) {\n    super.onCreate(savedInstanceState)\n    setContentView(R.layout.activity_main)\n    pickButton.setOnClickListener {\n        registerForActivityResult(GetContent()) { uri ->\n            show(uri)\n        }.launch(\"image/*\")\n    }\n}",
-      "options": [
-        "It throws `IllegalStateException`: launchers must be registered before `STARTED`",
-        "The picker opens and the result is delivered to the lambda normally",
-        "The picker opens, but the result is lost if the Activity is recreated by rotation",
-        "It compiles but is a no-op, because the launcher is never stored in a property"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`registerForActivityResult` must be called unconditionally during initialization (a property initializer or `onCreate`). Registering in `RESUMED` throws, saying LifecycleOwners must register before they are `STARTED`. Early registration is what lets the result come back to the right callback after recreation or process death."
-    },
-    {
-      "id": "d35q19",
-      "type": "mcq",
-      "topic": "coroutineworker",
-      "difficulty": "Easy",
-      "question": "Which statement about `CoroutineWorker` is correct?",
-      "options": [
-        "`doWork()` is a `suspend` function on `Dispatchers.Default`, cancelled when the work is stopped",
-        "`doWork()` runs on the main thread, so you must wrap everything in `withContext(Dispatchers.IO)` to avoid an ANR",
-        "`doWork()` must return a `Result` without suspending, so you need `runBlocking` to call suspend functions",
-        "It keeps running to completion even if its constraints stop being met"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`CoroutineWorker` lets you call suspend functions (Room, Retrofit) directly in `doWork()`. It defaults to `Dispatchers.Default`, not the main thread. When constraints are no longer met or the work is cancelled, WorkManager cancels the coroutine, and it will be retried later if needed."
-    },
-    {
-      "id": "d35q20",
-      "type": "truefalse",
-      "topic": "force stop",
-      "difficulty": "Hard",
-      "question": "WorkManager work survives a reboot and process death, so pending periodic work also keeps running on schedule after the user force-stops the app from Settings.",
-      "options": [
-        "True",
-        "False"
+        "The RenderThread is blocking the main thread to upload textures",
+        "A synchronous call to a system service, such as a PackageManager or ContentResolver lookup, is running in bind",
+        "Kotlin coroutines use binder to switch dispatchers",
+        "RecyclerView is sending each item to SurfaceFlinger separately"
       ],
       "answer": [
         1
       ],
-      "explanation": "Work is persisted and rescheduled after reboot or process death. Force stop is different: the OS cancels the app's jobs and alarms, and no work runs until the user launches the app again, at which point WorkManager reschedules it."
+      "explanation": "A binder transaction is IPC to another process, and in bind code it usually means a synchronous system service or content provider call. The main thread waits for the reply, so the fix is to load that data ahead of time off the main thread or cache it. RenderThread and coroutine dispatching do not show up as binder calls."
     }
   ]
 }

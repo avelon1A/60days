@@ -1,352 +1,175 @@
 {
   "day": 44,
-  "topic": "Clean architecture: layers, repositories & use cases",
+  "topic": "JNI & native C++ on Android",
   "questions": [
     {
       "id": "d44q01",
       "type": "mcq",
-      "topic": "layers",
+      "topic": "JNIEnv",
       "difficulty": "Easy",
-      "question": "In Android's recommended app architecture, which layer is explicitly optional?",
+      "question": "A native library caches the `JNIEnv*` from `JNI_OnLoad` in a global and uses it later from a worker thread. What is wrong?",
       "options": [
-        "UI layer",
-        "Data layer",
-        "Domain layer",
-        "Both the UI and data layers in single-screen apps"
+        "Nothing, as long as the cached global variable is declared `static`",
+        "A JNIEnv is valid only on its own thread; each thread needs its own",
+        "The JNIEnv expires after a few seconds and must be refreshed by native code",
+        "The JNIEnv must first be wrapped in a global reference before it is cached"
       ],
       "answer": [
-        2
+        1
       ],
-      "explanation": "The guide defines a UI layer and a data layer for every app, plus an optional domain layer for complex or reused business logic. The data layer is never optional: even a tiny app needs somewhere to own and expose its data."
+      "explanation": "A `JNIEnv` holds thread-local state such as the local reference table, so it may only be used on its own thread. Cache the `JavaVM*` instead and call `GetEnv` or `AttachCurrentThread` on the worker. Global references apply to `jobject`s, not to the env pointer."
     },
     {
       "id": "d44q02",
+      "type": "mcq",
+      "topic": "attaching threads",
+      "difficulty": "Medium",
+      "question": "A thread created with `pthread_create` in C++ needs to call back into a Kotlin object. What must it do?",
+      "options": [
+        "Call `AttachCurrentThread` on the JavaVM, and detach before the thread exits",
+        "Call `FindClass` first, which attaches the calling native thread automatically",
+        "Nothing special; any native thread in the process can already make JNI calls",
+        "Post the call over to the main thread, because only the main thread may use JNI"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Native threads are unknown to the VM until attached, and attaching gives them a `JNIEnv`. Not detaching before the thread exits leaks the thread's VM state and is reported as an error. Any attached thread can use JNI, so there is no main-thread requirement."
+    },
+    {
+      "id": "d44q03",
       "type": "truefalse",
-      "topic": "dependency rule",
+      "topic": "local references",
       "difficulty": "Easy",
-      "question": "Under Clean Architecture's dependency rule, the domain layer should not import data-layer classes such as Retrofit DTOs or Room entities.",
+      "question": "A `jobject` passed into a native method can be saved in a static C++ variable and safely used in a later, separate JNI call.",
       "options": [
         "True",
         "False"
       ],
       "answer": [
-        0
+        1
       ],
-      "explanation": "Dependencies point inward: outer layers (UI, data) know about the domain, and the domain knows nothing about them. The domain works with its own models and interfaces, so it doesn't change when the API or database does."
-    },
-    {
-      "id": "d44q03",
-      "type": "output",
-      "topic": "operator invoke",
-      "difficulty": "Easy",
-      "question": "What does this print?",
-      "code": "class Repo { fun names() = listOf(\"ana\", \"bo\", \"cy\") }\n\nclass GetDisplayNamesUseCase(private val repo: Repo) {\n    operator fun invoke(limit: Int): List<String> =\n        repo.names().take(limit).map { it.replaceFirstChar { c -> c.uppercaseChar() } }\n}\n\nfun main() {\n    val getDisplayNames = GetDisplayNamesUseCase(Repo())\n    println(getDisplayNames(2))\n}",
-      "options": [
-        "[Ana, Bo]",
-        "[ana, bo]",
-        "[Ana, Bo, Cy]",
-        "GetDisplayNamesUseCase@1b6d3586"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Declaring `operator fun invoke` lets you call the use case instance like a function, so `getDisplayNames(2)` runs `invoke(2)`. It takes 2 names and capitalises each one. It doesn't print the object itself."
+      "explanation": "False. Arguments and objects returned by JNI functions are local references, valid only until the native method returns on that thread. To keep an object across calls, create a global reference with `NewGlobalRef` and delete it with `DeleteGlobalRef` when done."
     },
     {
       "id": "d44q04",
       "type": "mcq",
-      "topic": "data sources",
-      "difficulty": "Easy",
-      "question": "According to Android's guidance, how many sources of data should a single data source class like `NewsRemoteDataSource` work with?",
+      "topic": "local ref table",
+      "difficulty": "Hard",
+      "question": "This native loop crashes with a local reference table overflow for large inputs. What is the right fix?",
+      "code": "for (int i = 0; i < count; i++) {\n    jstring s = env->NewStringUTF(names[i]);\n    env->SetObjectArrayElement(result, i, s);\n}",
       "options": [
-        "Exactly one, such as a network API, a Room database, a file or DataStore",
-        "All sources for one entity, so it can merge network and database results",
-        "One per screen that displays the data",
-        "Any number, as long as it exposes a Flow"
+        "Call `NewGlobalRef` on each string so it is not counted as a local reference",
+        "Run the loop on a separate attached thread that has a fresh JNIEnv and table",
+        "Call `DeleteLocalRef` on each string once stored, or use Push/PopLocalFrame",
+        "Raise the app's heap limit with `android:largeHeap` in the manifest"
       ],
       "answer": [
-        0
+        2
       ],
-      "explanation": "Each data source wraps one source (a Retrofit service, a DAO, a DataStore). Combining several sources and deciding which one wins is the repository's job."
+      "explanation": "Local references are freed only when the native method returns, so creating one per iteration fills the table. Deleting each one after `SetObjectArrayElement`, or wrapping iterations in `PushLocalFrame`/`PopLocalFrame`, keeps the count bounded. Global references would just leak in a different table, and heap size is unrelated."
     },
     {
       "id": "d44q05",
       "type": "mcq",
-      "topic": "single source of truth",
-      "difficulty": "Medium",
-      "question": "A repository's `refresh()` fetches articles from the API and inserts them into Room. `observeArticles()` returns `dao.observeAll()`, and the UI collects it. The user opens the screen in airplane mode with articles cached from yesterday. What should happen?",
+      "topic": "FindClass",
+      "difficulty": "Hard",
+      "question": "`FindClass(\"com/app/Callback\")` works inside a JNI method called from Kotlin but returns null on a native thread you attached yourself. Why?",
       "options": [
-        "The cached rows stay on screen, and the failed refresh is reported separately (e.g. a snackbar)",
-        "The Flow from Room throws the refresh's `IOException`, so the collector stops and the list is cleared",
-        "The screen stays blank until the network returns, because the API is the source of truth",
-        "Room emits an empty list because it only emits after a successful sync"
+        "Attached threads can only find classes that ship in the Android framework itself",
+        "R8 removed the class because it was only ever referenced from native code",
+        "Attached threads must use dotted names such as `com.app.Callback` instead",
+        "It falls back to the system class loader, which cannot see your app's classes"
       ],
       "answer": [
-        0
+        3
       ],
-      "explanation": "In offline-first design the database is the single source of truth. The UI only observes Room, and the network only writes into it. A failed refresh doesn't touch the cached rows, so the repository reports that error separately and the list stays on screen."
+      "explanation": "FindClass uses the class loader of the Java method on top of the stack; a freshly attached thread has none, so it falls back to the system loader. The usual fix is to look up and cache the `jclass` as a global reference in `JNI_OnLoad`, or keep a reference to the app's ClassLoader. R8 removal would fail on both threads, and JNI uses slash-separated names."
     },
     {
       "id": "d44q06",
-      "type": "multi",
-      "topic": "repository role",
+      "type": "mcq",
+      "topic": "crossing cost",
       "difficulty": "Medium",
-      "question": "Which of these are responsibilities of a repository in the data layer? Select all that apply.",
+      "question": "An image filter calls a tiny native function once per pixel from Kotlin. It is slower than the pure Kotlin version. What is the best fix?",
       "options": [
-        "Exposing data to the rest of the app as `Flow` streams or `suspend` functions",
-        "Deciding between cached and fresh network data and resolving conflicts between sources",
-        "Hiding whether data came from Room or Retrofit, so callers don't depend on the source",
-        "Holding a reference to the current `Activity` to show error toasts",
-        "Returning Retrofit `Response<T>` objects so ViewModels can inspect HTTP codes"
+        "Annotate the native method with `@FastNative` to remove most of the call overhead",
+        "Cross once per image, passing all pixels as an array or a direct ByteBuffer",
+        "Call the native function from a background thread pool instead of the caller",
+        "Rewrite the calling loop in Java, since Kotlin adds extra overhead to JNI calls"
       ],
       "answer": [
-        0,
-        1,
-        2
+        1
       ],
-      "explanation": "The repository is the single entry point to its data. It combines data sources, owns the caching and conflict policy, and exposes a clean API. Holding an Activity would leak it and pull UI work into the data layer. Exposing `Response<T>` would leak HTTP details into the UI."
+      "explanation": "Every JNI transition costs much more than a normal call, and per-pixel calls also stop the JIT from optimizing the loop. Moving the whole loop to native code and crossing the boundary once amortizes that cost. Threads only spread the overhead around, and Java versus Kotlin makes no difference to JNI."
     },
     {
       "id": "d44q07",
-      "type": "truefalse",
-      "topic": "main-safety",
-      "difficulty": "Medium",
-      "question": "A ViewModel calling a `suspend` repository function should wrap the call in `withContext(Dispatchers.IO)`, because the repository might do blocking work.",
+      "type": "multi",
+      "topic": "array memory",
+      "difficulty": "Hard",
+      "question": "Which statements about sharing array memory between Java and native code are true? Select all that apply.",
       "options": [
-        "True",
-        "False"
+        "Memory allocated with `malloc` in native code is freed by the GC when no Java object refers to it",
+        "`GetByteArrayElements` may return a copy, so native writes become visible in Java only after `ReleaseByteArrayElements`",
+        "Between `GetPrimitiveArrayCritical` and its release, you should not call other JNI functions or block",
+        "A direct ByteBuffer's memory can be moved by the GC, so its address must be fetched again on every call"
       ],
       "answer": [
-        1
+        1,
+        2
       ],
-      "explanation": "The data layer should be main-safe. The class that does the blocking work (a data source or repository) switches dispatchers itself, typically using an injected dispatcher. Room `suspend` DAOs and Retrofit `suspend` calls are already main-safe, so callers in the ViewModel shouldn't need to know about threading."
+      "explanation": "The VM may copy or pin an array for `Get<Type>ArrayElements`, so release with the right mode to copy changes back. Critical sections may stall the GC, which is why they must stay short and make no other JNI calls. A direct ByteBuffer's address is stable, and the GC never frees native `malloc` memory; native code owns it."
     },
     {
       "id": "d44q08",
-      "type": "mcq",
-      "topic": "which layer: ui",
-      "difficulty": "Easy",
-      "question": "Where does code that shows a `CircularProgressIndicator` instead of the list when `uiState.isLoading` is true belong?",
+      "type": "truefalse",
+      "topic": "caching IDs",
+      "difficulty": "Medium",
+      "question": "`jmethodID` and `jfieldID` values can be looked up once and cached, and stay valid as long as their class is not unloaded.",
       "options": [
-        "UI layer: the composable that renders the screen state",
-        "Domain layer: a `ShouldShowLoadingUseCase`",
-        "Data layer: the repository, since it knows when loading finishes",
-        "Data layer: a Room `@Query` that returns a loading flag"
+        "True",
+        "False"
       ],
       "answer": [
         0
       ],
-      "explanation": "Turning UI state into widgets is the UI layer's job. The repository may report that a load is in progress, but choosing what to draw is a UI decision. A use case for a single boolean check would be pointless indirection."
+      "explanation": "True. Method and field IDs are not references and are not tied to a thread, so caching them (often in `JNI_OnLoad`) avoids repeated lookups. They become invalid only if the class is unloaded, which is rare for app classes on Android."
     },
     {
       "id": "d44q09",
-      "type": "output",
-      "topic": "sealed errors",
-      "difficulty": "Medium",
-      "question": "The data layer maps HTTP codes to a domain error type. What does this print?",
-      "code": "sealed interface DomainError {\n    data object NotFound : DomainError\n    data object Server : DomainError\n    data class Unknown(val code: Int) : DomainError\n}\n\nfun toDomainError(code: Int): DomainError = when (code) {\n    404 -> DomainError.NotFound\n    in 500..599 -> DomainError.Server\n    else -> DomainError.Unknown(code)\n}\n\nfun main() {\n    listOf(404, 503, 418).map(::toDomainError).forEach { println(it) }\n}",
+      "type": "mcq",
+      "topic": "ABIs",
+      "difficulty": "Easy",
+      "question": "Your app bundle includes `.so` files for arm64-v8a, armeabi-v7a, x86 and x86_64. How does Play keep download size down?",
       "options": [
-        "NotFound\nServer\nUnknown(code=418)",
-        "DomainError.NotFound\nDomainError.Server\nDomainError.Unknown(code=418)",
-        "NotFound\nServer\nUnknown(418)",
-        "NotFound\nUnknown(code=503)\nUnknown(code=418)"
+        "It compresses all four ABIs together and the device extracts only its own",
+        "It strips the native libraries and the device compiles the C++ during install",
+        "It serves split APKs holding only the libraries for the device's ABI",
+        "It converts every library to arm64-v8a, since all current devices support it"
       ],
       "answer": [
-        0
+        2
       ],
-      "explanation": "A `data object`'s `toString()` is just its simple name, and a `data class` prints `Name(prop=value)`. 503 falls in `500..599`, so it maps to `Server`. Mapping like this keeps raw HTTP codes out of the UI, which only sees the `DomainError` cases."
+      "explanation": "App bundles let Play generate split APKs per ABI, so a device gets only the native code it can run. Devices never compile C++ on install. Not every device or emulator is arm64, which is why multiple ABIs are built in the first place."
     },
     {
       "id": "d44q10",
-      "type": "mcq",
-      "topic": "pass-through use case",
-      "difficulty": "Medium",
-      "question": "A codebase has dozens of use cases like this one. Which assessment matches Android's architecture guidance?",
-      "code": "class GetUserUseCase @Inject constructor(\n    private val repo: UserRepository\n) {\n    suspend operator fun invoke(id: String) = repo.getUser(id)\n}",
-      "options": [
-        "Pass-through boilerplate: the domain layer is optional, so the ViewModel could call the repository directly",
-        "They're required, because a ViewModel must never reference a repository",
-        "They're what makes the call main-safe, since the repository can't switch to `Dispatchers.IO` on its own",
-        "Hilt needs them, because it can't inject repositories into ViewModels"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "A use case earns its place by holding complex or reused logic; this one adds a class, a test and an extra hop without adding any behaviour. Some teams keep such wrappers for consistency, but that's a team convention, not a requirement: the guide lets the UI layer use repositories directly. Hilt injects repositories into ViewModels without trouble, and main-safety belongs to the data layer."
-    },
-    {
-      "id": "d44q11",
       "type": "multi",
-      "topic": "model mapping",
+      "topic": "exceptions",
       "difficulty": "Medium",
-      "question": "Why map a network `ArticleDto` and a Room `ArticleEntity` to a separate domain `Article`? Select all that apply.",
+      "question": "Which statements about exceptions across the JNI boundary are correct? Select all that apply.",
       "options": [
-        "A backend field rename only changes the DTO and its mapper, not the ViewModels and UI",
-        "The domain model can drop fields the app doesn't need and leave out serialization and Room annotations",
-        "The database schema can change independently of the API's response format",
-        "Retrofit can't deserialize JSON into a class that the UI also uses",
-        "Mapping makes the app faster by reducing allocations"
+        "If the native method returns with a Java exception pending, it is thrown in the Kotlin caller",
+        "A C++ exception thrown in native code is automatically turned into a Java exception",
+        "After a JNI call that can throw, check `ExceptionCheck` before making most other JNI calls",
+        "A pending Java exception immediately stops the native function, like a throw in Kotlin"
       ],
       "answer": [
         0,
-        1,
         2
       ],
-      "explanation": "Separate models keep each layer independent of the API's and the database's format. The cost is extra classes and mapper code, plus allocations: mapping adds allocations, it doesn't remove them. Retrofit will happily deserialize into any suitable class, so it doesn't require mapping."
-    },
-    {
-      "id": "d44q12",
-      "type": "truefalse",
-      "topic": "testability",
-      "difficulty": "Easy",
-      "question": "If a ViewModel depends on a `NewsRepository` interface, a unit test can pass a `FakeNewsRepository` backed by a `MutableStateFlow`, with no network or database.",
-      "options": [
-        "True",
-        "False"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Depending on an abstraction lets tests swap in a fake that the test controls. Google recommends fakes over mocks for repositories, because a fake has real, predictable behaviour and tests stay fast."
-    },
-    {
-      "id": "d44q13",
-      "type": "mcq",
-      "topic": "dependency inversion",
-      "difficulty": "Hard",
-      "question": "With a pure-Kotlin `:domain` module and a `:data` module, where do `interface ArticleRepository` and `ArticleRepositoryImpl` go, and which way does the module dependency point?",
-      "options": [
-        "Interface in `:domain`, implementation in `:data`, and `:data` depends on `:domain`",
-        "Both in `:data`, and `:domain` depends on `:data`",
-        "Interface in `:data`, implementation in `:domain`, and `:domain` depends on `:data`",
-        "Interface in `:domain`, implementation in `:data`, and `:domain` depends on `:data` so it can create the implementation"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "This is dependency inversion: the domain declares the interface it needs, and the data layer implements it, so the source-code dependency points inward. DI wiring (e.g. a Hilt `@Binds` module in `:data` or `:app`) connects the two at runtime. The domain never creates the implementation itself, which is why the last option is wrong."
-    },
-    {
-      "id": "d44q14",
-      "type": "mcq",
-      "topic": "which layer: domain",
-      "difficulty": "Medium",
-      "question": "Calculating a cart total with coupon and tiered-discount rules is needed by both the Cart screen and the Checkout screen. Where should that logic live?",
-      "options": [
-        "A shared domain-layer use case, e.g. `CalculateCartTotalUseCase`",
-        "Copied into each screen's ViewModel so each screen owns its own rules",
-        "Inside the composable that shows the total",
-        "In the Retrofit interface, as a query parameter default"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Business rules reused by several ViewModels are exactly what the domain layer is for. Copying them into each ViewModel means the two screens can drift apart and show different totals. Composables should only render the result."
-    },
-    {
-      "id": "d44q15",
-      "type": "truefalse",
-      "topic": "stateless use cases",
-      "difficulty": "Easy",
-      "question": "Android's guidance says a use case is a good place to keep mutable state, such as a `var` caching the last result, so repeated calls are cheaper.",
-      "options": [
-        "True",
-        "False"
-      ],
-      "answer": [
-        1
-      ],
-      "explanation": "Use cases should be lightweight and hold no mutable data. A cache belongs in the data layer (an in-memory cache in the repository, or Room), and screen state belongs in the UI layer. A stateful use case shared between screens leads to bugs that are hard to trace."
-    },
-    {
-      "id": "d44q16",
-      "type": "mcq",
-      "topic": "result & cancellation",
-      "difficulty": "Hard",
-      "question": "What's the subtle problem with this repository function?",
-      "code": "class UserRepository(private val api: UserApi) {\n    suspend fun getUser(id: String): Result<User> =\n        runCatching { api.getUser(id).toDomain() }\n}",
-      "options": [
-        "`runCatching` also catches `CancellationException`, turning a cancelled call into `Result.failure`",
-        "`Result` can't be returned from a `suspend` function",
-        "`runCatching` isn't suspend-aware, so the network call runs blocking on the main thread and freezes the UI",
-        "A `Result` can't be passed between Gradle modules"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Returning a `Result` or sealed error is a good way to keep exceptions from leaking into the UI. But a blanket `runCatching` swallows `CancellationException`, which breaks structured concurrency: the ViewModel might handle a cancelled job as an error or keep working. Rethrow `CancellationException`, or catch only the expected types such as `IOException` and `HttpException`. `Result` has been allowed as a return type since Kotlin 1.5."
-    },
-    {
-      "id": "d44q17",
-      "type": "multi",
-      "topic": "when use cases help",
-      "difficulty": "Hard",
-      "question": "Which are good reasons to add a use case instead of calling repositories directly from the ViewModel? Select all that apply.",
-      "options": [
-        "The logic combines several repositories, e.g. joining articles with their authors",
-        "Several ViewModels need the same business logic",
-        "The ViewModel has grown complex business rules that you want to pull out and test separately",
-        "Repositories aren't main-safe, so a use case is needed to switch to `Dispatchers.IO`",
-        "Use cases survive configuration changes, so they can hold the screen's state"
-      ],
-      "answer": [
-        0,
-        1,
-        2
-      ],
-      "explanation": "Use cases pay off when they hold complex logic, logic reused across screens, or logic that combines several repositories. Main-safety is already the data layer's job. Use cases are stateless and don't survive anything: the ViewModel keeps the screen state across configuration changes."
-    },
-    {
-      "id": "d44q18",
-      "type": "mcq",
-      "topic": "feature vs layer modules",
-      "difficulty": "Medium",
-      "question": "A growing app has only three modules: `:ui`, `:domain` and `:data`, each holding code for every feature. What's the main drawback as the team and the feature count grow?",
-      "options": [
-        "A change to one feature rebuilds code for all features, and no team can own a feature end to end",
-        "Hilt can't inject classes across module boundaries, so each layer module needs its own separate component",
-        "Layer modules stop the dependency rule from working",
-        "R8 can't shrink code in layer modules"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Splitting by layer only keeps the code apart by technical role. At scale, feature modules (each with its own UI/domain/data internals, and shared core modules) give better build isolation and clearer ownership. Hilt works across modules, and layer modules enforce the dependency rule well, so the other options are false."
-    },
-    {
-      "id": "d44q19",
-      "type": "output",
-      "topic": "repository caching",
-      "difficulty": "Medium",
-      "question": "A repository keeps an in-memory cache in front of a fake API. What does this print?",
-      "code": "class FakeApi {\n    var calls = 0\n    fun fetch(id: Int): String { calls++; return \"user$id\" }\n}\n\nclass UserRepository(private val api: FakeApi) {\n    private val cache = mutableMapOf<Int, String>()\n    fun get(id: Int, refresh: Boolean = false): String =\n        if (refresh) api.fetch(id).also { cache[id] = it }\n        else cache.getOrPut(id) { api.fetch(id) }\n}\n\nfun main() {\n    val api = FakeApi()\n    val repo = UserRepository(api)\n    repo.get(1); repo.get(1); repo.get(2); repo.get(1, refresh = true); repo.get(2)\n    println(\"calls=${api.calls}\")\n}",
-      "options": [
-        "calls=3",
-        "calls=2",
-        "calls=5",
-        "calls=4"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "The first `get(1)` and the first `get(2)` miss the cache and fetch. The refresh fetches again because it skips the cache. The second `get(1)` and the last `get(2)` are cache hits, so the total is 3. This caching policy belongs in the repository, so callers don't need to know about it."
-    },
-    {
-      "id": "d44q20",
-      "type": "mcq",
-      "topic": "skipping mapping",
-      "difficulty": "Hard",
-      "question": "To avoid mapper code, a team puts `@Entity` and `@SerialName` annotations on one `Article` class and uses it everywhere, from Retrofit through to the composables. Which consequence is most accurate?",
-      "options": [
-        "Domain and UI now depend on Room and serialization, so a backend or schema change spreads into every layer",
-        "Room refuses to store a class that also has serialization annotations, since both generate conflicting code",
-        "Nothing changes, since annotations have no runtime effect and the layers stay decoupled",
-        "Compose can't render state whose type is annotated with `@Entity`"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "One shared model ties the API format, the database schema and the UI together, so changing any one of them forces changes in the others, and can even need a Room migration. In a small app that's sometimes an acceptable trade-off. Neither Room nor Compose forbids it technically, but the coupling is real."
+      "explanation": "A Java exception raised during a JNI call is only marked pending; native code keeps running, must check for it, and may only call a few JNI functions until it is cleared or the method returns. On return, the pending exception is thrown in the caller. C++ exceptions are not translated and must be caught before crossing back into the VM."
     }
   ]
 }

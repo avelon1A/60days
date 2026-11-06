@@ -1,48 +1,64 @@
 {
   "day": 49,
-  "topic": "Build & release: Gradle, R8, build variants & modularization",
+  "topic": "Build your own: networking library & a UI layer on Compose",
   "questions": [
     {
       "id": "d49q01",
       "type": "mcq",
-      "topic": "settings.gradle.kts",
+      "topic": "interceptors",
       "difficulty": "Easy",
-      "question": "You add a new `:feature:search` module folder with its own `build.gradle.kts`, but Gradle ignores it. Which file must you edit?",
+      "question": "Why model a networking library's request pipeline as a chain of interceptors that each call `chain.proceed(request)`?",
       "options": [
-        "`settings.gradle.kts` (add `include(\":feature:search\")`)",
-        "The root `build.gradle.kts` (add it to `allprojects {}`)",
-        "`app/build.gradle.kts` (add it under `android {}`)",
-        "`gradle.properties` (add `modules=:feature:search`)"
+        "It forces every request through a single thread in strict arrival order",
+        "Each step can change the request, short-circuit, or retry by calling proceed again",
+        "It removes the need for a connection pool, since each step opens its own socket",
+        "It lets the server decide which of the client's interceptors should run on each call"
       ],
       "answer": [
-        0
+        1
       ],
-      "explanation": "The settings file defines which projects make up the build (plus plugin and dependency repositories). The root and module build files only configure projects that settings has already included."
+      "explanation": "Chain of responsibility gives every concern (auth headers, logging, caching, retries) one place to wrap the call. Because each interceptor decides whether and how many times to call `proceed`, it can short-circuit or retry without the others knowing. Threading and connection pooling are separate parts of the design."
     },
     {
       "id": "d49q02",
-      "type": "output",
-      "topic": "variants",
-      "difficulty": "Easy",
-      "question": "Android names each variant flavor + BuildType. This plain-Kotlin model builds the variant matrix. What does it print?",
-      "code": "fun main() {\n    val flavors = listOf(\"free\", \"paid\")\n    val buildTypes = listOf(\"debug\", \"release\")\n    val variants = flavors.flatMap { f ->\n        buildTypes.map { b -> f + b.replaceFirstChar { it.uppercase() } }\n    }\n    println(variants.size)\n    println(variants.joinToString())\n}",
+      "type": "mcq",
+      "topic": "idempotency",
+      "difficulty": "Medium",
+      "question": "Your library retries on connection resets. Which requests are safe to retry automatically?",
       "options": [
-        "4\nfreeDebug, freeRelease, paidDebug, paidRelease",
-        "4\ndebugFree, releaseFree, debugPaid, releasePaid",
-        "2\nfreeDebug, paidRelease",
-        "4\nfreeDebug, paidDebug, freeRelease, paidRelease"
+        "Every request, because servers reject duplicate requests by default anyway",
+        "Only requests with an empty body, since nothing can be applied twice",
+        "Only POST requests, since GET responses are usually served from cache",
+        "Idempotent ones like GET, PUT, DELETE; POST only with an idempotency key"
+      ],
+      "answer": [
+        3
+      ],
+      "explanation": "A connection reset can happen after the server has already done the work, so retrying a plain POST can charge a card twice. Idempotent methods produce the same outcome when repeated, and an idempotency key lets the server dedupe POSTs. Servers do not dedupe by default."
+    },
+    {
+      "id": "d49q03",
+      "type": "mcq",
+      "topic": "backoff",
+      "difficulty": "Easy",
+      "question": "After a backend outage, every client retries at exactly 1 s, 2 s, then 4 s. Why add random jitter to those delays?",
+      "options": [
+        "It spreads retries out so clients don't all hit the recovering server at once",
+        "It makes each retry come sooner, on average, than plain exponential backoff",
+        "It lets the client skip the wait entirely whenever the network type changes",
+        "HTTP/2 requires it to avoid stream ID conflicts between concurrent retries"
       ],
       "answer": [
         0
       ],
-      "explanation": "`flatMap` goes through every flavor and, for each one, every build type, so you get 2 × 2 = 4 combinations with the flavor first. That is also how AGP builds variants: the product flavors times the build types, named like `freeDebug`."
+      "explanation": "Without jitter, clients that failed together retry together, creating synchronized spikes that can knock the server over again. Randomizing each delay smooths the load. It does not make retries faster on average and has nothing to do with HTTP/2 framing."
     },
     {
-      "id": "d49q03",
+      "id": "d49q04",
       "type": "truefalse",
-      "topic": "versionCode",
-      "difficulty": "Easy",
-      "question": "Google Play rejects an upload that reuses a `versionCode` already uploaded for that app, even if `versionName` changed.",
+      "topic": "cancellation",
+      "difficulty": "Medium",
+      "question": "In a well-designed coroutine networking API, cancelling the caller's coroutine should also cancel the in-flight HTTP call, not just discard its result.",
       "options": [
         "True",
         "False"
@@ -50,301 +66,113 @@
       "answer": [
         0
       ],
-      "explanation": "Play uses the integer `versionCode` to identify builds and decide what counts as an update, so every upload needs a new one, and an update must be higher than the installed version. `versionName` is only a display string, so bumping it alone doesn't help."
-    },
-    {
-      "id": "d49q04",
-      "type": "mcq",
-      "topic": "implementation vs api",
-      "difficulty": "Medium",
-      "question": "`:core:network` declares `implementation(libs.okhttp)`. `:feature:home` depends on `:core:network` with `implementation(project(\":core:network\"))`. What is true?",
-      "options": [
-        "`:feature:home` can't import OkHttp classes, and OkHttp changes don't recompile it",
-        "`:feature:home` can import OkHttp classes because dependencies are transitive at compile time",
-        "OkHttp is left out of the APK because `:app` doesn't declare it",
-        "The build fails because `implementation` dependencies can't be transitive"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`implementation` keeps the dependency off consumers' compile classpath (it is still packaged at runtime), so it doesn't leak and you get compile avoidance. Use `api` only when OkHttp types show up in `:core:network`'s public API."
+      "explanation": "True. If cancellation only ignores the result, the request keeps holding a connection, using bandwidth and maybe hitting the server for a screen the user already left. Bridging coroutine cancellation to the underlying call (for example closing the call or stream) frees those resources."
     },
     {
       "id": "d49q05",
       "type": "mcq",
-      "topic": "version catalog",
-      "difficulty": "Easy",
-      "question": "`gradle/libs.versions.toml` contains `androidx-core-ktx = { group = \"androidx.core\", name = \"core-ktx\", version.ref = \"coreKtx\" }`. How do you use it in a module's `build.gradle.kts`?",
+      "topic": "token refresh",
+      "difficulty": "Hard",
+      "question": "Ten parallel requests all get 401 because the access token expired. How should the auth layer handle it?",
       "options": [
-        "`implementation(libs.androidx.core.ktx)`",
-        "`implementation(\"libs:androidx-core-ktx\")`",
-        "`implementation(libs[\"androidx-core-ktx\"])`",
-        "`implementation(versions.coreKtx)`"
+        "Let each request refresh the token on its own and retry with its own new token",
+        "Fail all ten requests and send the user back to the login screen to sign in",
+        "One refresh at a time; waiters check if the token changed, then retry with it",
+        "Retry all ten with the same expired token after a short fixed delay"
       ],
       "answer": [
-        0
+        2
       ],
-      "explanation": "Gradle generates type-safe accessors from the catalog, and the dashes in an alias become dots. Neither the string coordinate form nor a version reference adds the library."
+      "explanation": "A single-flight refresh behind a mutex stops ten refresh calls racing, which can also invalidate each other on servers that rotate refresh tokens. Requests that queued behind the lock see the token is already new and just retry. Forcing a logout is only right when the refresh itself fails."
     },
     {
       "id": "d49q06",
-      "type": "multi",
-      "topic": "keep rules",
+      "type": "mcq",
+      "topic": "HTTP caching",
       "difficulty": "Medium",
-      "question": "Your release build uses R8. Which of these need keep rules (from you or a library) to keep working? Select all that apply.",
+      "question": "A cached response has an `ETag`. The cache entry is stale. What should the library send, and what happens if the content has not changed?",
       "options": [
-        "A class loaded with `Class.forName(\"com.app.plugins.PdfPlugin\")`",
-        "Fields of a model that Gson fills by reflection from JSON field names",
-        "A Kotlin method that native C++ code calls through JNI by name",
-        "A private helper function that is only called directly from other Kotlin code",
-        "A `sealed` class that is only used in an exhaustive `when`"
+        "Send `If-None-Match` with the ETag; on 304, serve the cached body",
+        "Put the ETag in `Cache-Control`; the server then always resends the full body",
+        "Delete the stale entry and send a plain request, as stale entries are unusable",
+        "Send `If-Modified-Since` carrying the ETag; on a 200, keep the old cached body"
       ],
       "answer": [
-        0,
-        1,
-        2
+        0
       ],
-      "explanation": "R8 can only follow references it can see in bytecode. Names looked up by string through reflection, reflection-based serialization or JNI look unused, so they get removed or renamed. Code that is called directly is traced correctly and needs no rule."
+      "explanation": "A conditional request with `If-None-Match` lets the server reply 304 Not Modified with no body, so the client reuses its copy and saves bandwidth. `If-Modified-Since` takes a date, not an ETag. Throwing stale entries away wastes the validator."
     },
     {
       "id": "d49q07",
-      "type": "mcq",
-      "topic": "mapping.txt",
-      "difficulty": "Easy",
-      "question": "A Crashlytics report from your release build shows `at a.b.c(Unknown Source:12)`. What do you need to get a readable stack trace?",
+      "type": "multi",
+      "topic": "retry policy",
+      "difficulty": "Hard",
+      "question": "Which should your library's retry policy do? Select all that apply.",
       "options": [
-        "The `mapping.txt` R8 generated for that exact build, uploaded or used with retrace",
-        "The `mapping.txt` from today's build of `main`, since R8 renames classes the same way each time",
-        "A debug build installed on the user's device",
-        "Turning off obfuscation and asking the user to reproduce it"
+        "Stop retrying when the caller's coroutine has been cancelled",
+        "Retry a non-idempotent POST that has no idempotency key",
+        "Respect a `Retry-After` header on 429 or 503 responses",
+        "Retry 400 Bad Request responses, since they are often transient",
+        "Cap the number of attempts and the total time spent retrying"
       ],
       "answer": [
-        0
+        0,
+        2,
+        4
       ],
-      "explanation": "R8's renaming changes from build to build, so only the mapping file from the build that crashed can decode it. That's why CI should archive or upload `mapping.txt` for every release."
+      "explanation": "`Retry-After` tells you when the server will accept traffic again, and caps stop retries from hanging a screen or draining the battery. Retries must also stop on cancellation. A 400 means the request itself is wrong, so repeating it cannot succeed, and blind POST retries risk duplicate side effects."
     },
     {
       "id": "d49q08",
-      "type": "truefalse",
-      "topic": "shrink resources",
-      "difficulty": "Medium",
-      "question": "In a release build type you can set `isShrinkResources = true` while leaving `isMinifyEnabled = false`.",
+      "type": "mcq",
+      "topic": "slot APIs",
+      "difficulty": "Easy",
+      "question": "Why does a design-system button take `content: @Composable RowScope.() -> Unit` instead of `text: String`?",
       "options": [
-        "True",
-        "False"
+        "Composable lambdas recompose less often than plain String parameters do",
+        "Callers can add icons, styled text or a spinner while the button keeps its look",
+        "A plain String parameter cannot be localized through string resources",
+        "Slot lambdas are required for the button to be exposed to accessibility services"
       ],
       "answer": [
         1
       ],
-      "explanation": "The resource shrinker relies on code shrinking to find out which resources are still referenced, so AGP fails the build if you enable resource shrinking without `isMinifyEnabled = true`."
+      "explanation": "A slot keeps the component in charge of layout, theming and interaction while the caller decides what goes inside, which avoids a growing list of parameters like `icon`, `iconEnd`, `isLoading`. Strings can be localized fine, and accessibility comes from semantics, not from using slots."
     },
     {
       "id": "d49q09",
-      "type": "mcq",
-      "topic": "flavor dimensions",
+      "type": "truefalse",
+      "topic": "theme locals",
       "difficulty": "Medium",
-      "question": "An app has `flavorDimensions += listOf(\"tier\", \"env\")`, flavors `free`/`paid` (tier) and `dev`/`prod` (env), and the build types `debug` and `release`. How many build variants are there?",
+      "question": "`staticCompositionLocalOf` suits theme values that rarely change, because changing it recomposes the whole content under the provider instead of tracking each reader.",
       "options": [
-        "8",
-        "4",
-        "6",
-        "16"
+        "True",
+        "False"
       ],
       "answer": [
         0
       ],
-      "explanation": "The variant count is the product of each dimension's flavors times the build types: 2 × 2 × 2 = 8, for example `freeDevDebug` or `paidProdRelease`. Dimensions multiply, they don't add."
+      "explanation": "True. A static local does not track who reads it, which makes reads cheap, but a change recomposes everything in the provider's content. `compositionLocalOf` tracks readers so only they recompose, which is better for values that change often."
     },
     {
       "id": "d49q10",
-      "type": "output",
-      "topic": "versionCode",
-      "difficulty": "Medium",
-      "question": "A team computes `versionCode` from semantic versions. What does this print?",
-      "code": "fun code(major: Int, minor: Int, patch: Int) =\n    major * 10_000 + minor * 100 + patch\n\nfun main() {\n    val codes = listOf(code(1, 9, 0), code(1, 10, 0), code(2, 0, 1))\n    println(codes)\n    println(codes.zipWithNext().all { (a, b) -> b > a })\n    println(\"1.10.0\" > \"1.9.0\")\n}",
-      "options": [
-        "[10900, 11000, 20001]\ntrue\nfalse",
-        "[10900, 11000, 20001]\ntrue\ntrue",
-        "[10900, 1100, 20001]\nfalse\nfalse",
-        "[10900, 11000, 20001]\nfalse\nfalse"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "The integer formula always grows from 1.9.0 to 1.10.0 to 2.0.1. Comparing the strings `\"1.10.0\" > \"1.9.0\"` checks characters one by one, and `'1' < '9'`, so it gives `false`. That's why ordering must use `versionCode`, not `versionName`."
-    },
-    {
-      "id": "d49q11",
       "type": "multi",
-      "topic": "app bundles",
-      "difficulty": "Medium",
-      "question": "Which statements about Android App Bundles (AAB) are correct? Select all that apply.",
+      "topic": "component APIs",
+      "difficulty": "Hard",
+      "question": "Which are good API choices for a reusable design-system component in Compose? Select all that apply.",
       "options": [
-        "Play generates optimized split APKs from the bundle, so a device downloads only the code and resources for its ABI, screen density and language",
-        "New apps published on Google Play must be uploaded as AABs, not APKs",
-        "You can't `adb install` an `.aab` directly; `bundletool` (or Play) turns it into installable APKs",
-        "Uploading an AAB means you no longer have to increase `versionCode`",
-        "An AAB doesn't need to be signed because Play signs it"
+        "Take a ViewModel parameter so the component can load its own data",
+        "Accept a `modifier: Modifier = Modifier` parameter and apply it to the component's root",
+        "Expose colors through a `ComponentDefaults.colors(...)` function with overridable parameters",
+        "Apply the caller's modifier to an inner child so outer padding stays fixed",
+        "Hoist state: take `value` and `onValueChange` rather than holding the value internally"
       ],
       "answer": [
-        0,
         1,
-        2
+        2,
+        4
       ],
-      "explanation": "An AAB is a publishing format: Play builds and signs split APKs for each device configuration. You still sign the bundle with your upload key, and `versionCode` must still go up."
-    },
-    {
-      "id": "d49q12",
-      "type": "mcq",
-      "topic": "play app signing",
-      "difficulty": "Easy",
-      "question": "Your app uses Play App Signing and a developer has lost the upload keystore. What happens?",
-      "options": [
-        "Google's app signing key is safe; you request an upload key reset and use the new key",
-        "The app can never be updated again and must be published under a new package name",
-        "You re-sign with the debug keystore, since Play re-signs every upload with the app signing key anyway",
-        "Play generates a new app signing key, so existing users must reinstall"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "With Play App Signing, Google keeps the key that signs what users install, and you only sign uploads with an upload key. A lost upload key can be reset, while users keep getting updates signed with the same app signing key."
-    },
-    {
-      "id": "d49q13",
-      "type": "truefalse",
-      "topic": "applicationIdSuffix",
-      "difficulty": "Easy",
-      "question": "Setting `applicationIdSuffix = \".debug\"` on the debug build type lets the debug and release builds be installed side by side on the same device.",
-      "options": [
-        "True",
-        "False"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "The suffix changes the final application ID, for example `com.app.debug`, and Android treats that as a different app. The code's `namespace` (the R and BuildConfig package) stays the same."
-    },
-    {
-      "id": "d49q14",
-      "type": "mcq",
-      "topic": "module graph",
-      "difficulty": "Medium",
-      "question": "`:feature:search` needs to open a profile screen that lives in `:feature:profile`. Following the usual modularization rules, what should you do?",
-      "options": [
-        "Expose a callback like `onOpenProfile(id)` from `:feature:search` and let `:app` wire it to the profile route",
-        "Add `implementation(project(\":feature:profile\"))` to `:feature:search`",
-        "Make both features depend on each other with `api` so they can share screens",
-        "Move the profile screen into `:core:common` so every feature can reach it without depending on another feature"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Feature modules shouldn't depend on each other: that couples them and limits parallel and incremental builds. The `:app` module (or a shared navigation contract) connects them, and core modules shouldn't absorb feature UI."
-    },
-    {
-      "id": "d49q15",
-      "type": "multi",
-      "topic": "dependency configurations",
-      "difficulty": "Medium",
-      "question": "Which statements about Gradle dependency configurations are correct? Select all that apply.",
-      "options": [
-        "`testImplementation` adds a library (e.g. MockK) only to the local unit test source set",
-        "`compileOnly` makes a library available when compiling but doesn't package it into the APK",
-        "`runtimeOnly` lets your code reference the library's classes at compile time",
-        "`api` should be the default choice because it makes dependency graphs simpler"
-      ],
-      "answer": [
-        0,
-        1
-      ],
-      "explanation": "`runtimeOnly` is the opposite of `compileOnly`: the library is packaged but not visible to the compiler. Defaulting to `api` leaks dependencies to every consumer and makes more modules recompile, so `implementation` is the right default."
-    },
-    {
-      "id": "d49q16",
-      "type": "mcq",
-      "topic": "convention plugins",
-      "difficulty": "Medium",
-      "question": "Twelve Android library modules each repeat the same `compileSdk`, `minSdk`, Kotlin JVM target and lint settings. What is the recommended fix?",
-      "options": [
-        "A convention plugin in an included `build-logic` build, applied by ID in each module",
-        "Move the block into `allprojects {}` or `subprojects {}` in the root build file, so it's applied once",
-        "Keep copy-pasting, since Gradle caches identical blocks",
-        "Put the settings in `gradle.properties` as `android.compileSdk=...`"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Convention plugins keep shared config in one typed, testable place, and each module opts in explicitly. Cross-project configuration through `allprojects`/`subprojects` couples projects and conflicts with project isolation, and `gradle.properties` has no such Android DSL keys."
-    },
-    {
-      "id": "d49q17",
-      "type": "mcq",
-      "topic": "buildConfigField",
-      "difficulty": "Hard",
-      "question": "You add `buildConfigField(\"String\", \"API_URL\", \"\\\"https://dev.api\\\"\")` to the `dev` flavor, but `BuildConfig.API_URL` doesn't resolve. On current AGP, what's the most likely cause?",
-      "options": [
-        "`BuildConfig` isn't generated unless you set `buildFeatures { buildConfig = true }`",
-        "`buildConfigField` only works inside build types, so flavor fields are silently dropped",
-        "The value must not be wrapped in escaped quotes",
-        "You must use `resValue` for strings instead"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Recent AGP versions don't generate `BuildConfig` unless you opt in with `buildFeatures.buildConfig`. `buildConfigField` works in flavors and build types, and String values do need the inner escaped quotes because they're pasted into Java source."
-    },
-    {
-      "id": "d49q18",
-      "type": "multi",
-      "topic": "build speed",
-      "difficulty": "Hard",
-      "question": "A large multi-module project has slow builds. Which changes usually make them faster? Select all that apply.",
-      "options": [
-        "Turning on the Gradle configuration cache so the configuration phase can be reused",
-        "Migrating Room/Hilt annotation processing from kapt to KSP",
-        "Switching `api` to `implementation` where a dependency's types aren't exposed",
-        "Turning on `isMinifyEnabled` for the debug build type",
-        "Making every feature depend on one big `:core` module through `api`"
-      ],
-      "answer": [
-        0,
-        1,
-        2
-      ],
-      "explanation": "The configuration cache skips reconfiguration, KSP avoids kapt's Java stub generation, and `implementation` shrinks recompilation fan-out. R8 in debug adds a slow step, and one large `api` hub makes almost every change recompile everything."
-    },
-    {
-      "id": "d49q19",
-      "type": "mcq",
-      "topic": "consumer rules",
-      "difficulty": "Hard",
-      "question": "Your Android library loads its parser classes by reflection. Apps that use it crash in release builds with `ClassNotFoundException`. What's the correct fix in the library?",
-      "options": [
-        "Ship the keep rules via `consumerProguardFiles(\"consumer-rules.pro\")` so the app's R8 applies them",
-        "Add the rules to the library's own `proguardFiles(...)` in its release build type, so the AAR keeps those classes",
-        "Set `isMinifyEnabled = false` in the library module",
-        "Tell every app to turn off R8"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Apps usually shrink the library code themselves. Only consumer rules bundled in the AAR reach the app's R8 configuration. The library's own `proguardFiles` apply only when the library itself is minified and aren't passed on to apps."
-    },
-    {
-      "id": "d49q20",
-      "type": "truefalse",
-      "topic": "r8 full mode",
-      "difficulty": "Hard",
-      "question": "On current AGP versions R8 runs in full mode by default. Full mode is more aggressive than ProGuard-compatible mode, so code that only works through reflection (such as default constructors used by a serializer) can break unless you keep it explicitly.",
-      "options": [
-        "True",
-        "False"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Full mode became the default and drops some of ProGuard's lenient assumptions, for example implicitly keeping default constructors or attributes for classes that are only kept by name. Reflection-based code often needs more precise keep rules after upgrading."
+      "explanation": "A root-applied modifier, a defaults object for colors and sizes, and hoisted state are the conventions Material components use, and they keep components reusable and testable. Passing a ViewModel couples a UI component to a screen's logic. Applying the modifier to an inner child surprises callers whose size or click modifiers stop affecting the whole component."
     }
   ]
 }

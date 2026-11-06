@@ -1,50 +1,31 @@
 {
   "day": 15,
-  "topic": "Classes: constructors, init order & backing fields",
+  "topic": "Compose basics: composition, state & remember",
   "questions": [
     {
       "id": "d15q01",
-      "type": "output",
-      "topic": "init order",
+      "type": "mcq",
+      "topic": "observable state",
       "difficulty": "Easy",
-      "question": "What does this print?",
-      "code": "class Screen {\n    val a = \"a\".also { println(\"prop a\") }\n    init { println(\"init 1\") }\n    val b = \"b\".also { println(\"prop b\") }\n    init { println(\"init 2\") }\n}\n\nfun main() {\n    Screen()\n}",
+      "question": "The user taps the button three times. What does the text show?",
+      "code": "@Composable\nfun Counter() {\n    var count = 0\n    Button(onClick = { count++ }) {\n        Text(\"Count: $count\")\n    }\n}",
       "options": [
-        "prop a\ninit 1\nprop b\ninit 2",
-        "init 1\ninit 2\nprop a\nprop b",
-        "prop a\nprop b\ninit 1\ninit 2",
-        "init 1\ninit 2"
+        "Count: 0 every time, since a plain var is not observable state",
+        "Count: 3, because Compose tracks changes to all local variables",
+        "It crashes: a local var can't be changed from inside onClick",
+        "Count: 1, then it resets to 0 on the next tap of the button"
       ],
       "answer": [
         0
       ],
-      "explanation": "Property initializers and `init` blocks are merged into the primary constructor and run top to bottom in declaration order. `init` blocks are not run as a group before or after the properties."
+      "explanation": "Compose only recomposes when snapshot state it read changes; a plain local `var` is not tracked, so nothing is redrawn. Even if something else caused a recomposition, the function would run again and reset `count` to 0. Use `var count by remember { mutableStateOf(0) }`."
     },
     {
       "id": "d15q02",
-      "type": "mcq",
-      "topic": "plain constructor param",
-      "difficulty": "Easy",
-      "question": "What happens when you compile and run this?",
-      "code": "class User(name: String) {\n    fun greet() = \"Hi, $name\"\n}\n\nfun main() {\n    println(User(\"Ann\").greet())\n}",
-      "options": [
-        "Prints `Hi, Ann`",
-        "Compile error: unresolved reference `name`",
-        "Prints `Hi, null`",
-        "Throws `UninitializedPropertyAccessException` at runtime"
-      ],
-      "answer": [
-        1
-      ],
-      "compiles": false,
-      "explanation": "Without `val` or `var`, `name` is only a constructor parameter. It can be used in initializers and `init` blocks but is not a property, so member functions can't see it. Write `class User(val name: String)` to make it a property."
-    },
-    {
-      "id": "d15q03",
       "type": "truefalse",
-      "topic": "secondary constructor",
+      "topic": "rememberSaveable",
       "difficulty": "Easy",
-      "question": "If a class has a primary constructor, every secondary constructor must delegate to it, either directly with `: this(...)` or through another secondary constructor.",
+      "question": "A value held with `remember { }` survives recomposition but is lost on a configuration change such as rotation, while `rememberSaveable { }` survives it.",
       "options": [
         "True",
         "False"
@@ -52,311 +33,151 @@
       "answer": [
         0
       ],
-      "explanation": "Kotlin requires this so the primary constructor's initializers and `init` blocks always run. A secondary constructor without `: this(...)` in a class with a primary constructor is a compile error."
+      "explanation": "`remember` stores the value in the composition, which is rebuilt when the Activity is recreated. `rememberSaveable` also writes the value to the saved instance state, so it is restored after rotation and even after process death, as long as the type can be saved."
     },
     {
-      "id": "d15q04",
-      "type": "output",
-      "topic": "secondary ctor body",
+      "id": "d15q03",
+      "type": "mcq",
+      "topic": "recomposition scope",
       "difficulty": "Medium",
-      "question": "What does this print?",
-      "code": "class Person(val name: String) {\n    init { println(\"init $name\") }\n\n    constructor(name: String, age: Int) : this(name) {\n        println(\"secondary $age\")\n    }\n}\n\nfun main() {\n    Person(\"Ann\", 30)\n}",
+      "question": "`vm.name` emits a new value. Which composables run again?",
+      "code": "@Composable\nfun Screen(vm: ProfileViewModel) {\n    val name by vm.name.collectAsStateWithLifecycle()\n    Column {\n        Header()\n        Greeting(name)\n    }\n}",
       "options": [
-        "init Ann\nsecondary 30",
-        "secondary 30\ninit Ann",
-        "secondary 30",
-        "init Ann"
+        "Screen and Greeting run; Header is skipped",
+        "Only Greeting, because Screen never needs to run again after setup",
+        "Screen, Header and Greeting all run again on every new name value",
+        "The whole tree under setContent is re-executed from its root"
       ],
       "answer": [
         0
       ],
-      "explanation": "The delegation `: this(name)` runs first, which runs the primary constructor with all `init` blocks. Only after that does the secondary constructor's own body run."
+      "explanation": "`name` is read in Screen's body, so Screen's restart scope is invalidated and re-executes; `Column` is inline, so it is part of that same scope. Greeting gets a new argument and recomposes, while Header takes no parameters and is skipped. Compose recomposes the smallest scopes that read the changed state, not the whole tree."
+    },
+    {
+      "id": "d15q04",
+      "type": "multi",
+      "topic": "composable body",
+      "difficulty": "Easy",
+      "question": "Which of these are safe to do directly in a composable function's body? Select all that apply.",
+      "options": [
+        "Read state and compute values to display",
+        "Call `analytics.log(\"screen_shown\")`",
+        "Emit other composables such as Text and Row",
+        "Start a network call with `scope.launch { }`",
+        "Write to a `MutableState` that it also reads"
+      ],
+      "answer": [
+        0,
+        2
+      ],
+      "explanation": "Composable functions can run many times, in any order, and recomposition can be skipped or cancelled, so the body must be free of side effects. Logging or launching work there fires on every recomposition, and writing state you read causes an endless recomposition loop. Put such work in `LaunchedEffect`, `SideEffect` or event callbacks."
     },
     {
       "id": "d15q05",
       "type": "mcq",
-      "topic": "setter recursion",
+      "topic": "Saver",
       "difficulty": "Medium",
-      "question": "What happens when `main` runs?",
-      "code": "class Profile {\n    var name: String = \"\"\n        set(value) { name = value.trim() }\n}\n\nfun main() {\n    Profile().name = \" Ann \"\n}",
+      "question": "This crashes with an error saying the value cannot be saved using the current SaveableStateRegistry. Why?",
+      "code": "data class Filters(val query: String, val onlyActive: Boolean)\n\n@Composable\nfun FilterBar() {\n    var filters by rememberSaveable { mutableStateOf(Filters(\"\", false)) }\n    // ...\n}",
       "options": [
-        "It throws `StackOverflowError`",
-        "`name` becomes `Ann`",
-        "Compile error: `name` cannot be assigned inside its setter",
-        "`name` becomes ` Ann ` because the setter is skipped"
+        "Filters can't go into a Bundle; make it @Parcelize Parcelable or pass a Saver",
+        "rememberSaveable only accepts primitive values such as Int, String and Boolean, nothing else",
+        "mutableStateOf can't be used inside rememberSaveable; it must return the raw Filters value",
+        "Data classes need a no-argument constructor before rememberSaveable can recreate them"
       ],
       "answer": [
         0
       ],
-      "compiles": true,
-      "explanation": "Inside the setter, `name = ...` calls the setter again, so it recurses forever. It compiles (with at most a warning). To store the value, assign the backing field: `field = value.trim()`."
+      "explanation": "`rememberSaveable` writes into a Bundle, so the value must be a type a Bundle can hold: primitives, String, Parcelable, Serializable and so on. Wrapping a saveable value in `mutableStateOf` is supported. For a plain class, add `@Parcelize` or give it a `Saver` such as `mapSaver` or `listSaver`."
     },
     {
       "id": "d15q06",
-      "type": "output",
-      "topic": "computed property",
-      "difficulty": "Easy",
-      "question": "What does this print?",
-      "code": "class Cart {\n    var count = 0\n    val totalOnce = count * 10\n    val total get() = count * 10\n}\n\nfun main() {\n    val c = Cart()\n    c.count = 3\n    println(\"${c.totalOnce} ${c.total}\")\n}",
-      "options": [
-        "0 30",
-        "30 30",
-        "0 0",
-        "30 0"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`totalOnce` has an initializer, so it is computed once at construction (when `count` is 0) and stored. `total` has a custom getter and no backing field, so it is recomputed on every read."
-    },
-    {
-      "id": "d15q07",
-      "type": "output",
-      "topic": "open call in parent init",
-      "difficulty": "Hard",
-      "question": "What does this print?",
-      "code": "open class Base {\n    init { println(\"Base sees ${describe()}\") }\n    open fun describe(): String = \"base\"\n}\n\nclass Child : Base() {\n    private val label: String = \"child\"\n    override fun describe() = \"label=$label\"\n}\n\nfun main() {\n    Child()\n}",
-      "options": [
-        "Base sees label=null",
-        "Base sees label=child",
-        "Base sees base",
-        "Base sees label="
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "The override is dispatched virtually, so `Child.describe()` runs. But `Base`'s init runs before `Child`'s property initializers, so `label` still holds the JVM default `null`, even though its type is non-null `String`."
-    },
-    {
-      "id": "d15q08",
-      "type": "mcq",
-      "topic": "private set",
-      "difficulty": "Easy",
-      "question": "Given this ViewModel property, what can code outside the class do with `count`?",
-      "code": "class CounterViewModel : ViewModel() {\n    var count = 0\n        private set\n\n    fun increment() { count++ }\n}",
-      "options": [
-        "Read it, but not assign it",
-        "Read and assign it",
-        "Neither read nor assign it",
-        "Assign it, but not read it"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`private set` keeps the getter public and makes only the setter private. Outside code can read `vm.count` but `vm.count = 5` is a compile error, so all changes go through `increment()`."
-    },
-    {
-      "id": "d15q09",
-      "type": "output",
-      "topic": "parent before child",
-      "difficulty": "Medium",
-      "question": "What does this print?",
-      "code": "open class Parent(msg: String) {\n    init { println(\"Parent $msg\") }\n}\n\nclass Child : Parent(\"hi\".also { println(\"arg\") }) {\n    val x = \"x\".also { println(\"Child prop\") }\n    init { println(\"Child init\") }\n}\n\nfun main() {\n    Child()\n}",
-      "options": [
-        "arg\nParent hi\nChild prop\nChild init",
-        "Child prop\nChild init\narg\nParent hi",
-        "Parent hi\narg\nChild prop\nChild init",
-        "arg\nChild prop\nParent hi\nChild init"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "The argument to the superclass constructor is evaluated first, then the parent constructor runs fully (its init blocks), and only then the child's initializers and init blocks run in declaration order."
-    },
-    {
-      "id": "d15q10",
-      "type": "truefalse",
-      "topic": "default args & Java",
-      "difficulty": "Medium",
-      "question": "For `class BadgeView(context: Context, attrs: AttributeSet? = null) : View(context, attrs)`, Java code (such as the XML inflater looking up constructors) only sees the two-argument constructor unless you add `@JvmOverloads constructor`.",
-      "options": [
-        "True",
-        "False"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Default arguments are a Kotlin-side feature: the JVM gets one constructor taking all parameters (plus a synthetic one). `@JvmOverloads` generates the extra overloads, which is why custom Views often use `@JvmOverloads constructor(...)`."
-    },
-    {
-      "id": "d15q11",
-      "type": "mcq",
-      "topic": "@Inject constructor",
-      "difficulty": "Medium",
-      "question": "Why does this Hilt repository need the `constructor` keyword, when `class UserRepository(private val api: UserApi)` normally doesn't?",
-      "code": "class UserRepository @Inject constructor(\n    private val api: UserApi\n) {\n    suspend fun load(id: String) = api.getUser(id)\n}",
-      "options": [
-        "`constructor` is required when the primary constructor has annotations or modifiers",
-        "It turns the primary constructor into a secondary constructor that Hilt can call",
-        "`private val` constructor parameters are only allowed with an explicit `constructor` keyword",
-        "It makes the constructor `public` so Hilt can reach it"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "The keyword can be omitted only when the primary constructor has no annotations or modifiers. To put `@Inject` (or `private`) on it, you must write `constructor`. It is still the primary constructor, and it is already public by default."
-    },
-    {
-      "id": "d15q12",
-      "type": "output",
-      "topic": "initializer vs setter",
-      "difficulty": "Hard",
-      "question": "What does this print?",
-      "code": "class Volume {\n    var level = 50\n        set(value) { field = value.coerceIn(0, 10) }\n}\n\nfun main() {\n    val v = Volume()\n    print(v.level)\n    v.level = 15\n    println(\" ${v.level}\")\n}",
-      "options": [
-        "50 10",
-        "10 10",
-        "50 15",
-        "10 15"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "A property initializer writes straight to the backing field and does not call the custom setter, so `level` starts at 50. The later assignment goes through the setter and is clamped to 10."
-    },
-    {
-      "id": "d15q13",
       "type": "multi",
-      "topic": "constructor properties",
+      "topic": "what triggers recomposition",
       "difficulty": "Medium",
-      "question": "Which declarations let code outside the class read `User(\"Ann\").name`? Select all that apply.",
+      "question": "Which of these cause a composable that reads the value to recompose? Select all that apply.",
       "options": [
-        "`class User(val name: String)`",
-        "`class User(var name: String)`",
-        "`class User(name: String) { val name = name }`",
-        "`class User(name: String)`",
-        "`class User(private val name: String)`"
+        "A `MutableState` it reads is set to a different value",
+        "A StateFlow it collects with `collectAsStateWithLifecycle()` emits a new value",
+        "A plain `var` property on the ViewModel is reassigned",
+        "An item is added to a `mutableStateListOf()` it iterates",
+        "An item is added to an `ArrayList` stored in `mutableStateOf`"
       ],
       "answer": [
         0,
         1,
-        2
+        3
       ],
-      "explanation": "`val`/`var` in the primary constructor declare public properties, and a body property initialized from the plain parameter works too. A plain parameter alone isn't a property, and `private val` is a property that outside code can't see."
+      "explanation": "Recomposition is driven by snapshot state: `MutableState`, snapshot collections like `mutableStateListOf`, and flows converted to State. A plain property is invisible to Compose. Mutating an `ArrayList` in place does not change the `MutableState`'s value, so no read is invalidated."
     },
     {
-      "id": "d15q14",
+      "id": "d15q07",
+      "type": "mcq",
+      "topic": "derivedStateOf",
+      "difficulty": "Hard",
+      "question": "Why wrap this in `remember { derivedStateOf { ... } }` instead of computing it directly?",
+      "code": "val listState = rememberLazyListState()\n\n// direct:\nval showButton = listState.firstVisibleItemIndex > 0\n\n// vs:\nval showButton by remember {\n    derivedStateOf { listState.firstVisibleItemIndex > 0 }\n}",
+      "options": [
+        "Without it, every index change recomposes; derivedStateOf fires only when the Boolean flips",
+        "derivedStateOf runs the computation on a background thread so scrolling the list stays smooth",
+        "Read directly, the value is computed once and never updates while the user scrolls the list",
+        "derivedStateOf keeps the computed value across configuration changes, unlike direct reads"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Reading `firstVisibleItemIndex` in composition subscribes the composable to every change of the index, so it recomposes constantly while scrolling. `derivedStateOf` reads the index itself and only invalidates readers when its result changes, here when it goes between false and true. It runs on the same thread and saves nothing across recreation."
+    },
+    {
+      "id": "d15q08",
+      "type": "mcq",
+      "topic": "strong skipping",
+      "difficulty": "Hard",
+      "question": "With strong skipping (the default since the Kotlin 2.0.20 Compose compiler), the parent recomposes and passes a new `List<Item>` instance with equal contents. Does `ItemList` skip?",
+      "code": "data class Item(val id: Int, var title: String)\n\n@Composable\nfun ItemList(items: List<Item>) { /* ... */ }",
+      "options": [
+        "No: unstable parameters are compared by instance (===), and this is a new instance",
+        "Yes: strong skipping compares every parameter with equals(), and the lists are equal",
+        "No: a composable that has unstable parameters can never be skipped by the runtime",
+        "Yes: under strong skipping a child always skips when only its parent recomposed"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Strong skipping makes composables with unstable parameters skippable, but compares those parameters by identity; only stable parameters are compared with `equals`. `Item` has a `var`, so it and `List<Item>` are unstable, and a new list instance means ItemList recomposes. Keeping the same instance (or making the types stable, e.g. an immutable collection of stable classes) lets it skip."
+    },
+    {
+      "id": "d15q09",
       "type": "truefalse",
-      "topic": "field identifier",
-      "difficulty": "Medium",
-      "question": "Inside a regular member function, you can write `field` to read or write a property's backing field directly, bypassing its getter and setter.",
+      "topic": "lambda memoization",
+      "difficulty": "Hard",
+      "question": "Under strong skipping, lambdas passed to composables are automatically remembered, even when they capture unstable values.",
       "options": [
         "True",
         "False"
       ],
       "answer": [
-        1
-      ],
-      "explanation": "`field` is only available inside that property's own getter or setter. In other member functions the name means nothing special, and you access the property through its accessors."
-    },
-    {
-      "id": "d15q15",
-      "type": "output",
-      "topic": "no primary constructor",
-      "difficulty": "Hard",
-      "question": "This class has no primary constructor. What does this print?",
-      "code": "class Logger {\n    init { println(\"init\") }\n    val tag = \"T\".also { println(\"prop\") }\n\n    constructor(msg: String) { println(\"ctor $msg\") }\n    constructor() : this(\"default\") { println(\"ctor0\") }\n}\n\nfun main() {\n    Logger()\n}",
-      "options": [
-        "init\nprop\nctor default\nctor0",
-        "ctor0\nctor default\ninit\nprop",
-        "init\nprop\nctor0",
-        "ctor default\nctor0\ninit\nprop"
-      ],
-      "answer": [
         0
       ],
-      "explanation": "`Logger()` delegates to `Logger(String)`. That constructor has no `this(...)`, so it runs the initializers and `init` blocks in order, then its own body. Control then returns to the no-arg constructor's body."
+      "explanation": "With strong skipping, the compiler wraps lambdas in composable functions in a `remember` keyed on their captured values, comparing unstable captures by instance. So a recomposition no longer creates a new lambda that breaks skipping of the child, as long as the captures are the same instances. Before strong skipping, only lambdas capturing stable values were memoized."
     },
     {
-      "id": "d15q16",
+      "id": "d15q10",
       "type": "mcq",
-      "topic": "backing field",
-      "difficulty": "Easy",
-      "question": "In `var title: String = \"\"; set(value) { field = value.uppercase() }`, what is `field`?",
-      "options": [
-        "The property's backing storage, usable only inside its accessors",
-        "A keyword that declares a new private property",
-        "The previous value of `title`, passed into the setter as a read-only copy",
-        "A reference to the object, like `this`"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`field` refers to the property's backing field. Assigning `field` stores the value without calling the setter again. It is not a new property, and it can be written to, unlike a read-only copy."
-    },
-    {
-      "id": "d15q17",
-      "type": "mcq",
-      "topic": "custom View init",
+      "topic": "remember keys",
       "difficulty": "Medium",
-      "question": "This custom View is inflated from XML. What happens?",
-      "code": "class RingView(context: Context, attrs: AttributeSet?) : View(context, attrs) {\n    init { applyColor(Color.RED) }\n\n    private val paint = Paint()\n\n    private fun applyColor(c: Int) { paint.color = c }\n}",
+      "question": "The screen is reused when `userId` changes from \"a\" to \"b\". What does `formatter` hold afterwards?",
+      "code": "@Composable\nfun Profile(userId: String) {\n    val formatter = remember { createFormatter(userId) }\n    Text(formatter.title())\n}",
       "options": [
-        "`NullPointerException`: `paint` is still uninitialized when `init` runs",
-        "It works, because all properties are initialized before any `init` block",
-        "Compile error: `paint` must be declared before `init`",
-        "It works, but the color is reset when `paint` is initialized"
+        "The formatter built for \"a\", because remember has no key and keeps its first value",
+        "A new formatter for \"b\", since remember reruns when any parameter of the function changes",
+        "A new formatter for \"b\", but only once the composable leaves and re-enters composition",
+        "It throws, because remember can't capture a parameter of the enclosing composable"
       ],
       "answer": [
         0
       ],
-      "explanation": "Initializers and `init` blocks run in declaration order, so `paint` is still `null` when `init` calls `applyColor`. The compiler only catches direct references to a later property, not ones that go through a function call. Fix it by moving `paint` above the `init` block."
-    },
-    {
-      "id": "d15q18",
-      "type": "output",
-      "topic": "default constructor args",
-      "difficulty": "Easy",
-      "question": "What does this print?",
-      "code": "class Config(val host: String = \"localhost\", val port: Int = 80)\n\nfun main() {\n    val c = Config(port = 8080)\n    println(\"${c.host}:${c.port}\")\n}",
-      "options": [
-        "localhost:8080",
-        "localhost:80",
-        "8080:80",
-        ":8080"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "The named argument sets only `port`, so `host` falls back to its default `localhost`. Named arguments let you skip earlier parameters that have defaults."
-    },
-    {
-      "id": "d15q19",
-      "type": "mcq",
-      "topic": "body vs ctor property",
-      "difficulty": "Medium",
-      "question": "What happens when you compile and run this?",
-      "code": "class Item(val id: Int) {\n    val id = 2\n}\n\nfun main() {\n    println(Item(1).id)\n}",
-      "options": [
-        "Compile error: conflicting declarations of `id`",
-        "Prints `1`",
-        "Prints `2`, because the body property shadows the constructor one",
-        "Throws an exception at runtime"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`val id` in the constructor already declares a property, so the body declaration is a redeclaration. A body property can reuse the name only when the constructor parameter is a plain parameter without `val`/`var`."
-    },
-    {
-      "id": "d15q20",
-      "type": "multi",
-      "topic": "backing field generation",
-      "difficulty": "Hard",
-      "question": "Which of these properties have a backing field? Select all that apply.",
-      "options": [
-        "`var a = 1`",
-        "`val b get() = 2`",
-        "`var c = 0; set(v) { field = v }`",
-        "`val d: Int = 0; get() = field + 1`",
-        "`var e: Int get() = 1; set(v) {}`"
-      ],
-      "answer": [
-        0,
-        2,
-        3
-      ],
-      "explanation": "A backing field exists if the property uses a default accessor or an accessor that mentions `field`. `b` and `e` have custom accessors that never touch `field`, so they have no storage and cannot take an initializer."
+      "explanation": "`remember { }` without keys computes once per position in the composition and returns the cached value afterwards, so it keeps the stale formatter. Pass the inputs as keys, `remember(userId) { createFormatter(userId) }`, to recompute when they change. Parameters of the enclosing function are not implicit keys."
     }
   ]
 }

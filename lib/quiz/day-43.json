@@ -1,117 +1,133 @@
 {
   "day": 43,
-  "topic": "MVVM, MVI & unidirectional data flow",
+  "topic": "Bytecode, R8 & compiler optimizations",
   "questions": [
     {
       "id": "d43q01",
       "type": "mcq",
-      "topic": "udf",
+      "topic": "companion objects",
       "difficulty": "Easy",
-      "question": "In unidirectional data flow between a ViewModel and a screen, which description is correct?",
+      "question": "Kotlin class `Api` has `companion object { fun create(): Api = Api() }` with no annotations. How does Java code call it?",
       "options": [
-        "State flows down from the ViewModel to the UI, and events flow up from the UI to the ViewModel",
-        "The UI and ViewModel share one mutable object and both write to it (two-way binding)",
-        "The UI owns the state and pushes a full copy of it to the ViewModel after every change the user makes on screen",
-        "Events flow down from the ViewModel to the UI, and state flows up from the UI"
+        "`Api.create()`",
+        "`Api.Companion.create()`",
+        "`new Api.Companion().create()`",
+        "`ApiKt.create()`"
       ],
       "answer": [
-        0
+        1
       ],
-      "explanation": "In UDF the ViewModel is the single source of truth: it exposes state that the UI only renders, and the UI reports user actions back by calling ViewModel functions. Two-way binding lets both sides write the same data, which is exactly what UDF avoids."
+      "explanation": "A companion object compiles to a nested class `Api.Companion` with a static `Companion` field holding its single instance, so Java calls `Api.Companion.create()`. Adding `@JvmStatic` also generates a static `Api.create()` on the outer class. `ApiKt` is the facade class for top-level functions, not companion members."
     },
     {
       "id": "d43q02",
-      "type": "truefalse",
-      "topic": "exposing state",
+      "type": "mcq",
+      "topic": "inline functions",
       "difficulty": "Easy",
-      "question": "If a ViewModel exposes a public `MutableStateFlow<UiState>`, the ViewModel is still the only place where the screen's state can change.",
+      "question": "What happens to the lambda argument when you call a Kotlin `inline fun measure(block: () -> Unit)`?",
+      "options": [
+        "It is compiled once into a shared singleton Function0 object that every call reuses",
+        "It is wrapped in a Runnable and executed synchronously on the calling thread",
+        "Both bodies are copied into the call site, so no Function object is created",
+        "It becomes an invokedynamic call site that is resolved and linked on first use"
+      ],
+      "answer": [
+        2
+      ],
+      "explanation": "Inlining copies both the function body and the lambda body into the caller, which removes the Function allocation and the virtual call and enables non-local `return`. Singleton Function objects and invokedynamic are how non-inline lambdas are compiled. The trade-off is bytecode size grows with every call site."
+    },
+    {
+      "id": "d43q03",
+      "type": "truefalse",
+      "topic": "invokedynamic lambdas",
+      "difficulty": "Medium",
+      "question": "Since Kotlin 2.0, non-inline lambdas compiled for the JVM use invokedynamic with LambdaMetafactory by default, instead of a generated class per lambda.",
       "options": [
         "True",
         "False"
       ],
       "answer": [
-        1
-      ],
-      "explanation": "A public `MutableStateFlow` lets any caller, including the UI, assign `value`, so the ViewModel is no longer the single source of truth. Keep `private val _state = MutableStateFlow(...)` and expose `val state: StateFlow<UiState> = _state.asStateFlow()`."
-    },
-    {
-      "id": "d43q03",
-      "type": "output",
-      "topic": "reducer",
-      "difficulty": "Medium",
-      "question": "What does this MVI-style reducer program print?",
-      "code": "data class State(val count: Int = 0, val log: List<String> = emptyList())\nsealed interface Action\ndata class Add(val n: Int) : Action\ndata object Reset : Action\n\nfun reduce(s: State, a: Action): State = when (a) {\n    is Add -> s.copy(count = s.count + a.n, log = s.log + \"add${a.n}\")\n    Reset -> s.copy(count = 0)\n}\n\nfun main() {\n    val start = State()\n    val end = listOf(Add(2), Add(3), Reset, Add(4)).fold(start, ::reduce)\n    println(\"${start.count} ${end.count} ${end.log}\")\n}",
-      "options": [
-        "0 4 [add2, add3, add4]",
-        "4 4 [add2, add3, add4]",
-        "0 4 [add4]",
-        "0 9 [add2, add3, add4]"
-      ],
-      "answer": [
         0
       ],
-      "explanation": "The reducer never mutates: each step returns a new `State` via `copy`, so `start` stays at 0. `Reset` only zeroes `count` and keeps `log`, so the result is 2+3 → 0 → 4 with all three log entries."
+      "explanation": "True. Kotlin 2.0 made invokedynamic generation of lambdas the default, matching how Java compiles lambdas and reducing the number of generated classes. On Android, D8 still processes these call sites when converting to dex, so the runtime shape may differ from plain JVM bytecode."
     },
     {
       "id": "d43q04",
       "type": "mcq",
-      "topic": "collecting state",
-      "difficulty": "Easy",
-      "question": "A composable screen needs to render `viewModel.uiState: StateFlow<UiState>`. What is the recommended way to read it?",
+      "topic": "data class methods",
+      "difficulty": "Medium",
+      "question": "What does this print?",
+      "code": "data class User(val id: Int) {\n    var name: String = \"\"\n}\n\nval a = User(1).apply { name = \"Ana\" }\nval b = User(1).apply { name = \"Bo\" }\nprintln(a == b)",
       "options": [
-        "`val state by viewModel.uiState.collectAsStateWithLifecycle()`",
-        "`val state by viewModel.uiState.observeAsState()`",
-        "`val state = viewModel.uiState.value`",
-        "`LaunchedEffect(Unit) { viewModel.uiState.collect { cached = it } }` with a plain `var cached`"
+        "true",
+        "false",
+        "It fails to compile because data classes cannot have body properties",
+        "It depends on the order the objects were created"
       ],
       "answer": [
         0
       ],
-      "explanation": "`collectAsStateWithLifecycle()` turns the flow into Compose state and stops collecting when the lifecycle drops below STARTED. Reading `.value` directly doesn't subscribe, so the screen won't update, and `observeAsState()` is for LiveData."
+      "explanation": "The generated `equals`, `hashCode`, `toString`, `copy` and `componentN` only use properties declared in the primary constructor. `name` lives in the class body, so both objects compare equal on `id` alone. Body properties are allowed, which makes this a real source of cache and diffing bugs."
     },
     {
       "id": "d43q05",
-      "type": "multi",
-      "topic": "viewmodel references",
-      "difficulty": "Easy",
-      "question": "Which of these should a ViewModel NOT keep a reference to? Select all that apply.",
+      "type": "mcq",
+      "topic": "noinline",
+      "difficulty": "Hard",
+      "question": "This does not compile: the compiler reports an illegal usage of the inline parameter. Which change fixes it while keeping the function `inline`?",
+      "code": "var pending: (() -> Unit)? = null\n\ninline fun runLater(block: () -> Unit) {\n    pending = block\n}",
       "options": [
-        "A `TextView` from the screen's layout",
-        "The `Activity`, used as a `Context`",
-        "The `NavController`",
-        "A `SavedStateHandle`",
-        "A repository interface injected by Hilt"
+        "Mark the parameter `noinline`, so it is passed as a real Function object",
+        "Mark the parameter `crossinline`, so it is allowed to be saved into the field",
+        "Add a `reified` type parameter, so the lambda's type is kept around at runtime",
+        "Annotate `pending` with `@JvmField`, so the field can accept an inline lambda"
       ],
       "answer": [
-        0,
-        1,
-        2
+        0
       ],
-      "explanation": "A ViewModel outlives configuration changes, so holding Views, an Activity or a NavController leaks the old screen and couples the ViewModel to UI objects. The ViewModel should expose state or a navigation request that the UI acts on. `SavedStateHandle` and injected repositories are normal ViewModel dependencies."
+      "explanation": "An inlined lambda has no object at runtime, so it cannot be assigned to a field. `noinline` makes that one parameter a normal Function instance. `crossinline` only forbids non-local returns so the lambda can be called from another execution context such as an object expression; it is still inlined and still cannot be stored directly."
     },
     {
       "id": "d43q06",
       "type": "mcq",
-      "topic": "modelling ui state",
+      "topic": "obfuscation",
       "difficulty": "Medium",
-      "question": "A feed screen must keep showing the current list while pull-to-refresh runs, and show a transient error message on top of the list if the refresh fails. Which UiState model fits best?",
+      "question": "A release build sends `{\"a\":1,\"b\":\"x\"}` instead of `{\"id\":1,\"name\":\"x\"}` when serializing a model with Gson. Debug is fine. What is happening?",
       "options": [
-        "`data class FeedUiState(val items: List<Item>, val isRefreshing: Boolean, val userMessage: String?)`",
-        "`sealed interface FeedUiState { Loading; Success(items); Error(message) }`",
-        "Three separate `StateFlow`s (`items`, `isRefreshing`, `error`) exposed from the ViewModel, which the composable combines into what it shows",
-        "A `MutableList<Item>` exposed from the ViewModel and mutated in place on refresh"
+        "Gson switches to a compact field-naming policy when it detects a non-debuggable build",
+        "R8 merged the model class into another class, so Gson now reads the wrong fields",
+        "OkHttp's release logging interceptor minified the JSON body before sending it",
+        "R8 renamed the fields, and Gson takes JSON keys from field names via reflection"
       ],
       "answer": [
-        0
+        3
       ],
-      "explanation": "Here loading, content and error can legitimately coexist, so one data class with independent fields fits. A sealed `Loading/Success/Error` would throw away the list when switching to `Loading`. Separate flows push the combining logic into the UI, and a mutable list breaks immutability."
+      "explanation": "Gson reads field names by reflection, and R8 obfuscation renamed them to short names in release. The fix is `@SerializedName` on the fields with matching keep rules, or keeping the model's fields, or moving to a codegen-based serializer like kotlinx.serialization. Gson has no build-type aware naming policy."
     },
     {
       "id": "d43q07",
+      "type": "multi",
+      "topic": "keep rules",
+      "difficulty": "Hard",
+      "question": "With R8 enabled, which of these typically need you to write keep rules yourself? Select all that apply.",
+      "options": [
+        "A Java method that native code looks up by name with `GetMethodID`",
+        "A sealed class used in an exhaustive `when` expression",
+        "An Activity that is declared in AndroidManifest.xml",
+        "A class instantiated via `Class.forName(prefix + name)` where the name is built at runtime"
+      ],
+      "answer": [
+        0,
+        3
+      ],
+      "explanation": "R8 cannot see references made through runtime-built strings or from native code, so it may remove or rename those targets. Manifest components are kept by rules AAPT2 generates automatically. A `when` over a sealed class is an ordinary static reference that R8 traces like any other code."
+    },
+    {
+      "id": "d43q08",
       "type": "truefalse",
-      "topic": "mvp",
-      "difficulty": "Easy",
-      "question": "In classic MVP, the Presenter holds a reference to the View interface, so it must be attached and detached with the lifecycle to avoid leaks and calls into a destroyed screen.",
+      "topic": "keepnames",
+      "difficulty": "Medium",
+      "question": "`-keepnames class com.app.Foo` stops R8 from renaming Foo, but R8 can still remove Foo entirely if nothing uses it.",
       "options": [
         "True",
         "False"
@@ -119,232 +135,43 @@
       "answer": [
         0
       ],
-      "explanation": "The MVP Presenter calls `view.showItems(...)` directly, so it must drop the reference in `onDestroy` and gets nothing back across rotation unless you add your own retention. MVVM avoids this: the ViewModel has no view reference and the UI observes its state."
-    },
-    {
-      "id": "d43q08",
-      "type": "multi",
-      "topic": "sealed ui state",
-      "difficulty": "Medium",
-      "question": "Compared with `data class UiState(val isLoading: Boolean, val data: Data?, val error: String?)`, what does a `sealed interface UiState { Loading; Success(data); Error(message) }` give you? Select all that apply.",
-      "options": [
-        "Combinations like loading with an error at the same time can't be represented",
-        "A `when (state)` without `else` is exhaustive, so the compiler flags a missing branch",
-        "It's the easiest way to keep the old data on screen while a refresh runs",
-        "You can change one field with `copy` and leave the others untouched"
-      ],
-      "answer": [
-        0,
-        1
-      ],
-      "explanation": "Each subtype carries only the data valid for that state, so impossible states disappear and `when` is exhaustive. Keeping old data during a refresh, and updating single fields with `copy`, are what the flat data class is good at."
+      "explanation": "True. `-keepnames` is shorthand for keep with `allowshrinking`, so it only protects the name of a class that survives shrinking. If you need the class to exist even when unreferenced, use `-keep`."
     },
     {
       "id": "d43q09",
       "type": "mcq",
-      "topic": "state update",
-      "difficulty": "Medium",
-      "question": "Why is `_state.update { it.copy(query = q) }` preferred over `_state.value = _state.value.copy(query = q)`?",
+      "topic": "retrace",
+      "difficulty": "Easy",
+      "question": "A production crash shows `at a.b.c(Unknown Source:4)`. What do you need to turn it into readable class and method names?",
       "options": [
-        "`update` retries with compare-and-set, so two concurrent updates can't silently overwrite each other",
-        "`update` forces every collector to be notified, even when the new state is equal to the old one, so the UI always redraws",
-        "Assigning `value` directly only works on the main thread",
-        "`update` saves the new state into `SavedStateHandle` automatically"
+        "The debug build's stack trace for the same crash, captured locally",
+        "The `mapping.txt` from that exact release build, used with retrace",
+        "The proguard-rules.pro file together with the app's current source code",
+        "A freshly rebuilt release APK from the current branch to compare against"
       ],
       "answer": [
-        0
+        1
       ],
-      "explanation": "The read-then-assign version is not atomic: if another coroutine updates the state between the read and the write, its change is lost. `update` loops on `compareAndSet` until its transformation is applied to the latest value. Neither form notifies collectors about an equal value, and `value` can be set from any thread."
+      "explanation": "R8 writes `mapping.txt` for every minified build, and retrace (or the Play Console and crash tools when you upload it) maps obfuscated names back. The mapping must match that exact build; a rebuild from a later commit can produce different names. Keep rules alone do not describe how names were assigned."
     },
     {
       "id": "d43q10",
-      "type": "mcq",
-      "topic": "state holders",
-      "difficulty": "Medium",
-      "question": "A reusable `ExpandableSearchBar` composable needs to track whether it is expanded and which suggestion is highlighted. Two of them can appear on the same screen. Where should this state live?",
-      "options": [
-        "In a plain state holder class created with a `rememberSearchBarState()` function, like `LazyListState`",
-        "In a dedicated `SearchBarViewModel`, obtained with `viewModel()` inside the component itself so the state survives configuration changes",
-        "In the screen's ViewModel, as two fields per search bar",
-        "In top-level global `mutableStateOf` variables"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "This is UI element state with no business logic, so a component-level plain state holder remembered in composition fits. ViewModels are screen-level: `viewModel()` without a key returns the same instance for the same owner, so both bars would share one state. Global variables are shared by every instance too."
-    },
-    {
-      "id": "d43q11",
       "type": "multi",
-      "topic": "rotation mid-load",
-      "difficulty": "Medium",
-      "question": "A ViewModel starts loading in `init { viewModelScope.launch { ... } }` and exposes `StateFlow<UiState>`. The user rotates the phone while the request is in flight. Which statements are true? Select all that apply.",
+      "topic": "R8 optimizations",
+      "difficulty": "Hard",
+      "question": "Which of these are optimizations R8 can perform on your app's bytecode? Select all that apply.",
       "options": [
-        "The coroutine keeps running, because the ViewModel isn't cleared on a configuration change",
-        "The recreated screen gets the current state (e.g. `Loading`) as soon as it collects, then `Success` when the load finishes",
-        "`init` runs again for the new Activity, so a second request starts",
-        "The result is lost, because the old screen's collector was cancelled while the request was running"
+        "Converting `synchronized` blocks into lock-free code",
+        "Removing branches that constant propagation proves can never run",
+        "Merging a class into its only subclass or interface implementation",
+        "Inlining small methods into their callers"
       ],
       "answer": [
-        0,
-        1
-      ],
-      "explanation": "The same ViewModel instance is handed to the new Activity, so `init` doesn't run again and `viewModelScope` keeps working. A `StateFlow` always holds its latest value, so the new collector gets it right away. Only the collector was cancelled, not the work that writes the state."
-    },
-    {
-      "id": "d43q12",
-      "type": "truefalse",
-      "topic": "mvi reducer",
-      "difficulty": "Easy",
-      "question": "In MVI, the reducer `(State, Action) -> State` should be a pure function, and work such as network calls or navigation is handled outside it as a side effect.",
-      "options": [
-        "True",
-        "False"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "A pure reducer always gives the same new state for the same inputs, which makes it easy to test and reason about. Side effects such as API calls run elsewhere and dispatch new actions with their results, and one-off effects such as navigation go through a separate effects stream."
-    },
-    {
-      "id": "d43q13",
-      "type": "mcq",
-      "topic": "combine",
-      "difficulty": "Medium",
-      "question": "A profile screen needs `userRepo.user: Flow<User>` and `settingsRepo.settings: Flow<Settings>`, and must update whenever either changes. What is the idiomatic way to build the ViewModel's UI state?",
-      "options": [
-        "`combine(user, settings) { u, s -> ProfileUiState(u, s) }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ProfileUiState())`",
-        "`user.zip(settings) { u, s -> ProfileUiState(u, s) }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), initialValue = ProfileUiState())",
-        "Expose both flows and let the composable merge them into one state",
-        "`user.flatMapLatest { settings }` and build the state from the settings value alone"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`combine` emits a new value whenever either source emits, using the latest from each, and `stateIn` turns the result into a `StateFlow` scoped to the ViewModel. `zip` pairs emissions one-to-one, so a settings change wouldn't show until the user flow also emits. Merging in the composable puts state logic in the UI."
-    },
-    {
-      "id": "d43q14",
-      "type": "mcq",
-      "topic": "events as state",
-      "difficulty": "Medium",
-      "question": "After a failed save, the screen must show a snackbar once. What does the Android architecture guidance recommend?",
-      "options": [
-        "Put `userMessage: String?` in the UiState, show it from the UI, then call `viewModel.userMessageShown()` to clear it",
-        "Pass the `SnackbarHostState` to the ViewModel and call `showSnackbar` from there",
-        "Emit the message on a `MutableSharedFlow(replay = 1)` so that a collector that subscribes late, for example after a rotation, still receives it",
-        "Show a `Toast` from the ViewModel using the Activity context"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Modelling the message as state that the UI acknowledges means it survives rotation and is shown exactly once. Giving UI objects to the ViewModel leaks them and breaks UDF. A `replay = 1` SharedFlow replays the old message to every new collector, so the snackbar shows again after rotation."
-    },
-    {
-      "id": "d43q15",
-      "type": "multi",
-      "topic": "logic in composables",
-      "difficulty": "Easy",
-      "question": "On a sign-up form, which of these belong in the ViewModel rather than in the composable? Select all that apply.",
-      "options": [
-        "Deciding whether Submit is enabled based on the validation rules",
-        "Calling the repository to create the account",
-        "Turning a repository failure into the message the screen shows",
-        "The current scroll position of the form's `LazyColumn`",
-        "The progress of the button's press animation"
-      ],
-      "answer": [
-        0,
         1,
-        2
+        2,
+        3
       ],
-      "explanation": "Validation rules, data calls and error mapping are business or screen logic. Kept in the ViewModel, they can be tested without UI and they survive configuration changes. Scroll position and animation progress are UI element state, which belongs in the composition (`rememberLazyListState`, animation APIs)."
-    },
-    {
-      "id": "d43q16",
-      "type": "mcq",
-      "topic": "testing viewmodel",
-      "difficulty": "Medium",
-      "question": "This local JVM unit test crashes with an `IllegalStateException` about the Main dispatcher. Why, and what is the usual fix?",
-      "code": "@Test\nfun loadEmitsSuccess() = runTest {\n    val vm = TasksViewModel(FakeTasksRepository(listOf(\"a\")))\n    vm.load() // launches in viewModelScope\n    advanceUntilIdle()\n    assertEquals(UiState.Success(listOf(\"a\")), vm.state.value)\n}",
-      "options": [
-        "`viewModelScope` needs `Dispatchers.Main`, which plain JVM tests lack; replace it via `Dispatchers.setMain(...)` in a test rule",
-        "ViewModels can only be constructed inside instrumented tests on a device or emulator, so the test has to move to `androidTest`",
-        "`runTest` can't read `StateFlow.value`, so the assertion must use `first()`",
-        "`FakeTasksRepository` must be replaced by a real Room database"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`viewModelScope` runs on `Dispatchers.Main.immediate`, which needs Android's main looper. Replacing it with a `TestDispatcher` via `Dispatchers.setMain` makes the ViewModel testable on the JVM with a fake repository, and you then assert the states it emits. ViewModels are plain classes and don't need an instrumented test."
-    },
-    {
-      "id": "d43q17",
-      "type": "output",
-      "topic": "state machine",
-      "difficulty": "Hard",
-      "question": "What does this reducer print?",
-      "code": "sealed interface State\ndata object Idle : State\ndata object Loading : State\ndata class Loaded(val n: Int) : State\n\nsealed interface Action\ndata object Fetch : Action\ndata class Done(val n: Int) : Action\n\nfun reduce(s: State, a: Action): State = when (a) {\n    Fetch -> if (s is Loading) s else Loading\n    is Done -> if (s is Loading) Loaded(a.n) else s\n}\n\nfun main() {\n    val start: State = Idle\n    val actions = listOf(Done(1), Fetch, Fetch, Done(2), Done(3))\n    println(actions.runningFold(start, ::reduce).joinToString(\" -> \"))\n}",
-      "options": [
-        "Idle -> Idle -> Loading -> Loading -> Loaded(n=2) -> Loaded(n=2)",
-        "Idle -> Idle -> Loading -> Loading -> Loaded(n=2) -> Loaded(n=3)",
-        "Idle -> Loaded(n=1) -> Loading -> Loading -> Loaded(n=2) -> Loaded(n=3)",
-        "Idle -> Loading -> Loading -> Loaded(n=2) -> Loaded(n=2)"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`runningFold` includes the initial value, then one state per action. `Done` is only accepted while `Loading`, so `Done(1)` in `Idle` and `Done(3)` in `Loaded` are ignored, and a second `Fetch` while loading changes nothing. Ignoring actions that make no sense in the current state is how a reducer prevents impossible transitions."
-    },
-    {
-      "id": "d43q18",
-      "type": "mcq",
-      "topic": "impossible states",
-      "difficulty": "Hard",
-      "question": "The first `load()` fails with message \"Timeout\". The user taps Retry and the second call returns 3 items. The UI shows an error banner when `error != null` and the list otherwise below it. What does the user see?",
-      "code": "data class UiState(\n    val isLoading: Boolean = false,\n    val items: List<String> = emptyList(),\n    val error: String? = null\n)\n\nfun load() = viewModelScope.launch {\n    _state.update { it.copy(isLoading = true) }\n    runCatching { repo.fetch() }\n        .onSuccess { r -> _state.update { it.copy(isLoading = false, items = r) } }\n        .onFailure { e -> _state.update { it.copy(isLoading = false, error = e.message) } }\n}",
-      "options": [
-        "The 3 items, with the stale \"Timeout\" banner still showing",
-        "Only the 3 items",
-        "Only the \"Timeout\" error banner, with no items",
-        "A spinner that never goes away, since `isLoading` is never reset"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`copy` keeps every field you don't mention, and no step ever clears `error`, so the final state is `isLoading=false, items=[3 items], error=\"Timeout\"`. Each transition must reset the fields it invalidates (e.g. `error = null` when loading starts), or the state should be modelled as a sealed type where this combination can't exist."
-    },
-    {
-      "id": "d43q19",
-      "type": "truefalse",
-      "topic": "stateflow equality",
-      "difficulty": "Hard",
-      "question": "If a ViewModel sets `_state.value = UiState(count = 1)` while the current value is already an equal `UiState(count = 1)` (a data class), collectors receive the new value again.",
-      "options": [
-        "True",
-        "False"
-      ],
-      "answer": [
-        1
-      ],
-      "explanation": "`StateFlow` is conflated by equality: assigning a value `==` to the current one is a no-op, and data classes compare structurally. So you can't re-trigger the UI by re-sending an equal state, which is one reason one-off events shouldn't be modelled as \"set the same state again\"."
-    },
-    {
-      "id": "d43q20",
-      "type": "mcq",
-      "topic": "mvi effects",
-      "difficulty": "Hard",
-      "question": "An MVI ViewModel sends one-off effects (e.g. `NavigateToDetails`) through `Channel<Effect>(Channel.BUFFERED).receiveAsFlow()` rather than a `MutableSharedFlow<Effect>()` with no replay. What is the main reason?",
-      "options": [
-        "The channel buffers an effect until a collector receives it, while a SharedFlow with no subscribers drops it (e.g. during a rotation)",
-        "A channel delivers every effect to all of its collectors at the same time, whereas a SharedFlow hands each one to a single collector only",
-        "A channel replays the last effect to each new collector, so it's never missed",
-        "A SharedFlow can't be collected from a composable"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Effects aren't state, so they're kept out of the reducer's state and sent on a separate stream. With `replay = 0`, a SharedFlow emission with no active collector is lost, but a buffered channel holds it until the new screen collects it. Each channel element goes to exactly one receiver, and channels don't replay."
+      "explanation": "R8's optimizer inlines methods, propagates constants and removes dead branches, and merges classes when the hierarchy allows it. These are also why stack traces can show fewer frames than the source suggests. It does not rewrite synchronization into lock-free algorithms; that would change semantics."
     }
   ]
 }

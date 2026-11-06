@@ -1,366 +1,178 @@
 {
   "day": 39,
-  "topic": "Compose performance: stability, keys & lazy lists",
+  "topic": "ExoPlayer (Media3) internals: renderers, buffering & tracks",
   "questions": [
     {
       "id": "d39q01",
       "type": "mcq",
-      "topic": "skipping",
+      "topic": "player states",
       "difficulty": "Easy",
-      "question": "Without strong skipping, when can Compose skip calling a child composable while its parent recomposes?",
+      "question": "A video is playing with `playWhenReady = true` when the buffer runs out. What does the player report?",
       "options": [
-        "When all its parameters are stable and unchanged",
-        "When all of its parameters have default values",
-        "When it is annotated with `@Preview`",
-        "When it is declared `private`"
+        "`STATE_ENDED`, until more data arrives",
+        "`STATE_IDLE`, and `playWhenReady` becomes false",
+        "`STATE_READY`, with `isPlaying` still true",
+        "`STATE_BUFFERING`, while `playWhenReady` stays true"
       ],
       "answer": [
-        0
+        3
       ],
-      "explanation": "Compose skips a composable only if every parameter is of a stable type and compares equal to what was passed last time. Default values, visibility and preview annotations have nothing to do with skipping."
+      "explanation": "Playback state and the user's intent are separate: the state moves to buffering while `playWhenReady` keeps saying the user wants to play. `isPlaying` becomes false during buffering, which is the right signal for a spinner. Idle means not prepared or failed, and ended means the end of the media."
     },
     {
       "id": "d39q02",
-      "type": "mcq",
-      "topic": "var in data class",
-      "difficulty": "Easy",
-      "question": "How does the Compose compiler infer the stability of this class?",
-      "code": "data class Profile(\n    var name: String,\n    val age: Int\n)",
-      "options": [
-        "Unstable, because it has a public `var`",
-        "Stable, because data classes generate `equals()`",
-        "Stable, because `String` and `Int` are both stable types",
-        "It is a compile error to pass a data class with a `var` to a composable"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "A public mutable property that isn't backed by snapshot state makes the class unstable: it can be mutated behind Compose's back. Having `equals()` and stable property types isn't enough once a property is a plain `var`."
-    },
-    {
-      "id": "d39q03",
       "type": "truefalse",
-      "topic": "heavy work",
+      "topic": "threading",
       "difficulty": "Easy",
-      "question": "Sorting a 5,000-item list directly in a composable body (e.g. `val sorted = items.sortedBy { it.name }`) is fine, because a composable body only runs once.",
+      "question": "ExoPlayer must be accessed from the thread it was created on (its application thread), even though decoding and loading run on an internal playback thread.",
       "options": [
         "True",
         "False"
       ],
       "answer": [
+        0
+      ],
+      "explanation": "The player is bound to an application Looper, usually the main one, and its listener callbacks are delivered there. Internally, the playback thread drives renderers and loading and talks to the app thread by messages, so the app never calls that thread directly."
+    },
+    {
+      "id": "d39q03",
+      "type": "mcq",
+      "topic": "renderers",
+      "difficulty": "Easy",
+      "question": "What does a `Renderer` do inside ExoPlayer?",
+      "options": [
+        "Draws the playback controls on screen",
+        "Consumes samples for one track type, such as video, audio or text, and renders them to its output",
+        "Downloads media segments from the network",
+        "Chooses which bitrate variant to play"
+      ],
+      "answer": [
         1
       ],
-      "explanation": "A composable body can run again on every recomposition, sometimes every frame during animations. Wrap it in `remember(items) { ... }` or, better, compute it in the ViewModel."
+      "explanation": "Each renderer handles one kind of track, for example decoding video into a Surface or audio into an AudioTrack. Loading belongs to MediaSources, bitrate choice to the TrackSelector, and controls to the UI module."
     },
     {
       "id": "d39q04",
-      "type": "output",
-      "topic": "instance equality",
-      "difficulty": "Easy",
-      "question": "Under strong skipping, unstable parameters like `List` are compared with `===`. What does this print?",
-      "code": "data class Item(val id: Int)\n\nfun main() {\n    val a = listOf(Item(1), Item(2))\n    val b = a.toList()\n    val c = a\n    println(\"${a == b} ${a === b} ${a === c}\")\n}",
+      "type": "mcq",
+      "topic": "LoadControl",
+      "difficulty": "Medium",
+      "question": "Playback takes too long to start after the user taps play on a fast network. Which `DefaultLoadControl` setting most directly controls that delay?",
       "options": [
-        "true false true",
-        "true true true",
-        "false false true",
-        "true false false"
+        "The back buffer duration",
+        "The maximum buffer duration",
+        "The amount of media that must be buffered before playback starts",
+        "The target buffer size in bytes"
       ],
       "answer": [
-        0
+        2
       ],
-      "explanation": "`toList()` makes a new list with the same elements, so `==` (structural) is `true` but `===` (identity) is `false`. `c` is the same reference as `a`, so `a === c` is `true`."
+      "explanation": "The buffer-for-playback threshold decides how much must be loaded before the player switches to ready and starts. Lowering it starts sooner but raises the chance of an early rebuffer. The maximum and back buffer settings control how much is held later, not startup."
     },
     {
       "id": "d39q05",
       "type": "mcq",
-      "topic": "lazy keys",
-      "difficulty": "Easy",
-      "question": "Why pass `key = { it.id }` to `items(...)` in a `LazyColumn`?",
-      "code": "LazyColumn {\n    items(messages, key = { it.id }) { message ->\n        MessageRow(message)\n    }\n}",
+      "topic": "track selection",
+      "difficulty": "Medium",
+      "question": "You want adaptive streams to never exceed 720p while on a cellular network. What is the idiomatic way?",
       "options": [
-        "So item state follows the item when the list is reordered or changed",
-        "So the list is sorted by `id`",
-        "So `LazyColumn` composes every item up front instead of lazily",
-        "Because `items` doesn't compile without a key"
+        "Update `player.trackSelectionParameters` with a maximum video size when the network type changes",
+        "Remove the video renderer while on cellular",
+        "Build a different MediaItem URL for each resolution",
+        "Lower the LoadControl buffer sizes so high bitrates cannot fit"
       ],
       "answer": [
         0
       ],
-      "explanation": "Without keys, items are identified by position, so inserting at the top shifts remembered state to the wrong rows and recomposes everything after it. A stable key ties state (and item animations) to the item itself; keys are optional and don't sort anything."
+      "explanation": "Track selection parameters constrain what the TrackSelector can pick, and the adaptive selection then chooses among allowed variants by estimated bandwidth. Removing a renderer drops video entirely, and buffer sizes do not cap resolution."
     },
     {
       "id": "d39q06",
       "type": "multi",
-      "topic": "stable types",
+      "topic": "MediaSource",
       "difficulty": "Medium",
-      "question": "Which parameter types does the Compose compiler treat as stable on its own (no strong skipping, no stability config)?",
+      "question": "Which statements about MediaSources are true? Select all that apply.",
       "options": [
-        "`Int`",
-        "`String`",
-        "`(Int) -> Unit`",
-        "`@Immutable data class Point(val x: Int, val y: Int)`",
-        "`List<String>`",
-        "`data class Form(var email: String)`"
+        "HLS and DASH need their own Media3 modules to provide the matching MediaSource",
+        "A MediaSource draws decoded frames onto the Surface",
+        "Each Renderer must be given its own MediaSource",
+        "`DefaultMediaSourceFactory` picks the source type from the MediaItem's URI or MIME type",
+        "Plain MP4 files are played with a progressive media source"
       ],
       "answer": [
         0,
-        1,
-        2,
-        3
+        3,
+        4
       ],
-      "explanation": "Primitives, `String`, function types and classes with only stable `val`s (or marked `@Immutable`/`@Stable`) are stable. `List` is an interface whose implementation might be mutable, so it's unstable, and a `var` property makes `Form` unstable."
+      "explanation": "Adaptive formats live in separate modules, and the default factory chooses HLS, DASH or progressive from the URI or MIME type. A MediaSource provides media structure and samples; renderers do the decoding and drawing, and a single source feeds all of them."
     },
     {
       "id": "d39q07",
-      "type": "mcq",
-      "topic": "nested scrolling",
-      "difficulty": "Easy",
-      "question": "What happens when this screen is shown?",
-      "code": "Column(Modifier.verticalScroll(rememberScrollState())) {\n    Header()\n    LazyColumn {\n        items(products) { ProductRow(it) }\n    }\n}",
+      "type": "truefalse",
+      "topic": "release",
+      "difficulty": "Medium",
+      "question": "If you never call `player.release()`, the player's internal thread and codecs can stay allocated, and hardware decoders are a limited resource.",
       "options": [
-        "It crashes, because a `LazyColumn` is measured with infinite max height",
-        "It works, but the `LazyColumn` composes every item at once",
-        "Only the `LazyColumn` scrolls and the header stays fixed",
-        "The two scroll containers share scrolling automatically with no issues"
+        "True",
+        "False"
       ],
       "answer": [
         0
       ],
-      "explanation": "`verticalScroll` gives its children unbounded height, and a `LazyColumn` can't be measured with infinite height, so Compose throws. Put the header inside the `LazyColumn` as an `item { }` instead."
+      "explanation": "Release frees the playback thread, decoders and audio output. Devices support only a few simultaneous hardware decoder instances, so leaked players can make later players fail to start."
     },
     {
       "id": "d39q08",
       "type": "mcq",
-      "topic": "derivedStateOf",
-      "difficulty": "Easy",
-      "question": "You want to show a \"scroll to top\" button once the first item has scrolled off. Which is the right way to compute `show`?",
+      "topic": "players in lists",
+      "difficulty": "Hard",
+      "question": "A video feed creates a new ExoPlayer for each visible RecyclerView item. On some devices, later videos fail with decoder initialization errors. What is the best fix?",
       "options": [
-        "`val show by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }`",
-        "`val show = remember { listState.firstVisibleItemIndex > 0 }`",
-        "`val show = listState.firstVisibleItemIndex` compared in a `LaunchedEffect(Unit)` that runs once",
-        "`val show = rememberSaveable { listState.firstVisibleItemIndex > 0 }`"
+        "Run each player on a separate background thread",
+        "Switch every video to software decoding",
+        "Use a small pool of players and attach one to the visible item's surface, releasing or reusing the rest",
+        "Raise the LoadControl buffer so decoders start earlier"
       ],
       "answer": [
-        0
+        2
       ],
-      "explanation": "`derivedStateOf` reads the fast-changing index but only triggers recomposition when the boolean result flips. A plain `remember { ... }` (or `rememberSaveable`) computes it once and never updates, and a one-shot `LaunchedEffect` also never re-checks."
+      "explanation": "Each prepared player can hold a hardware decoder, and devices only have a few, so many players at once exhaust them. Reusing one or two players and swapping MediaItems and surfaces keeps decoder use bounded. Threading or buffering does not change decoder counts, and forcing software decoding costs battery and performance."
     },
     {
       "id": "d39q09",
-      "type": "output",
-      "topic": "mutable params",
-      "difficulty": "Medium",
-      "question": "This is why a mutated `var` can leave Compose showing stale UI. What does this print?",
-      "code": "data class Cart(var count: Int)\n\nfun main() {\n    val cart = Cart(1)\n    val previous = cart\n    cart.count = 2\n    println(previous == cart)\n    println(previous.count)\n}",
+      "type": "multi",
+      "topic": "debugging rebuffering",
+      "difficulty": "Hard",
+      "question": "Users report frequent rebuffering in an HLS stream. Which investigations are useful? Select all that apply.",
       "options": [
-        "true\n2",
-        "false\n2",
-        "true\n1",
-        "false\n1"
+        "Check whether adaptive selection keeps picking bitrates above what the network sustains",
+        "Check whether loading stops early because the LoadControl's buffer limits are being reached",
+        "Move player calls to a background thread so the UI is not involved",
+        "Increase the number of renderers in the RenderersFactory",
+        "Add an `EventLogger` or `AnalyticsListener` to see load events, bandwidth estimates and format switches"
       ],
       "answer": [
-        0
+        0,
+        1,
+        4
       ],
-      "explanation": "`previous` and `cart` are the same object, so after `cart.count = 2` both see `2` and they compare equal. If Compose compared old and new parameters here, it would see \"no change\" and skip, even though the data did change."
+      "explanation": "Rebuffering means data is not arriving fast enough or loading paused too early, so look at load timing, bandwidth estimates, buffer limits and chosen variants. More renderers do not add throughput, and the player must still be used from its application thread."
     },
     {
       "id": "d39q10",
       "type": "mcq",
-      "topic": "deferred reads",
-      "difficulty": "Medium",
-      "question": "`scroll` is a `ScrollState`. Why is the second version better while the user scrolls?",
-      "code": "// 1\nImage(painter, null, Modifier.offset(y = scroll.value.dp))\n\n// 2\nImage(painter, null, Modifier.offset { IntOffset(0, scroll.value) })",
-      "options": [
-        "The lambda reads `scroll.value` in layout, so scrolling skips composition",
-        "Both are identical; the lambda is only shorter syntax",
-        "The first is better because the lambda version allocates on every frame and can't be skipped",
-        "The lambda version caches the first offset, so the image never moves"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "The non-lambda `offset(y = ...)` reads state during composition, so every scroll pixel recomposes the caller. `Modifier.offset { }` defers the read to the layout phase, so only layout and draw run again."
-    },
-    {
-      "id": "d39q11",
-      "type": "truefalse",
-      "topic": "graphicsLayer",
-      "difficulty": "Medium",
-      "question": "Reading an animated value inside `Modifier.graphicsLayer { alpha = fade.value }` lets each animation frame skip composition and layout and only redraw.",
-      "options": [
-        "True",
-        "False"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "The `graphicsLayer { }` lambda runs in the draw phase, so state read there only invalidates the layer. `Modifier.alpha(fade.value)` would read in composition and recompose every frame."
-    },
-    {
-      "id": "d39q12",
-      "type": "mcq",
-      "topic": "contentType",
-      "difficulty": "Medium",
-      "question": "What does `contentType` give you in this list?",
-      "code": "LazyColumn {\n    items(feed, key = { it.id }, contentType = { it.kind }) { entry ->\n        when (entry.kind) {\n            Kind.Ad -> AdCard(entry)\n            Kind.Post -> PostCard(entry)\n        }\n    }\n}",
-      "options": [
-        "Compositions are reused only between items of the same type",
-        "The list is grouped and sorted by type before items are laid out",
-        "It replaces `key`, so keys are no longer needed",
-        "Items of the same type are never recomposed again"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Like view types in a `RecyclerView` adapter, `contentType` lets the lazy list reuse a scrolled-off item's composition for an item with the same structure. It doesn't sort, doesn't replace keys and doesn't stop recomposition."
-    },
-    {
-      "id": "d39q13",
-      "type": "multi",
-      "topic": "compiler reports",
-      "difficulty": "Medium",
-      "question": "You enable Compose compiler reports and metrics (`reportsDestination` / `metricsDestination` in the `composeCompiler { }` block). What can you learn from them?",
-      "options": [
-        "Whether each class is inferred stable or unstable",
-        "Whether each composable is restartable and skippable, with each parameter marked stable or unstable",
-        "Module-wide counts such as how many composables are skippable",
-        "How many times each composable recomposed on the device",
-        "Frame durations and jank while scrolling"
-      ],
-      "answer": [
-        0,
-        1,
-        2
-      ],
-      "explanation": "The reports are produced at compile time, so they describe stability and skippability inferred from the code. Runtime numbers like recomposition counts come from Layout Inspector, and frame timing from tools like Macrobenchmark."
-    },
-    {
-      "id": "d39q14",
-      "type": "mcq",
-      "topic": "ImmutableList",
-      "difficulty": "Medium",
-      "question": "Strong skipping is disabled in this module, and the compiler report shows `unstable val items: List<Article>` (where `Article` is stable). Which change makes the parameter stable?",
-      "code": "@Composable\nfun ArticleList(items: List<Article>) { /* ... */ }",
-      "options": [
-        "Change the type to `ImmutableList<Article>`",
-        "Change the type to `MutableList<Article>`",
-        "Change the type to `ArrayList<Article>`",
-        "Change the type to `Array<Article>`"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "The compiler knows `ImmutableList` (from `kotlinx.collections.immutable`) can't change, so it treats it as stable. `MutableList`, `ArrayList` and arrays are all mutable, so they're even less stable than the read-only `List` interface."
-    },
-    {
-      "id": "d39q15",
-      "type": "mcq",
-      "topic": "lambda deferral",
-      "difficulty": "Medium",
-      "question": "`Screen` recomposes on every scroll pixel only because it reads `scroll.value`. What's the best fix?",
-      "code": "@Composable\nfun Screen() {\n    val scroll = rememberScrollState()\n    Header(offset = scroll.value)\n    Column(Modifier.verticalScroll(scroll)) { /* ... */ }\n}",
-      "options": [
-        "Pass `offsetProvider: () -> Int` as `{ scroll.value }` and read it inside `Header`",
-        "Pass `remember { scroll.value }` instead",
-        "Pass `derivedStateOf { scroll.value }.value` instead, so reads are batched",
-        "Annotate `Header` with `@Stable` so Compose skips it on scroll"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Passing a lambda moves the state read out of `Screen` into `Header`, ideally into a `Modifier.offset { }` there, so `Screen` no longer recomposes. `remember` freezes the first value, and `derivedStateOf` doesn't help when the result changes as often as the input."
-    },
-    {
-      "id": "d39q16",
-      "type": "multi",
-      "topic": "measuring",
-      "difficulty": "Medium",
-      "question": "A teammate reports that a `LazyColumn` janks while scrolling. Which steps give you representative performance numbers?",
-      "options": [
-        "Measure a release (non-debuggable) build with R8 enabled",
-        "Include a baseline profile so the hot code paths are compiled ahead of time",
-        "Run it on a real device rather than judging from the emulator",
-        "Measure the debug build, since it has the same performance plus extra logging",
-        "Keep Layout Inspector's live recomposition counts attached while recording timing"
-      ],
-      "answer": [
-        0,
-        1,
-        2
-      ],
-      "explanation": "Debug builds run much slower (the debuggable flag turns off many ART optimizations and there is no R8), so they exaggerate jank. Baseline profiles let critical code be AOT-compiled, and attached inspection tools add their own overhead to timing."
-    },
-    {
-      "id": "d39q17",
-      "type": "truefalse",
-      "topic": "strong skipping",
+      "topic": "live window",
       "difficulty": "Hard",
-      "question": "With strong skipping on, if the ViewModel emits `items.toList()` with exactly the same contents, `ArticleList(items)` (taking an unstable `List<Article>`) is skipped.",
+      "question": "A live HLS stream is paused for a long time; on resume it fails with a 'behind live window' error. What is the recommended handling?",
       "options": [
-        "True",
-        "False"
+        "Recreate the whole Activity",
+        "Seek to the default position (the live edge) and call `prepare()` again",
+        "Switch to a progressive media source for live content",
+        "Increase the back buffer so old segments are kept"
       ],
       "answer": [
         1
       ],
-      "explanation": "Strong skipping compares unstable parameters by instance (`===`), not `equals()`. `toList()` creates a new instance, so the composable recomposes even though the contents are equal."
-    },
-    {
-      "id": "d39q18",
-      "type": "mcq",
-      "topic": "backwards writes",
-      "difficulty": "Hard",
-      "question": "What happens when this composable runs?",
-      "code": "@Composable\nfun Counter() {\n    var count by remember { mutableIntStateOf(0) }\n    Text(\"Count: $count\")\n    count++\n}",
-      "options": [
-        "It recomposes endlessly, because it writes `count` after reading it",
-        "It shows `Count: 0` once and then stops",
-        "It shows `Count: 1`, because the write happens before the frame is drawn",
-        "It fails to compile, because state can't be written in a composable body"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "This is a backwards write: `count` is read by `Text`, then written, which invalidates the composition that just read it, so it recomposes forever. Write state only from event callbacks or effects, never in the composable body."
-    },
-    {
-      "id": "d39q19",
-      "type": "multi",
-      "topic": "strong skipping",
-      "difficulty": "Hard",
-      "question": "Strong skipping mode is on by default in current versions of the Compose compiler. Which statements about it are true?",
-      "options": [
-        "Composables with unstable parameters become skippable, and those parameters are compared with `===`",
-        "Stable parameters are still compared with `equals()`",
-        "Lambdas inside composables are remembered automatically, keyed on what they capture",
-        "Unstable parameters are compared with `equals()` instead of `===`",
-        "Mutating a `var` property of the same instance and passing it again forces the child to recompose",
-        "It has to be turned on by hand in every module"
-      ],
-      "answer": [
-        0,
-        1,
-        2
-      ],
-      "explanation": "Strong skipping makes every restartable composable skippable: unstable params use instance equality, and stable ones keep using `equals()`. Mutating the same instance still passes `===`, so the child is skipped and shows stale data, which is why immutable models still matter."
-    },
-    {
-      "id": "d39q20",
-      "type": "mcq",
-      "topic": "duplicate keys",
-      "difficulty": "Hard",
-      "question": "After a sync bug, two items in `messages` have the same `id`, and they sit next to each other in the list. What happens when that part of the list is shown?",
-      "code": "LazyColumn {\n    items(messages, key = { it.id }) { MessageRow(it) }\n}",
-      "options": [
-        "It crashes at runtime because the key was already used",
-        "The second item is silently dropped",
-        "Both items show, but they share the same remembered state",
-        "The list falls back to position-based keys"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Keys in a lazy layout must be unique, and a duplicate throws at runtime instead of being merged or ignored. Use a truly unique identifier, such as a database primary key."
+      "explanation": "Live playlists only keep a sliding window of segments, so after a long pause the player's position has fallen off the start. The documented fix is to seek to the default position and prepare again. A back buffer stores media already played, and it cannot bring back segments the server has dropped."
     }
   ]
 }

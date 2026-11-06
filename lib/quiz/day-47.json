@@ -1,290 +1,148 @@
 {
   "day": 47,
-  "topic": "Testing: JUnit, MockK, Turbine & Compose UI tests",
+  "topic": "Build your own: navigation framework",
   "questions": [
     {
       "id": "d47q01",
       "type": "mcq",
-      "topic": "test pyramid",
+      "topic": "back stack entries",
       "difficulty": "Easy",
-      "question": "You write tests for a pure-Kotlin `PriceFormatter` class that has no Android dependencies. Where should they live?",
+      "question": "In a navigation framework you are building, what should each back stack entry own?",
       "options": [
-        "In `src/test`, as local unit tests that run on the JVM of your machine",
-        "In `src/androidTest`, because every class in an Android app must be tested on a device",
-        "In `src/androidTest` as Espresso tests, so the formatting is checked on real hardware",
-        "In `src/main`, next to the class, marked `@VisibleForTesting`"
+        "Only its route string; all screen state lives in one global app-wide object",
+        "Its destination and arguments, plus its lifecycle, ViewModels and saved state",
+        "A reference to the previous entry's composable, so it can be redrawn on Back",
+        "A snapshot copy of the whole back stack, taken at the moment the entry was pushed"
       ],
       "answer": [
-        0
+        1
       ],
-      "explanation": "Code with no Android dependencies belongs at the base of the test pyramid: local JVM tests in `src/test`, which are fast and need no emulator. `androidTest` is for instrumented tests that really need a device, and they are slower and more expensive."
+      "explanation": "Each entry is a little host: it knows what to show, with which arguments, and owns lifecycle, ViewModels and saved state for that screen. That is what lets a screen under the top keep its state and be cleaned up properly when popped. A single global state object makes popping and restoring screens leak or lose data."
     },
     {
       "id": "d47q02",
-      "type": "output",
-      "topic": "state equality",
-      "difficulty": "Easy",
-      "question": "A test compares UI states with `==`, which is what `assertEquals` uses. What does this print?",
-      "code": "data class UiState(val loading: Boolean, val items: List<String>)\nclass PlainState(val loading: Boolean)\n\nfun main() {\n    val expected = UiState(false, listOf(\"a\"))\n    val actual = UiState(false, mutableListOf(\"a\"))\n    println(expected == actual)\n    println(PlainState(false) == PlainState(false))\n}",
+      "type": "mcq",
+      "topic": "process death",
+      "difficulty": "Medium",
+      "question": "The app is killed in the background and later restored. What must your navigation framework have saved to put the user back where they were?",
       "options": [
-        "true\nfalse",
-        "false\nfalse",
-        "true\ntrue",
-        "false\ntrue"
+        "The stack as destinations with arguments, plus each entry's saved state",
+        "Nothing at all; the system restores the Compose tree and its state automatically",
+        "Only the top entry, because the rest can be rebuilt from the start destination",
+        "Every entry's ViewModel instance, serialized into the Activity's saved state"
       ],
       "answer": [
         0
       ],
-      "explanation": "A data class compares its properties, and lists are equal when their elements are equal, whatever the implementation (`listOf` vs `mutableListOf`). A plain class keeps reference equality, so two separate instances are not equal. That is why UI state is usually a data class: `assertEquals` on it works."
+      "explanation": "After process death only the saved state Bundle survives, so the framework must write the stack (routes and arguments) and each entry's saved state, then rebuild entries from it. Saving only the top makes Back go to the wrong place. ViewModel instances are not serializable; they are recreated and read what they need from SavedStateHandle."
     },
     {
       "id": "d47q03",
-      "type": "truefalse",
-      "topic": "robolectric",
+      "type": "mcq",
+      "topic": "type-safe args",
       "difficulty": "Easy",
-      "question": "True or false: Robolectric lets a test that uses Android framework classes such as `Context` or `SharedPreferences` run in `src/test` on the local JVM without an emulator, and screenshot tools such as Roborazzi build on it.",
+      "question": "Why move from string routes like `\"detail/$id\"` to serializable route classes like `Detail(id: Long)`?",
+      "options": [
+        "The compiler checks argument names and types instead of failing at runtime",
+        "Route classes navigate faster, because no string parsing has to happen",
+        "Route classes never need to be saved and restored across process death",
+        "String routes cannot carry more than one argument through to the destination"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "With string routes, a typo in a key or a wrong type is only found when the screen fails to parse its arguments at runtime. A route class makes the destination's contract a compile-time type. It still has to be serialized into saved state, and performance is not the point."
+    },
+    {
+      "id": "d47q04",
+      "type": "truefalse",
+      "topic": "large arguments",
+      "difficulty": "Medium",
+      "question": "Passing large objects, such as a full list of items, as navigation arguments is fine because arguments only live in memory.",
       "options": [
         "True",
         "False"
       ],
       "answer": [
-        0
+        1
       ],
-      "explanation": "Robolectric simulates the Android framework on the JVM, so it sits between plain unit tests and instrumented tests. Roborazzi runs on top of it to record and compare screenshots against golden images with no device."
-    },
-    {
-      "id": "d47q04",
-      "type": "mcq",
-      "topic": "fakes vs mocks",
-      "difficulty": "Medium",
-      "question": "A `NewsViewModel` depends on a `NewsRepository` interface. Which test double is a fake, the kind Android's testing guidance prefers for repositories?",
-      "options": [
-        "`FakeNewsRepository`, a small in-memory implementation whose `save()` changes what `observeNews()` emits",
-        "`mockk<NewsRepository>()` with `coEvery { repo.getNews() } returns listOf(article)`",
-        "A class whose `getNews()` always returns the same hard-coded list and ignores every input",
-        "`spyk(RealNewsRepository(api, dao))`, which wraps the real repository and records every call made to it"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "A fake really works, just in a simpler way (in memory instead of network and disk), so tests check behaviour instead of exact calls. The hard-coded class is a stub, the `mockk` is a mock tied to specific call expectations, and a spy still runs the real code."
+      "explanation": "False. Arguments are stored in the entry's saved state, which goes into a Bundle that can exceed binder limits and fail with TransactionTooLargeException. Pass an ID and load the data from a repository in the destination."
     },
     {
       "id": "d47q05",
       "type": "mcq",
-      "topic": "coEvery",
-      "difficulty": "Easy",
-      "question": "`UserRepo` declares `suspend fun getUser(id: String): User`. How do you stub it with MockK?",
+      "topic": "deep links",
+      "difficulty": "Medium",
+      "question": "A notification deep link opens a product detail screen directly. What should Back do, and what must the framework support for it?",
       "options": [
-        "`coEvery { repo.getUser(\"42\") } returns User(\"42\", \"Ann\")`",
-        "`every { repo.getUser(\"42\") } returns User(\"42\", \"Ann\")`",
-        "`whenever(repo.getUser(\"42\")).thenReturn(User(\"42\", \"Ann\"))`",
-        "`every { repo.getUser(\"42\") } coReturns User(\"42\", \"Ann\")`"
+        "Exit the app, since the user arrived from outside it through the notification",
+        "Return to whatever screen the user visited last in their previous session",
+        "Show an empty placeholder screen while the start destination finishes loading",
+        "Go up the hierarchy, so the framework builds a synthetic stack like Home > Detail"
       ],
       "answer": [
-        0
+        3
       ],
-      "explanation": "The `every` block is not a suspend lambda, so calling a suspend function inside it does not compile. MockK provides `coEvery` (and `coVerify`) for suspend functions. `whenever` is Mockito-Kotlin syntax, not MockK."
+      "explanation": "Users expect Back from a deep-linked screen to stay in the app and move up the hierarchy. The framework does this by building the parent entries when it handles the link. Restoring an old session is unpredictable and may not even match the linked content."
     },
     {
       "id": "d47q06",
-      "type": "multi",
-      "topic": "relaxed mocks",
-      "difficulty": "Medium",
-      "question": "Given `val analytics = mockk<Analytics>(relaxed = true)`, which statements are true? Select all that apply.",
+      "type": "mcq",
+      "topic": "popping entries",
+      "difficulty": "Hard",
+      "question": "When should a popped entry's ViewModelStore be cleared?",
       "options": [
-        "Calling a method you never stubbed returns a simple default value (0, an empty string, an empty list or a child mock) instead of throwing",
-        "You can still check calls with `verify { analytics.log(\"login\") }`",
-        "On a plain `mockk<Analytics>()`, calling a method that was never stubbed throws a `MockKException`",
-        "A relaxed mock cannot be stubbed with `every { }` any more",
-        "`relaxed = true` makes unstubbed calls run the real implementation of the class"
+        "Immediately when `pop()` is called, before any animation starts",
+        "Never; keep it in case the user navigates forward again",
+        "After its exit transition finishes and it has left composition",
+        "When the Activity is destroyed, along with every other entry"
       ],
       "answer": [
-        0,
-        1,
         2
       ],
-      "explanation": "Relaxed mocks return defaults for unstubbed calls but still record calls and still accept `every` stubs. Plain mocks are strict and throw on unstubbed calls. Running the real code is what `spyk` does, not `relaxed`."
+      "explanation": "The outgoing screen is still on screen during its exit animation or a predictive back gesture, so clearing its ViewModels immediately can crash or blank it mid-animation. Clearing once it has really left composition avoids that. Keeping stores forever or until the Activity dies leaks every screen the user ever visited."
     },
     {
       "id": "d47q07",
-      "type": "truefalse",
-      "topic": "mocking final classes",
-      "difficulty": "Easy",
-      "question": "True or false: in a local JVM unit test, MockK can mock an ordinary final Kotlin class (not `open`, no all-open plugin) without any extra setup.",
+      "type": "multi",
+      "topic": "duplicate navigation",
+      "difficulty": "Hard",
+      "question": "A double tap on a button pushes the same screen twice. Which are correct ways to prevent this? Select all that apply.",
       "options": [
-        "True",
-        "False"
+        "Call `navigate()` directly in the composable body so it runs during composition",
+        "Skip pushing when the destination is already on top (single-top behavior)",
+        "Ignore navigate requests from an entry that is not in the RESUMED state",
+        "Store the navigation event in a StateFlow and replay it after rotation"
       ],
       "answer": [
-        0
+        1,
+        2
       ],
-      "explanation": "Kotlin classes are final by default, and MockK was built for this: on the JVM it uses inline bytecode instrumentation, so `mockk<FinalClass>()` just works. Older Mockito setups needed `mockito-inline` or `open` classes for this."
+      "explanation": "Single-top checks stop the same destination stacking on itself, and once the first tap starts a transition the source entry is no longer RESUMED, so a second tap can be ignored. Navigating during composition fires again on every recomposition. Replaying an event after rotation navigates twice, which is the opposite of what we want."
     },
     {
       "id": "d47q08",
-      "type": "truefalse",
-      "topic": "virtual time",
-      "difficulty": "Easy",
-      "question": "True or false: a `runTest { }` test whose body calls `delay(60_000)` takes about a minute of real time to finish.",
+      "type": "mcq",
+      "topic": "multiple back stacks",
+      "difficulty": "Medium",
+      "question": "A bottom bar has three tabs, and each tab should remember its own history when the user switches away and back. What does the framework need?",
       "options": [
-        "True",
-        "False"
+        "One shared back stack, cleared whenever the user taps a different tab",
+        "Save each tab's stack and state on leaving, and restore it on return",
+        "A separate Activity for each tab, so the system keeps each stack itself",
+        "Turn off state saving for tab screens to keep memory usage as low as possible"
       ],
       "answer": [
         1
       ],
-      "explanation": "`runTest` runs on a `TestCoroutineScheduler` with virtual time. A `delay` on the test dispatcher moves the virtual clock forward (so `currentTime` becomes 60000) and returns immediately. It does not wait in real time."
+      "explanation": "Multiple back stacks means saving a tab's entries and their state when switching away and restoring them on return, often by popping to the tab root with save and restore flags. Clearing the stack loses the user's place. Separate Activities make shared UI and transitions much harder."
     },
     {
       "id": "d47q09",
-      "type": "output",
-      "topic": "fake + naming",
-      "difficulty": "Medium",
-      "question": "A hand-written fake and a Given-When-Then test name. What does this print?",
-      "code": "interface CartRepo {\n    fun add(item: String)\n    fun items(): List<String>\n}\n\nclass FakeCartRepo : CartRepo {\n    private val stored = mutableListOf<String>()\n    var addCalls = 0\n    override fun add(item: String) {\n        addCalls++\n        if (item !in stored) stored += item\n    }\n    override fun items() = stored.toList()\n}\n\nfun `given empty cart when same item added twice then stored once`() {\n    val repo = FakeCartRepo()\n    repo.add(\"apple\"); repo.add(\"apple\")\n    println(\"${repo.items()} ${repo.addCalls}\")\n}\n\nfun main() = `given empty cart when same item added twice then stored once`()",
-      "options": [
-        "[apple] 2",
-        "[apple, apple] 2",
-        "[apple] 1",
-        "Compile error: function names cannot contain spaces"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "On the JVM, backtick names with spaces are legal, which is why local tests often use Given-When-Then sentences as names. The fake counts both calls (`addCalls = 2`) but stores `apple` only once, just as the real repository would. A fake can show both behaviour and call counts."
-    },
-    {
-      "id": "d47q10",
-      "type": "mcq",
-      "topic": "StandardTestDispatcher",
-      "difficulty": "Hard",
-      "question": "What happens when this test runs?",
-      "code": "@Test\nfun counterIncrements() = runTest {\n    var count = 0\n    launch { count++ }\n    assertEquals(1, count)\n}",
-      "options": [
-        "It fails with expected 1 but was 0, because the launched coroutine is only queued",
-        "It passes, because `launch` inside `runTest` runs its body right away on the test thread",
-        "It is flaky, because the launched coroutine races the assertion on another thread",
-        "It fails with `UncompletedCoroutinesError` because the child coroutine never runs"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`StandardTestDispatcher` queues new coroutines on the scheduler instead of starting them right away. The assertion runs first and sees 0; `advanceUntilIdle()` or `runCurrent()` before it would run the child. Everything runs on one thread, so the result is deterministic, not flaky. The queued child would run before `runTest` finishes, so the error is a failed assertion, not an uncompleted coroutine."
-    },
-    {
-      "id": "d47q11",
-      "type": "mcq",
-      "topic": "MainDispatcherRule",
-      "difficulty": "Easy",
-      "question": "A local test of a ViewModel that launches in `viewModelScope` crashes with \"Module with the Main dispatcher had failed to initialize\". What is the standard fix?",
-      "options": [
-        "A JUnit `MainDispatcherRule` that calls `Dispatchers.setMain(testDispatcher)` and later `resetMain()`",
-        "Move the test to `androidTest`, since `Dispatchers.Main` only exists with a real Android main looper",
-        "Change the ViewModel to launch in `GlobalScope` so it no longer needs `Dispatchers.Main`",
-        "Wrap the test body in `runBlocking(Dispatchers.Main)`"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`viewModelScope` uses `Dispatchers.Main.immediate`, and there is no Android main looper on the plain JVM. `setMain` swaps in a test dispatcher, and `resetMain` restores it so later tests are not affected. A rule keeps this boilerplate out of each test. The other options either avoid the problem or make the production code worse."
-    },
-    {
-      "id": "d47q12",
-      "type": "multi",
-      "topic": "slot capture",
-      "difficulty": "Medium",
-      "question": "`onSubmit(\"ann\")` calls `repo.save(User(\"ann\"))` (a suspend function) once in `viewModelScope`. Which statements are true after the code below? Select all that apply.",
-      "code": "val repo = mockk<UserRepo>()\nval saved = slot<User>()\ncoEvery { repo.save(capture(saved)) } just Runs\n\nval vm = SignUpViewModel(repo)\nvm.onSubmit(\"ann\")\nadvanceUntilIdle()",
-      "options": [
-        "`saved.captured` equals `User(\"ann\")`",
-        "`coVerify(exactly = 1) { repo.save(any()) }` passes",
-        "Writing `every { repo.save(capture(saved)) } just Runs` instead would work the same way",
-        "A `slot` keeps a list of every argument, so `saved.captured` is a `List<User>`"
-      ],
-      "answer": [
-        0,
-        1
-      ],
-      "explanation": "`capture(slot)` stores the argument of the matched call, so you can assert on it later. `coVerify` checks suspend calls. `every` would not compile because `save` is a suspend function. A slot keeps a single value (the last capture). To keep every argument you capture into a `mutableListOf<User>()`."
-    },
-    {
-      "id": "d47q13",
-      "type": "mcq",
-      "topic": "advanceTimeBy",
-      "difficulty": "Hard",
-      "question": "In this test, what is `done` when it is printed?",
-      "code": "@Test\nfun t() = runTest {\n    var done = false\n    launch {\n        delay(1_000)\n        done = true\n    }\n    advanceTimeBy(1_000)\n    println(done)\n}",
-      "options": [
-        "`false`: `advanceTimeBy(1_000)` doesn't run the task scheduled at exactly 1000",
-        "`true`: the clock reached 1000, so the resumed coroutine has run",
-        "`false`: `launch` on a `StandardTestDispatcher` never starts until `advanceUntilIdle()` is called",
-        "It throws, because `advanceTimeBy` can only be called from a `backgroundScope` coroutine"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`advanceTimeBy(n)` moves the virtual clock to `currentTime + n` and runs everything scheduled strictly before that time. The task at exactly 1000 is left for `runCurrent()`. The coroutine did start (it was scheduled at time 0 and ran up to its `delay`), so the \"never starts\" explanation is wrong."
-    },
-    {
-      "id": "d47q14",
-      "type": "mcq",
-      "topic": "room in-memory db",
-      "difficulty": "Medium",
-      "question": "Why do DAO tests usually build the database with `Room.inMemoryDatabaseBuilder(context, AppDb::class.java)` and close it in `@After`?",
-      "options": [
-        "Each test gets a fresh, isolated database that vanishes on close, and real SQL still runs on SQLite",
-        "An in-memory database replaces the DAO with a mock, so no SQL actually runs",
-        "It removes the need for an Android `Context`, so the test runs on the plain JVM without Robolectric or a device",
-        "It skips Room's compile-time query checks, which makes the tests build faster"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "The in-memory database keeps no file, so there is no leftover state between tests and no cleanup step, and your queries still run on real SQLite. This builder still takes a `Context` and uses Android's SQLite, so it runs as an instrumented test or under Robolectric. Query checking happens at build time, whatever builder you use."
-    },
-    {
-      "id": "d47q15",
-      "type": "mcq",
-      "topic": "testing StateFlow",
-      "difficulty": "Medium",
-      "question": "The test sets up `fakeRepo` to emit `listOf(\"a\")`, then checks `vm.state.value`. The assertion fails because `state` is still `UiState.Empty`. What fixes it?",
-      "code": "val state = repo.results()\n    .map { UiState(it) }\n    .stateIn(\n        viewModelScope,\n        SharingStarted.WhileSubscribed(5_000),\n        UiState.Empty\n    )",
-      "options": [
-        "Start a subscriber first: `backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect {} }`",
-        "Call `advanceUntilIdle()` before reading `vm.state.value`, so the queued `stateIn` upstream gets to emit",
-        "Add `Thread.sleep(100)` before the assertion to let the upstream catch up",
-        "Read `vm.state.value` twice, since the first read of a `WhileSubscribed` flow only starts the upstream"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "With `WhileSubscribed`, the upstream only runs while something collects, and reading `.value` does not count as collecting. A collector in `backgroundScope` starts sharing and is cancelled when the test ends. `advanceUntilIdle()` alone has nothing to run because the upstream never started."
-    },
-    {
-      "id": "d47q16",
-      "type": "mcq",
-      "topic": "injecting dispatchers",
-      "difficulty": "Hard",
-      "question": "This repository is tested with `runTest { repo.refresh() }`. What happens, and what is the usual fix?",
-      "code": "class FeedRepository(private val api: FeedApi) {\n    suspend fun refresh() = withContext(Dispatchers.IO) {\n        delay(30_000) // retry backoff\n        api.fetch()\n    }\n}",
-      "options": [
-        "It waits 30 real seconds, as `Dispatchers.IO` is outside virtual time; inject the dispatcher instead",
-        "`runTest` skips every `delay`, on any dispatcher, so the test finishes immediately and needs no change",
-        "It deadlocks, because `withContext(Dispatchers.IO)` cannot be called from `runTest`",
-        "It fails right away, because `Dispatchers.IO` must be replaced with `Dispatchers.setMain` first"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Virtual time only applies to coroutines that run on the test scheduler. Hard-coding `Dispatchers.IO` moves the work to real threads with a real clock, which makes the test slow and can make it flaky. Taking the dispatcher as a constructor parameter (default `Dispatchers.IO`) lets the test share the `runTest` scheduler. `setMain` only replaces `Main`."
-    },
-    {
-      "id": "d47q17",
       "type": "truefalse",
-      "topic": "turbine",
-      "difficulty": "Medium",
-      "question": "True or false: in Turbine's `flow.test { assertEquals(Loading, awaitItem()) }`, if the flow has already emitted a second item that the block never consumes, the test fails at the end of the block unless you call `cancelAndIgnoreRemainingEvents()`.",
+      "topic": "system back",
+      "difficulty": "Easy",
+      "question": "In a single-Activity Compose app, the navigation framework should handle system Back by popping its own stack, and let the Activity handle it only when the stack has a single entry.",
       "options": [
         "True",
         "False"
@@ -292,65 +150,25 @@
       "answer": [
         0
       ],
-      "explanation": "When the `test` block ends, Turbine cancels collection and checks that every received event was consumed, failing with an unconsumed-events error if not. `cancelAndIgnoreRemainingEvents()` is the explicit way to say the rest does not matter."
+      "explanation": "True. The framework registers a back callback that is enabled only while it has something to pop. When only the start destination remains, it disables itself so the system can finish or background the Activity."
     },
     {
-      "id": "d47q18",
+      "id": "d47q10",
       "type": "multi",
-      "topic": "compose ui tests",
-      "difficulty": "Medium",
-      "question": "Which statements about Compose UI tests are true? Select all that apply.",
-      "options": [
-        "`createComposeRule()` lets you call `composeTestRule.setContent { LoginScreen() }` to test a composable without writing your own Activity",
-        "`onNodeWithText(\"Login\").performClick()` finds the node in the semantics tree and clicks it",
-        "`assertIsDisplayed()` checks that the node is actually visible on screen, while `assertExists()` only checks that it is in the tree",
-        "After `performClick()` you need a `Thread.sleep()` before asserting, so recomposition has time to finish",
-        "Finders like `onNodeWithTag` look nodes up by their XML `R.id` values"
-      ],
-      "answer": [
-        0,
-        1,
-        2
-      ],
-      "explanation": "Compose tests query the semantics tree, not view IDs. `testTag` provides an identifier for `onNodeWithTag`. The test rule syncs with the UI automatically and waits for recomposition and idle before assertions, so manual sleeps are unnecessary and cause flakiness."
-    },
-    {
-      "id": "d47q19",
-      "type": "mcq",
-      "topic": "useUnmergedTree",
+      "topic": "predictive back",
       "difficulty": "Hard",
-      "question": "Why does this assertion fail with \"no node found\", and what fixes it?",
-      "code": "composeTestRule.setContent {\n    Button(onClick = {}) {\n        Text(\"Save\", Modifier.testTag(\"saveLabel\"))\n    }\n}\ncomposeTestRule\n    .onNodeWithTag(\"saveLabel\")\n    .assertIsDisplayed()",
+      "question": "Which behaviors does your framework need to support Android's predictive back gesture? Select all that apply.",
       "options": [
-        "`Button` merges child semantics, so the tagged `Text` isn't a separate node; use `useUnmergedTree = true`",
-        "A `testTag` only works on layout composables like `Box`, so move the tag to a `Box` wrapping the `Text`",
-        "`onNodeWithTag` looks tags up in `R.id`, so `saveLabel` must be declared as an id in `res/values/ids.xml`",
-        "The Button is not composed until `waitForIdle()` is called, so call it before the finder"
+        "Pop the entry as soon as the gesture starts, then push it back if cancelled",
+        "Keep the previous entry composed and visible while the gesture is in progress",
+        "Discard the previous entry's saved state while the gesture is in progress",
+        "Commit the pop only when the gesture completes, and restore the current screen if it is cancelled"
       ],
       "answer": [
-        0
-      ],
-      "explanation": "Finders search the merged semantics tree by default. A clickable `Button` merges its descendants, and test tags are never passed up to the parent, so no node has the tag `saveLabel`. `useUnmergedTree = true` searches the raw tree. `onNodeWithText(\"Save\")` would match the merged button."
-    },
-    {
-      "id": "d47q20",
-      "type": "multi",
-      "topic": "flaky tests",
-      "difficulty": "Medium",
-      "question": "Which of these are likely to make a test flaky? Select all that apply.",
-      "options": [
-        "The cache-staleness check reads `System.currentTimeMillis()` directly",
-        "The repository uses a real `Dispatchers.IO`, and the test calls `Thread.sleep(500)` to wait for it",
-        "Tests change a shared singleton held in a `companion object` and never reset it",
-        "The repository gets a fake `Clock` and a test dispatcher through its constructor",
-        "Each DAO test builds a fresh in-memory Room database in `@Before`"
-      ],
-      "answer": [
-        0,
         1,
-        2
+        3
       ],
-      "explanation": "Real time, real threads and shared mutable state make results depend on machine speed or test order. Injecting a clock and dispatcher makes time controllable, and a fresh database per test keeps tests isolated, so those two make tests more deterministic, not less."
+      "explanation": "Predictive back shows the destination underneath while the user drags, driven by gesture progress, and the user can still cancel. So the framework previews the pop and only commits it at the end. Popping at the start destroys the current entry's state, and discarding the previous entry's state breaks the screen the user is about to see."
     }
   ]
 }

@@ -1,117 +1,30 @@
 {
   "day": 54,
-  "topic": "Reliable background work: retries, backoff & idempotency",
+  "topic": "Media-heavy apps & app startup performance",
   "questions": [
     {
       "id": "d54q01",
       "type": "mcq",
-      "topic": "failure classification",
+      "topic": "downsampling",
       "difficulty": "Easy",
-      "question": "A background sync gets one of these responses. Which one should the client retry automatically with backoff?",
+      "question": "You show a 4000×3000 camera photo in a 120dp square thumbnail. What should the image pipeline do?",
       "options": [
-        "400 Bad Request with a validation error body",
-        "503 Service Unavailable",
-        "404 Not Found for a resource the user deleted",
-        "422 Unprocessable Entity"
+        "Decode the full bitmap and let the ImageView scaleType or SwiftUI resizable modifier shrink it on screen",
+        "Decode it at about the target size (Coil/Glide sizing or `inSampleSize`; ImageIO thumbnailing or Kingfisher's downsampling on iOS)",
+        "Re-encode the file as JPEG at 50% quality before decoding so the decoded bitmap takes half the memory",
+        "Cache the full-resolution file on disk first so the next decode of the full bitmap is faster than the first"
       ],
       "answer": [
         1
       ],
-      "explanation": "A 503 is transient: the server is overloaded or restarting, and the same request may succeed later. 400, 404 and 422 are permanent for this payload, so retrying sends the same bad request again and wastes battery and server capacity."
+      "explanation": "A full ARGB_8888 decode of 4000×3000 is about 48 MB of pixels for a thumbnail that needs a few hundred KB. Downsampling during decode is the fix on both platforms. Scaling at draw time still pays the full memory cost, and JPEG quality affects file size, not decoded bitmap size."
     },
     {
       "id": "d54q02",
       "type": "truefalse",
-      "topic": "http idempotency",
+      "topic": "memory vs disk cache",
       "difficulty": "Easy",
-      "question": "By HTTP semantics, `GET`, `PUT` and `DELETE` are idempotent but `POST` is not, so a blind retry of a `POST` can create a duplicate.",
-      "options": [
-        "True",
-        "False"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Repeating a `PUT` or `DELETE` leaves the server in the same state as doing it once. A `POST` like \"create order\" is not idempotent by definition, so it needs an idempotency key before it is safe to retry."
-    },
-    {
-      "id": "d54q03",
-      "type": "mcq",
-      "topic": "payment timeout",
-      "difficulty": "Hard",
-      "question": "The client sends `POST /payments` and the read times out. The client can't tell whether the server charged the card. What should it do?",
-      "code": "POST /payments\nIdempotency-Key: 7f3c...e91\n{ \"orderId\": \"o-42\", \"amount\": 1999 }\n\n-> SocketTimeoutException (no response)",
-      "options": [
-        "Retry the same request with the same `Idempotency-Key` that was persisted with the pending payment",
-        "Retry with a fresh `Idempotency-Key` so the server treats it as a clean attempt",
-        "Never retry a payment: show \"Payment failed\" and ask the user to pay again",
-        "Call `GET /payments?orderId=o-42` first, and if no payment is found, `POST` again with a newly generated key"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "With the same key the server either replays the stored result of the first attempt or processes it once, so a retry can't double-charge. A new key, or check-then-create (the first request may still be in flight), can charge twice, and telling the user it failed may be false when the charge actually went through."
-    },
-    {
-      "id": "d54q04",
-      "type": "multi",
-      "topic": "transient errors",
-      "difficulty": "Medium",
-      "question": "For an idempotent request, which failures are usually worth retrying with backoff? Select all that apply.",
-      "options": [
-        "`SocketTimeoutException` on read",
-        "`UnknownHostException` because the device just lost connectivity",
-        "429 Too Many Requests with a `Retry-After` header",
-        "403 Forbidden because the user lacks permission",
-        "400 Bad Request because a required field is missing"
-      ],
-      "answer": [
-        0,
-        1,
-        2
-      ],
-      "explanation": "Timeouts, connectivity loss and rate limiting are temporary, so the same request can succeed later (for 429, after `Retry-After`). 403 and 400 come from who the user is or what was sent. Retrying won't change them. They need user action or a code fix."
-    },
-    {
-      "id": "d54q05",
-      "type": "mcq",
-      "topic": "jitter",
-      "difficulty": "Easy",
-      "question": "Why add random jitter to exponential backoff delays?",
-      "options": [
-        "So clients that failed together don't retry in lockstep and hit the recovering server at once",
-        "To make each retry more likely to land on a different server IP behind the load balancer",
-        "Because Android's scheduler rejects delays that are exact powers of two",
-        "To make the total retry time shorter than plain exponential backoff, since the average delay drops"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Without jitter, thousands of clients that failed during the same outage retry in lockstep (1s, 2s, 4s...), causing repeated load spikes, the thundering herd. Jitter spreads them out. It doesn't make retries finish sooner and has nothing to do with routing."
-    },
-    {
-      "id": "d54q06",
-      "type": "mcq",
-      "topic": "cancellation",
-      "difficulty": "Medium",
-      "question": "A `CoroutineWorker` is uploading a file and the user taps Cancel, which calls `WorkManager.cancelUniqueWork(\"upload-123\")`. What happens?",
-      "options": [
-        "The worker's coroutine is cancelled, which cancels the suspending network call, and the worker should clean up",
-        "The work is marked cancelled in WorkManager's database so it won't start again, but an upload that is already running keeps going until it completes",
-        "WorkManager treats it like `Result.retry()` and re-runs the upload after the backoff delay",
-        "Nothing happens until the app process is killed, because a running worker can't be stopped"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Cancelling stops running work: a `CoroutineWorker`'s coroutine is cancelled and cooperative suspend calls (like a Retrofit/OkHttp call) throw `CancellationException`. Cancelled work is not retried. Use `finally` to delete temp files and tell the server to drop the partial session."
-    },
-    {
-      "id": "d54q07",
-      "type": "truefalse",
-      "topic": "idempotency key",
-      "difficulty": "Medium",
-      "question": "The client should generate a new idempotency key for every retry attempt so the server can tell the attempts apart.",
+      "question": "Once an image loader has a disk cache of downloaded files, a memory cache of decoded bitmaps adds little, because reading from flash and decoding is about as fast as a memory lookup.",
       "options": [
         "True",
         "False"
@@ -119,235 +32,147 @@
       "answer": [
         1
       ],
-      "explanation": "The key identifies the logical operation, not the attempt. Generate it once when the user acts, persist it with the pending request, and reuse it on every retry, even after process death. A fresh key per attempt defeats deduplication."
+      "explanation": "A disk hit still needs file I/O plus a decode, which can take many milliseconds for a large image; a memory hit is ready to draw immediately. That is why Coil/Glide and Kingfisher/SDWebImage keep both tiers. The memory cache prevents flicker when scrolling back, while the disk cache saves the network."
+    },
+    {
+      "id": "d54q03",
+      "type": "mcq",
+      "topic": "startup triage",
+      "difficulty": "Easy",
+      "question": "Cold start takes 2.5 s, and a trace shows twelve SDKs being initialised in Application.onCreate (or `didFinishLaunching` on iOS). What is the best first step?",
+      "options": [
+        "Enable multidex and code shrinking, since a smaller dex is what dominates the time spent in onCreate",
+        "Measure each one, keep only what the first screen needs on the critical path, and defer the rest until after first frame or first use",
+        "Move all twelve initialisations to one background thread at once, so the main thread is free during startup",
+        "Add a splash screen with a fixed two-second delay so the SDKs have time to finish before the UI appears"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "Startup work should be justified by the first frame; analytics, chat widgets and similar SDKs can usually be lazy or deferred. Blindly moving everything to a background thread can break SDKs that need the main thread or a fixed order, and creates races. A fixed splash delay makes startup slower, not faster."
+    },
+    {
+      "id": "d54q04",
+      "type": "mcq",
+      "topic": "baseline profiles",
+      "difficulty": "Medium",
+      "question": "What do Baseline Profiles do for an Android app?",
+      "options": [
+        "They record the network calls made at startup so the app can prefetch that data on the next launch",
+        "They tell R8 which classes to keep so shrinking removes more unused code and the APK becomes smaller",
+        "They list hot classes and methods so ART can compile them ahead of time at install, cutting interpreted/JIT work at startup",
+        "They turn the whole app into native code at build time, so ART no longer needs to load any dex files"
+      ],
+      "answer": [
+        2
+      ],
+      "explanation": "Without a profile, fresh installs run startup and early scrolling code interpreted or JIT-compiled until ART gathers its own profile. Shipping a baseline profile lets the hot paths be AOT-compiled from the first launch. iOS has no JIT step (apps ship as native code), so launch work there focuses on dylib loading, static initialisers and work in the launch path."
+    },
+    {
+      "id": "d54q05",
+      "type": "multi",
+      "topic": "resumable uploads",
+      "difficulty": "Medium",
+      "question": "Users upload 500 MB videos on unreliable mobile networks. Which design choices are sound? Select all that apply.",
+      "options": [
+        "Run the transfer under WorkManager on Android, and a background URLSession uploading from a file on iOS",
+        "Persist the upload session ID and progress so an upload can resume after process death or reboot",
+        "Use a resumable or chunked protocol (e.g. tus, GCS resumable, S3 multipart) where the server reports what it already has",
+        "Read the whole video into a ByteArray / Data first so retries do not need to reopen the file each time",
+        "Restart from byte 0 after any failure, because partly uploaded data on the server cannot be trusted"
+      ],
+      "answer": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "Resumable protocols plus persisted session state mean a dropped connection costs a chunk, not the whole file, and OS-managed background transfer keeps it going when the app is gone. Restarting from zero on a flaky network may never finish. Loading 500 MB into memory risks an OOM; stream from the file."
+    },
+    {
+      "id": "d54q06",
+      "type": "mcq",
+      "topic": "feed video",
+      "difficulty": "Medium",
+      "question": "You build a TikTok-style vertical video feed. Which player strategy gives fast starts without running out of memory?",
+      "options": [
+        "Keep a small pool of player instances (ExoPlayer / AVPlayer), preload the next item's start, and release offscreen ones",
+        "Use one player and fully reload the media each time the visible item changes, so only one decoder is ever alive",
+        "Create a new player for each cell when it binds, and let garbage collection clean up the ones scrolled away",
+        "Download each video completely to disk before it plays, so playback never stalls once it has started"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Players hold decoders and buffers, which are scarce; creating one per cell leaks hardware decoders and memory. A pool of two or three, with the next video's first segment buffered, gives near-instant swipes. Full downloads waste data on videos users skip, and a single player with no preloading makes every swipe wait."
+    },
+    {
+      "id": "d54q07",
+      "type": "truefalse",
+      "topic": "background URLSession",
+      "difficulty": "Medium",
+      "question": "On iOS, an upload started on a background URLSession from a file can continue after the app is suspended or terminated by the system, and the app is relaunched in the background to handle completion.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Background sessions hand the transfer to a system daemon, which continues it and wakes the app via `handleEventsForBackgroundURLSession` when done. Uploads in such sessions must come from a file, not in-memory data. This is the iOS counterpart to WorkManager-driven uploads on Android, though a user force-quit cancels background transfers."
     },
     {
       "id": "d54q08",
       "type": "mcq",
-      "topic": "retry-after",
-      "difficulty": "Easy",
-      "question": "A sync request gets `429 Too Many Requests` with `Retry-After: 120`. What should the client do?",
+      "topic": "App Startup library",
+      "difficulty": "Hard",
+      "question": "What does the Jetpack App Startup library actually change about initialisation?",
       "options": [
-        "Wait at least 120 seconds before retrying, e.g. reschedule the work with that delay",
-        "Retry immediately, then back off from 1 second as usual, since `Retry-After` is only a hint",
-        "Treat it as a permanent failure and drop the request",
-        "Refresh the access token, because 429 means the session expired"
+        "It replaces many per-library ContentProviders with one, and lets you declare initialiser dependencies or initialise lazily",
+        "It postpones every library's initialisation until the first Activity has drawn, without any configuration",
+        "It moves every Initializer onto a background thread automatically, so none of them can block the main thread",
+        "It AOT-compiles the initialisers at install time, the same way a baseline profile does for startup code"
       ],
       "answer": [
         0
       ],
-      "explanation": "429 is transient, and `Retry-After` is the server saying when it can accept the request again. Retrying sooner just gets throttled again (and can extend the penalty). Dropping the request loses data, and 429 has nothing to do with auth."
+      "explanation": "Many libraries used a ContentProvider to self-initialise, and each provider costs time at process start; App Startup merges them into one provider with an explicit dependency graph, and supports lazy manual initialisation. Initializers still run on the main thread, so heavy work inside them still hurts. It does not compile anything or defer work unless you configure lazy init."
     },
     {
       "id": "d54q09",
-      "type": "multi",
-      "topic": "workmanager",
-      "difficulty": "Medium",
-      "question": "Which statements about WorkManager are correct? Select all that apply.",
+      "type": "mcq",
+      "topic": "adaptive streaming",
+      "difficulty": "Hard",
+      "question": "Why do media-heavy apps usually stream video with HLS or DASH rather than a single progressive MP4?",
       "options": [
-        "`enqueueUniqueWork` with `ExistingWorkPolicy.KEEP` ignores the new request if unfinished work with that name already exists",
-        "`setBackoffCriteria(BackoffPolicy.EXPONENTIAL, ...)` sets the delay used when the worker returns `Result.retry()`",
-        "Enqueued work is persisted and still runs after the app process is killed or the device reboots",
-        "Work with a `NetworkType.CONNECTED` constraint starts at the requested time even if the device is offline",
-        "`PeriodicWorkRequest` can repeat every minute if you need near-real-time sync"
+        "HLS and DASH send data over UDP, which avoids the head-of-line blocking that TCP causes for MP4 files",
+        "A progressive MP4 cannot be cached on disk, while HLS or DASH segments can be stored by any HTTP cache",
+        "Segments at several bitrates let the player start quickly at a low rendition and switch quality as bandwidth changes",
+        "DRM can only be applied to HLS or DASH streams, so a progressive MP4 cannot be protected at all"
       ],
       "answer": [
-        0,
-        1,
         2
       ],
-      "explanation": "Unique work prevents duplicate jobs, backoff criteria control `Result.retry()` timing, and WorkManager stores work in its own database so it survives process death and reboot. Constraints delay work until they're met, and periodic work has a 15-minute minimum interval."
+      "explanation": "Adaptive bitrate streaming is about start time and stall avoidance on variable mobile networks: the player picks a rendition per segment from measured throughput. Progressive files can be cached and protected in other ways, so those are not the reason. Standard HLS and DASH use plain HTTP over TCP (or QUIC with HTTP/3)."
     },
     {
       "id": "d54q10",
-      "type": "mcq",
-      "topic": "401 re-auth",
-      "difficulty": "Medium",
-      "question": "Queued background requests start failing with 401 because the access token expired. What is the right handling?",
-      "options": [
-        "Refresh the token once, shared by all failing requests, then retry them. If the refresh is rejected, pause the queue and ask the user to sign in.",
-        "Retry each request with exponential backoff and jitter, since an expired token often starts working again after the server's clock-skew window passes",
-        "Mark every queued request as permanently failed and delete it",
-        "Have each failing request refresh the token on its own, in parallel"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "A 401 won't fix itself with backoff. It needs new credentials, and after that the request is retryable. Parallel refreshes race and can invalidate each other's refresh tokens. Deleting the queue loses work that will succeed after re-auth."
-    },
-    {
-      "id": "d54q11",
-      "type": "mcq",
-      "topic": "backoff cap",
-      "difficulty": "Easy",
-      "question": "A retry policy starts at 1 s and doubles each attempt. Why also set a maximum delay and a maximum number of attempts?",
-      "options": [
-        "Uncapped doubling soon means hours-long waits, and a call that never succeeds would retry forever",
-        "WorkManager throws an `IllegalArgumentException` when a backoff delay exceeds 60 seconds",
-        "Caps make every retry use the same delay, which keeps the schedule predictable and easier to test",
-        "So the server can tell retries apart from first attempts"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "1 s × 2^14 is about 4.5 hours, so without a cap the delay becomes useless. A max-attempts limit (or retry budget) stops an operation from cycling forever and sends it to dead-letter handling. A cap only limits the largest delay, so the earlier ones still grow exponentially."
-    },
-    {
-      "id": "d54q12",
-      "type": "mcq",
-      "topic": "outbox pattern",
-      "difficulty": "Medium",
-      "question": "The user posts a comment while on a flaky connection. Which design is the client-side outbox pattern?",
-      "options": [
-        "In one Room transaction, save the comment as pending plus an outbox row, show it, and let a unique WorkManager job send it",
-        "Call the API first, and insert the comment into Room as confirmed only once the server returns 201 with the canonical ID, so the local copy never diverges",
-        "Keep pending comments in a `MutableList` in the ViewModel and retry them in `init`",
-        "Save the comment in `SharedPreferences` after the network call fails"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Recording intent durably before any network I/O means a crash, process kill or offline period can't lose it, and the UI can show it at once. Network-first loses the comment if the app dies mid-request, and an in-memory list dies with the process."
-    },
-    {
-      "id": "d54q13",
-      "type": "truefalse",
-      "topic": "effectively once",
-      "difficulty": "Medium",
-      "question": "Exactly-once delivery over an unreliable network isn't achievable, but at-least-once delivery (retry until acknowledged) plus idempotent processing on the server gives an effectively-once result.",
-      "options": [
-        "True",
-        "False"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "The client can't tell a lost request from a lost response, so it must retry, which means the server may see duplicates. Deduplicating by an idempotency key or client-generated ID makes those duplicates harmless, so the effect happens once."
-    },
-    {
-      "id": "d54q14",
-      "type": "mcq",
-      "topic": "resumable upload",
-      "difficulty": "Hard",
-      "question": "A 200 MB video upload uses a resumable session with 8 MB chunks. The app is killed at about 60%. When the worker runs again, what should it do?",
-      "options": [
-        "Ask the server for the session's committed offset and resume from that byte",
-        "Continue from the offset of the last chunk the client saved locally as sent",
-        "Restart from byte 0 with the same idempotency key, since the server will dedupe",
-        "Create a new upload session to be safe, then delete the old one"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "The server is the source of truth for what it durably received. The client's last sent chunk may not have been committed, or may have been committed after the client last saved its offset. Restarting from 0 or opening a new session throws away 120 MB of progress on a metered or flaky network."
-    },
-    {
-      "id": "d54q15",
       "type": "multi",
-      "topic": "photo upload design",
-      "difficulty": "Medium",
-      "question": "You're designing a reliable \"upload photo to post\" feature. Which choices belong in the design? Select all that apply.",
+      "topic": "measuring startup",
+      "difficulty": "Hard",
+      "question": "You want trustworthy startup numbers before and after an optimisation. Which practices are sound? Select all that apply.",
       "options": [
-        "Copy the picked image into app-private storage before enqueueing, since the content URI's permission may not outlast the process",
-        "Run long, user-initiated uploads as foreground work (`setForeground`) with a progress notification",
-        "Upload the bytes first, then make a separate call to commit the post metadata that references the upload ID",
-        "Run the upload loop in the Activity's `lifecycleScope` so it stops cleanly when the user leaves",
-        "Read the whole file into a `ByteArray` so the retry can resend it without touching disk"
+        "On iOS, use Instruments' App Launch template plus Xcode Organizer or MetricKit launch metrics from the field",
+        "Measure release-like builds on real, mid-range devices, since debug builds and emulators distort timing",
+        "On Android, use Macrobenchmark startup metrics and call `reportFullyDrawn()` so time-to-full-display is captured",
+        "Measure on an emulator with a debug build, as long as you compare the before and after runs on the same one",
+        "Log a timestamp at the top of Application.onCreate, since that marks when the user's wait actually began"
       ],
       "answer": [
         0,
         1,
         2
       ],
-      "explanation": "Owning a stable copy, making long uploads visible foreground work, and the upload-then-commit split all keep the upload going across process death and avoid half-created posts. `lifecycleScope` kills the upload when the user navigates away, and loading large files into memory risks OOM. Stream from the file instead."
-    },
-    {
-      "id": "d54q16",
-      "type": "mcq",
-      "topic": "operation ordering",
-      "difficulty": "Medium",
-      "question": "Offline, the user creates an album and then adds a photo to it. The photo upload needs the album's server ID. How should the queued work be structured?",
-      "options": [
-        "Chain them with `beginWith(createAlbum).then(uploadPhoto)` and pass the album's server ID to the upload",
-        "Enqueue both independently. WorkManager runs requests in the order they were enqueued.",
-        "Run both in parallel and have the photo upload return `Result.retry()` on 404 until the album exists on the server and the ID can be looked up",
-        "Upload the photo first and create the album afterwards, then move the photo"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "A chain encodes the dependency: the child waits for the parent, receives its output, and is marked failed if the parent fails permanently. Independent requests have no ordering guarantee. Retrying on 404 wastes requests and can't tell \"not created yet\" from \"really gone\". Map the parent's output (the album's server ID) into the upload's input."
-    },
-    {
-      "id": "d54q17",
-      "type": "truefalse",
-      "topic": "dead letter",
-      "difficulty": "Easy",
-      "question": "When a queued operation fails permanently (e.g. a 422 validation error), it should be moved out of the retry queue and the failure shown to the user instead of retried silently.",
-      "options": [
-        "True",
-        "False"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Retrying a permanent failure never succeeds, burns battery and can block later items in an ordered queue. Moving it to a dead-letter state lets the UI mark it \"Failed, tap to edit or discard\" so the user can fix it."
-    },
-    {
-      "id": "d54q18",
-      "type": "multi",
-      "topic": "retry storms",
-      "difficulty": "Hard",
-      "question": "Your backend is recovering from an outage and 2 million installed clients have queued work. Which client behaviours help it recover instead of knocking it over again? Select all that apply.",
-      "options": [
-        "Exponential backoff with jitter",
-        "A retry budget: a cap on attempts, and on the share of traffic that can be retries",
-        "A client-side circuit breaker that stops calls for a cooldown after repeated failures, then sends one probe request",
-        "Retrying each failed call three times in a tight loop before backing off",
-        "Scheduling every client's catch-up sync for the same fixed time, such as 03:00"
-      ],
-      "answer": [
-        0,
-        1,
-        2
-      ],
-      "explanation": "Jitter spreads load, budgets limit how much retries can add to the original traffic, and a breaker stops calls to a server that's clearly down. Tight-loop retries and a fleet-wide fixed sync time cause synchronized spikes, the retry storm that keeps the outage going."
-    },
-    {
-      "id": "d54q19",
-      "type": "mcq",
-      "topic": "expedited work",
-      "difficulty": "Hard",
-      "question": "Which statement about `setExpedited` work in WorkManager is correct?",
-      "options": [
-        "It's for short, user-important tasks and is quota-limited, so set an `OutOfQuotaPolicy` fallback",
-        "It is exempt from time limits and Doze, which makes it the right choice for an hour-long backup that the user started from settings",
-        "It can be applied to a `PeriodicWorkRequest` to make a 15-minute sync high priority",
-        "It runs the worker synchronously on the main thread to skip scheduler latency"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Expedited work starts quickly but is quota-limited and meant to finish in minutes, so it needs an out-of-quota fallback. It doesn't support periodic requests, and long user-initiated transfers belong in foreground work with a notification."
-    },
-    {
-      "id": "d54q20",
-      "type": "multi",
-      "topic": "observability",
-      "difficulty": "Easy",
-      "question": "Which are good observability practices for a background retry system? Select all that apply.",
-      "options": [
-        "Log each attempt with the attempt number, error class (timeout, 5xx, 429...) and the operation's ID",
-        "Track metrics such as retry rate, time-to-success, and how many operations end up dead-lettered",
-        "Include the idempotency key or a request ID in logs so client and server records can be matched",
-        "Log full request headers, including the `Authorization` token, to make debugging easier"
-      ],
-      "answer": [
-        0,
-        1,
-        2
-      ],
-      "explanation": "Per-attempt context, aggregate metrics and a shared correlation ID show whether retries are helping and where operations get stuck. Logging bearer tokens leaks credentials into log pipelines and crash tools."
+      "explanation": "Debug builds disable optimisations and add tooling overhead, so their numbers do not reflect production. Macrobenchmark and Instruments measure from process creation, and field metrics show the real device mix. A timestamp in onCreate misses process fork, class loading and provider init before it, which are often a big part of the problem."
     }
   ]
 }

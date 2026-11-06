@@ -1,31 +1,30 @@
 {
   "day": 38,
-  "topic": "Compose side effects: LaunchedEffect, DisposableEffect & friends",
+  "topic": "Coil internals: request pipeline, caches & decoding",
   "questions": [
     {
       "id": "d38q01",
       "type": "mcq",
-      "topic": "effects in body",
+      "topic": "pipeline order",
       "difficulty": "Easy",
-      "question": "A composable calls `analytics.logScreenView(\"home\")` directly in its body. What is the problem?",
-      "code": "@Composable\nfun HomeScreen(state: HomeState) {\n    analytics.logScreenView(\"home\")\n    HomeContent(state)\n}",
+      "question": "For a network image that is not yet cached anywhere, in what order does Coil work through its pipeline?",
       "options": [
-        "It runs every time `HomeScreen` recomposes, so one visit can log many screen views",
-        "It runs only once, the first time the app starts, so later visits are never logged",
-        "It doesn't compile because non-composable functions can't be called from a composable",
-        "Compose defers it until after the first frame, so the first screen view is logged late"
+        "Check the disk cache, decode, then check the memory cache",
+        "Fetch from network, write to memory cache, then decode on the main thread",
+        "Check the memory cache, fetch the source (disk cache or network), decode, then store the result in the memory cache",
+        "Decode, then check the memory cache, then fetch"
       ],
       "answer": [
-        0
+        2
       ],
-      "explanation": "The composable body is re-executed on every recomposition (and a composition may even be discarded), so side effects there run an unpredictable number of times. Calling ordinary functions from a composable compiles fine; the issue is how often it happens. Wrap it in an effect API such as `LaunchedEffect(Unit)`."
+      "explanation": "Coil first looks for a ready decoded image in the memory cache, which is the cheapest hit. On a miss it fetches the source data, from the disk cache or the network, decodes it off the main thread, and stores the decoded image in memory for later requests."
     },
     {
       "id": "d38q02",
       "type": "truefalse",
-      "topic": "launchedeffect(unit)",
+      "topic": "auto cancellation",
       "difficulty": "Easy",
-      "question": "`LaunchedEffect(Unit) { ... }` runs its block once when the composable enters composition, and does not run it again when the composable later recomposes.",
+      "question": "When an `ImageView` that Coil is loading into gets a new request, or is detached, Coil cancels the old in-flight request for that view.",
       "options": [
         "True",
         "False"
@@ -33,319 +32,143 @@
       "answer": [
         0
       ],
-      "explanation": "A constant key like `Unit` or `true` never changes, so the effect launches once per entry into composition and is only cancelled when the composable leaves. If the composable leaves and comes back (e.g. an `if` toggles), it runs again."
+      "explanation": "Coil tracks the current request per view target and disposes the previous one when a new one starts or the view goes away. This is what prevents recycled list items from flashing the wrong image."
     },
     {
       "id": "d38q03",
       "type": "mcq",
-      "topic": "rememberCoroutineScope",
+      "topic": "disk cache",
       "difficulty": "Easy",
-      "question": "A Save button should show a snackbar via `snackbarHostState.showSnackbar(\"Saved\")`, which is a suspend function. Where should you start the coroutine?",
+      "question": "What does Coil's disk cache store for a network image?",
       "options": [
-        "Get a scope with `rememberCoroutineScope()` and `scope.launch { }` in `onClick`",
-        "Put a `LaunchedEffect(Unit) { ... }` inside the `onClick` lambda",
-        "Use `GlobalScope.launch { ... }` inside `onClick`, since snackbars outlive the screen",
-        "Wrap the call in `SideEffect { ... }` inside `onClick`"
+        "Only the HTTP headers, used to revalidate the image",
+        "The decoded bitmap, so no decoding is needed next time",
+        "A downsampled copy at the size of the last request",
+        "The encoded source bytes as downloaded, which still need decoding"
       ],
       "answer": [
-        0
+        3
       ],
-      "explanation": "`rememberCoroutineScope()` gives a scope tied to the composition that you can use from event callbacks. `LaunchedEffect` and `SideEffect` are composables and can't be called from a non-composable lambda like `onClick`, and `GlobalScope` leaks work beyond the screen."
+      "explanation": "The disk cache holds the fetched source data, so a disk hit skips the network but still needs decoding at the size the new request asks for. Decoded bitmaps live only in the memory cache, which is why the two caches complement each other."
     },
     {
       "id": "d38q04",
       "type": "mcq",
-      "topic": "disposableeffect",
-      "difficulty": "Easy",
-      "question": "A compass screen must register a `SensorEventListener` while it's on screen and unregister it when it leaves. Which effect API fits best?",
+      "topic": "sizing",
+      "difficulty": "Medium",
+      "question": "A feed of thumbnails uses `size(Size.ORIGINAL)` on every request, and memory spikes while scrolling. Why?",
       "options": [
-        "`DisposableEffect`, unregistering in `onDispose`",
-        "`SideEffect`, registering after every recomposition",
-        "`LaunchedEffect`, registering and then calling `delay(Long.MAX_VALUE)`",
-        "`remember { sensorManager.registerListener(...) }`"
+        "`Size.ORIGINAL` forces software bitmaps",
+        "`Size.ORIGINAL` decodes each image at its full pixel dimensions instead of the size it is shown at",
+        "`Size.ORIGINAL` turns off the memory cache",
+        "`Size.ORIGINAL` downloads the image twice"
       ],
       "answer": [
-        0
+        1
       ],
-      "explanation": "`DisposableEffect` is built for register/unregister pairs: `onDispose` runs when the composable leaves composition or the key changes. `SideEffect` would register repeatedly, and `remember` has no cleanup hook, so the listener would leak."
+      "explanation": "Coil normally resolves the target size from the view or layout constraints and downsamples during decode. Asking for the original size skips that, so a 4000 px photo in a 100 dp cell costs tens of megabytes. Caching and the download itself are unaffected."
     },
     {
       "id": "d38q05",
-      "type": "output",
-      "topic": "unstable keys",
+      "type": "mcq",
+      "topic": "interceptors",
       "difficulty": "Medium",
-      "question": "This models how an effect compares its key across 4 recompositions and relaunches when the key differs. What does it print?",
-      "code": "class FakeEffect {\n    private var lastKey: Any? = null\n    var launches = 0\n    fun run(key: Any?) {\n        if (key != lastKey) { lastKey = key; launches++ }\n    }\n}\n\nfun main() {\n    val stable = FakeEffect()\n    val unstable = FakeEffect()\n    repeat(4) {\n        stable.run(\"user-42\")\n        unstable.run(Any())\n    }\n    println(\"${stable.launches} ${unstable.launches}\")\n}",
+      "question": "You add a custom Coil `Interceptor` to an ImageLoader. Which is true about it?",
       "options": [
-        "1 4",
-        "1 1",
-        "4 4",
-        "0 4"
+        "It runs only after the image is decoded, so it can only change the bitmap",
+        "It runs only on memory cache misses",
+        "It runs before Coil's own engine, so it can rewrite the request (e.g. add a width to the URL) or return a result itself",
+        "It replaces the network layer and must download the bytes itself"
       ],
       "answer": [
-        0
+        2
       ],
-      "explanation": "The string key is equal every time, so the effect launches only on the first pass. `Any()` creates a new object that is never equal to the previous one, so it relaunches on every pass. That is the bug of keying `LaunchedEffect` on something recreated each recomposition."
+      "explanation": "Coil interceptors wrap the request execution, and the engine that checks the memory cache, fetches and decodes runs at the end of the chain. So an interceptor can change the request before any cache lookup or short-circuit with its own result. Transformations, not interceptors, are the usual tool for changing the bitmap."
     },
     {
       "id": "d38q06",
+      "type": "multi",
+      "topic": "memory cache key",
+      "difficulty": "Medium",
+      "question": "Which of these result in a different memory cache entry for the same URL? Select all that apply.",
+      "options": [
+        "Giving the requests different custom `memoryCacheKey` values",
+        "Using a different crossfade duration",
+        "Applying a circle-crop transformation versus no transformation",
+        "Using a different placeholder drawable"
+      ],
+      "answer": [
+        0,
+        2
+      ],
+      "explanation": "The memory cache key is built from the data and things that change the decoded output, such as transformations, or set explicitly with `memoryCacheKey`. Placeholders and crossfade only affect how the result is shown, so they do not change which cached image is reused."
+    },
+    {
+      "id": "d38q07",
       "type": "truefalse",
-      "topic": "ondispose",
-      "difficulty": "Easy",
-      "question": "The lambda passed to `DisposableEffect(key) { ... }` can simply end after registering a listener. An `onDispose { ... }` call is optional when there's nothing to clean up.",
+      "topic": "hardware bitmaps",
+      "difficulty": "Medium",
+      "question": "On Android, Coil may decode images as hardware bitmaps by default, so you should disable hardware bitmaps for a request whose result you need to read pixels from, for example with Palette.",
       "options": [
         "True",
         "False"
       ],
       "answer": [
-        1
+        0
       ],
-      "explanation": "The block must return a `DisposableEffectResult`, which you normally get by ending it with `onDispose { }`. Without it the code doesn't compile, so even with nothing to clean up you write `onDispose { }`, which usually hints that a different effect API fits better."
-    },
-    {
-      "id": "d38q07",
-      "type": "multi",
-      "topic": "effect cancellation",
-      "difficulty": "Medium",
-      "question": "Given `LaunchedEffect(userId) { repo.observe(userId).collect { ... } }`, which events cancel the running coroutine?",
-      "options": [
-        "`userId` changes to a different value",
-        "The composable leaves composition, e.g. an enclosing `if` becomes false",
-        "The composable recomposes with the same `userId`",
-        "A state object read inside the effect's block changes"
-      ],
-      "answer": [
-        0,
-        1
-      ],
-      "explanation": "A `LaunchedEffect` is cancelled when its key changes (and then relaunched) or when it leaves composition. Recomposing with an equal key leaves it running, and the effect block is not a composable scope, so state reads inside it don't restart it."
+      "explanation": "Coil allows hardware bitmaps by default where the platform supports them because they save memory and upload time. Their pixels cannot be read on the CPU, so set `allowHardware(false)` on requests whose bitmap you will inspect."
     },
     {
       "id": "d38q08",
       "type": "mcq",
-      "topic": "navigation in effect",
-      "difficulty": "Easy",
-      "question": "A login screen navigates as soon as the state says the user is logged in. What goes wrong?",
-      "code": "@Composable\nfun LoginScreen(state: LoginState, navController: NavController) {\n    if (state.loggedIn) {\n        navController.navigate(Home)\n    }\n    LoginForm(state)\n}",
+      "topic": "shared ImageLoader",
+      "difficulty": "Hard",
+      "question": "Each screen builds its own `ImageLoader` with `ImageLoader.Builder(context).build()`. What is the main consequence?",
       "options": [
-        "It can navigate on each recomposition, pushing `Home` several times",
-        "Nothing: `navigate` ignores calls made from composition",
-        "It never navigates, because composables can't call `NavController` methods",
-        "It navigates once, but the back stack is cleared automatically"
+        "Each loader has its own memory cache and resources, so memory is duplicated and screens do not share cache hits",
+        "All loaders share one memory cache automatically, so there is no impact",
+        "Images stop loading after the second screen because only one loader is allowed",
+        "Disk caching is disabled for every loader except the first"
       ],
       "answer": [
         0
       ],
-      "explanation": "Navigation is a side effect, and in the body it re-runs on each recomposition, causing duplicate destinations or navigation loops. Move it into `LaunchedEffect(state.loggedIn) { if (state.loggedIn) navController.navigate(Home) }` so it only runs when the value changes."
+      "explanation": "Each ImageLoader owns its memory cache and other machinery, so several of them hold separate copies of hot images and cannot reuse each other's decoded results. Coil is designed around a single shared loader, typically provided through the singleton or DI, with `newBuilder()` for variants that share resources."
     },
     {
       "id": "d38q09",
-      "type": "mcq",
-      "topic": "key restart",
-      "difficulty": "Medium",
-      "question": "The user types \"a\", \"ab\", \"abc\" with less than 300 ms between keystrokes, then stops. Which searches are sent?",
-      "code": "@Composable\nfun SearchBox(query: String, onSearch: (String) -> Unit) {\n    LaunchedEffect(query) {\n        delay(300)\n        onSearch(query)\n    }\n    // TextField ...\n}",
+      "type": "multi",
+      "topic": "size and caching",
+      "difficulty": "Hard",
+      "question": "A list shows an image as a small thumbnail, then a detail screen shows the same URL full-screen. Which statements describe Coil's behavior? Select all that apply.",
       "options": [
-        "Only \"abc\"",
-        "\"a\", \"ab\" and \"abc\", each 300 ms after its keystroke",
-        "Only \"a\", because the effect already started",
-        "None, because the key changed during the delay"
+        "The small thumbnail in memory is upscaled and reused for the full-screen request",
+        "The thumbnail request decodes with subsampling, so it uses far less memory than the full image",
+        "The disk cache stores the thumbnail-sized version, so the detail screen must re-download",
+        "A larger decoded image already in the memory cache can satisfy a later, smaller request"
       ],
       "answer": [
-        0
+        1,
+        3
       ],
-      "explanation": "Each new `query` cancels the previous coroutine (still inside `delay`) and starts a new one. Only the last one completes its delay, which gives you a simple debounce. Earlier effects don't queue up, they are cancelled."
+      "explanation": "Coil downsamples during decode to the requested size, and when checking the memory cache it accepts a cached image that is large enough. A smaller cached image is not good enough for a bigger request, so Coil decodes again, usually from the disk cache, which holds the original bytes rather than a resized copy."
     },
     {
       "id": "d38q10",
-      "type": "truefalse",
-      "topic": "effects need composition",
-      "difficulty": "Easy",
-      "question": "You can write `LaunchedEffect(Unit) { ... }` inside a `Button`'s `onClick` lambda to start a coroutine when the button is tapped.",
-      "options": [
-        "True",
-        "False"
-      ],
-      "answer": [
-        1
-      ],
-      "explanation": "`LaunchedEffect` is a `@Composable` function and `onClick` is a plain lambda, so this is a compile error. For event-driven work use `rememberCoroutineScope()` and `scope.launch` inside the callback."
-    },
-    {
-      "id": "d38q11",
       "type": "mcq",
-      "topic": "sideeffect",
-      "difficulty": "Medium",
-      "question": "You need to push the current `userId` from Compose state into a non-Compose analytics SDK so it's always up to date. Why use `SideEffect { analytics.setUserId(userId) }` instead of calling it in the body?",
-      "options": [
-        "`SideEffect` runs only after a recomposition is applied, never for a discarded one",
-        "`SideEffect` runs only once, when the composable first appears",
-        "`SideEffect` runs in a background coroutine so the SDK call doesn't block the UI thread",
-        "`SideEffect` automatically undoes the call when the composable leaves"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`SideEffect` runs after every successful recomposition, so it keeps the external object in sync but never with state from a composition that was thrown away. It's not a one-shot effect, has no cleanup (that's `DisposableEffect`), and isn't a coroutine."
-    },
-    {
-      "id": "d38q12",
-      "type": "output",
-      "topic": "stale lambda",
-      "difficulty": "Medium",
-      "question": "This mimics a long-running effect that captured `onTimeout` at launch versus one that reads it through a holder (like `rememberUpdatedState`). What does it print?",
-      "code": "class Holder<T>(var value: T)\n\nfun main() {\n    var onTimeout: () -> String = { \"old\" }\n    val captured = onTimeout\n    val latest = Holder(onTimeout)\n\n    onTimeout = { \"new\" }      // parent passes a new lambda\n    latest.value = onTimeout   // holder is updated\n\n    println(captured() + \" \" + latest.value())\n}",
-      "options": [
-        "old new",
-        "new new",
-        "old old",
-        "new old"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`captured` kept a reference to the original lambda, so reassigning the variable doesn't affect it. The holder is read at call time and returns the latest lambda. `rememberUpdatedState` works the same way, so an effect that isn't restarted still calls the newest callback."
-    },
-    {
-      "id": "d38q13",
-      "type": "multi",
-      "topic": "coroutine scope uses",
-      "difficulty": "Medium",
-      "question": "Which are appropriate uses of a scope from `rememberCoroutineScope()`?",
-      "options": [
-        "Scrolling a list to the top when a FAB is tapped: `scope.launch { listState.animateScrollToItem(0) }`",
-        "Opening a `ModalNavigationDrawer` from a menu button: `scope.launch { drawerState.open() }`",
-        "Loading the screen's data with `scope.launch { ... }` written directly in the composable body",
-        "Loading data once when the screen first appears, with no user action involved"
-      ],
-      "answer": [
-        0,
-        1
-      ],
-      "explanation": "`rememberCoroutineScope` is for coroutines started by user events in callbacks. Calling `scope.launch` in the body launches again on every recomposition, and work tied to entering composition belongs in `LaunchedEffect` (or better, the ViewModel)."
-    },
-    {
-      "id": "d38q14",
-      "type": "mcq",
-      "topic": "dispose order",
-      "difficulty": "Medium",
-      "question": "A `DisposableEffect(userId)` registers a listener for the user in its block and removes it in `onDispose`. When `userId` changes from 1 to 2, what happens?",
-      "options": [
-        "`onDispose` for user 1 runs, then the block runs for user 2",
-        "The block runs for user 2, then `onDispose` for user 1 runs",
-        "The block runs for user 2 and `onDispose` only runs when the composable leaves",
-        "Nothing, because `DisposableEffect` ignores key changes after the first run"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "A key change disposes the old effect first and then starts the new one, so you never have two listeners registered. `onDispose` doesn't wait for the composable to leave; it also runs on every key change."
-    },
-    {
-      "id": "d38q15",
-      "type": "mcq",
-      "topic": "one-off events",
-      "difficulty": "Medium",
-      "question": "A ViewModel exposes one-off events (show a toast, navigate) as `val events: Flow<UiEvent>` backed by a `Channel`. Where should the screen consume them?",
-      "options": [
-        "In a `LaunchedEffect` that calls `viewModel.events.collect { ... }` and handles each event",
-        "With `val event by viewModel.events.collectAsState(null)` and acting on `event` in the body",
-        "In a `SideEffect` that collects the flow",
-        "Inside `remember { viewModel.events.collect { ... } }`"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Collecting in `LaunchedEffect` handles each event exactly once in a coroutine tied to the composition (ideally combined with `repeatOnLifecycle` or a lifecycle-aware wrapper). Turning events into state and acting in the body repeats the action on recomposition, and `SideEffect`/`remember` can't call a suspend function like `collect`."
-    },
-    {
-      "id": "d38q16",
-      "type": "multi",
-      "topic": "producestate",
+      "topic": "extension points",
       "difficulty": "Hard",
-      "question": "Which statements about `val image by produceState<Result>(initialValue = Loading, url) { value = repo.load(url) }` are true?",
+      "question": "You want `AsyncImage(model = AvatarId(\"42\"))` to work, where an `AvatarId` resolves to a normal HTTPS URL. Which Coil extension point fits best?",
       "options": [
-        "It returns a `State` whose `value` starts as `Loading` and is updated by the producer",
-        "The producer coroutine is cancelled and relaunched when `url` changes",
-        "For a callback-based source you can register in the producer and clean up in `awaitDispose { }`",
-        "The producer block runs again on every recomposition",
-        "The produced value survives process death like `rememberSaveable`"
+        "A custom `Decoder` that turns `AvatarId` into a bitmap",
+        "A `Transformation` that replaces the request data",
+        "A custom `Fetcher` that downloads the bytes for `AvatarId` itself",
+        "A `Mapper` that converts `AvatarId` into its URL, so the standard network fetcher and caches handle the rest"
       ],
       "answer": [
-        0,
-        1,
-        2
+        3
       ],
-      "explanation": "`produceState` launches a coroutine (keyed like `LaunchedEffect`) that pushes values into a `State`, and `awaitDispose` lets you unregister non-suspending sources. It doesn't re-run on recomposition with the same keys, and nothing about it is saved across process death."
-    },
-    {
-      "id": "d38q17",
-      "type": "mcq",
-      "topic": "snapshotflow",
-      "difficulty": "Medium",
-      "question": "Inside `LaunchedEffect(listState) { snapshotFlow { listState.firstVisibleItemIndex }.collect { ... } }`, what does `snapshotFlow` provide?",
-      "options": [
-        "A Flow that emits when the Compose state read in its block changes value",
-        "A Flow that emits once per frame, whether or not the index changed",
-        "A hot `StateFlow` that keeps running after the composable leaves composition",
-        "A one-time snapshot of the current index wrapped in a Flow"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`snapshotFlow` turns Compose `State` reads into a cold Flow: it re-runs the block when the states it read change and emits only if the result differs from the previous one. Collected in a `LaunchedEffect`, it's cancelled with the effect, and you avoid restarting the effect on every scroll."
-    },
-    {
-      "id": "d38q18",
-      "type": "mcq",
-      "topic": "rememberUpdatedState",
-      "difficulty": "Hard",
-      "question": "A splash screen should call `onTimeout` after 3 seconds. The parent passes a new `onTimeout` lambda on each recomposition. Which implementation waits exactly 3 seconds and calls the latest lambda?",
-      "options": [
-        "`val current by rememberUpdatedState(onTimeout)` then `LaunchedEffect(Unit) { delay(3000); current() }`",
-        "`LaunchedEffect(Unit) { delay(3000); onTimeout() }`",
-        "`LaunchedEffect(onTimeout) { delay(3000); onTimeout() }`",
-        "`SideEffect { Thread.sleep(3000); onTimeout() }`"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Keying on `Unit` keeps the timer from restarting, and `rememberUpdatedState` lets it read the newest lambda at the end. Without it, the `Unit` version calls the stale lambda it captured; keying on `onTimeout` restarts the 3 seconds on every new lambda; and sleeping in `SideEffect` freezes the main thread."
-    },
-    {
-      "id": "d38q19",
-      "type": "multi",
-      "topic": "lifecycle observer",
-      "difficulty": "Hard",
-      "question": "Which statements about this code are true?",
-      "code": "val lifecycleOwner = LocalLifecycleOwner.current\nDisposableEffect(lifecycleOwner) {\n    val observer = LifecycleEventObserver { _, event ->\n        if (event == Lifecycle.Event.ON_START) onStart()\n        if (event == Lifecycle.Event.ON_STOP) onStop()\n    }\n    lifecycleOwner.lifecycle.addObserver(observer)\n    onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }\n}",
-      "options": [
-        "If a different `LifecycleOwner` is provided, the observer is removed from the old one and added to the new one",
-        "The observer is removed when the composable leaves composition",
-        "If the parent later passes a new `onStart` lambda, the observer keeps calling the old one unless it's read through `rememberUpdatedState`",
-        "If the lifecycle is already STARTED when the observer is added, `onStart()` is not called until the next stop/start cycle"
-      ],
-      "answer": [
-        0,
-        1,
-        2
-      ],
-      "explanation": "Keying on the owner re-registers on owner change, and `onDispose` handles removal. The observer lambda captured the first `onStart`, so wrap callbacks in `rememberUpdatedState`. The last statement is false: `addObserver` replays events up to the current state, so a newly added observer gets ON_START immediately."
-    },
-    {
-      "id": "d38q20",
-      "type": "truefalse",
-      "topic": "config change",
-      "difficulty": "Hard",
-      "question": "A screen loads data in `LaunchedEffect(Unit) { data = repo.load() }`. When the user rotates the device (default Activity recreation), the effect does not run again.",
-      "options": [
-        "True",
-        "False"
-      ],
-      "answer": [
-        1
-      ],
-      "explanation": "Rotation recreates the Activity, so the old composition is disposed (cancelling the effect) and the new composition launches it again, reloading the data. That's why one-time loading belongs in a ViewModel, which survives configuration changes, rather than in a `LaunchedEffect(Unit)`."
+      "explanation": "A Mapper converts your model type into a type Coil already knows, so you keep the built-in network fetching, disk caching and decoding. A Fetcher is for a genuinely new data source, a Decoder for a new image format, and Transformations work on the decoded image, not the request."
     }
   ]
 }

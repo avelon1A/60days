@@ -1,177 +1,120 @@
 {
   "day": 57,
-  "topic": "Final boss: Kotlin & coroutine gotchas",
+  "topic": "Final boss: Kotlin, coroutines & Flow",
   "questions": [
     {
       "id": "d57q01",
       "type": "output",
-      "topic": "takeIf + elvis",
+      "topic": "launch & yield",
       "difficulty": "Easy",
       "question": "What does this print?",
-      "code": "fun main() {\n    val s: String? = \"  kt  \"\n    val r = s?.trim()?.takeIf { it.length > 2 }?.uppercase() ?: s?.length\n    println(r)\n}",
+      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking {\n    launch { println(\"A\") }\n    println(\"B\")\n    yield()\n    println(\"C\")\n}",
       "options": [
-        "6",
-        "KT",
-        "null",
-        "2"
+        "A\nB\nC",
+        "A\nC\nB",
+        "B\nC\nA",
+        "B\nA\nC"
       ],
       "answer": [
-        0
+        3
       ],
-      "explanation": "`trim()` gives `\"kt\"` (length 2), so `takeIf` returns null and the rest of the safe-call chain is skipped. The elvis then evaluates `s?.length`, which is the untrimmed length 6, not 2."
+      "explanation": "`runBlocking` runs on one thread with an event loop, so `launch` only queues the child and the parent keeps going and prints B. `yield()` suspends the parent and lets the queued child run, which prints A, and then the parent resumes and prints C. The child never runs before the parent suspends."
     },
     {
       "id": "d57q02",
-      "type": "truefalse",
-      "topic": "sequence vs flow suspension",
+      "type": "mcq",
+      "topic": "StateFlow equality",
       "difficulty": "Easy",
-      "question": "Inside a `sequence { }` builder you can call `delay()` between `yield`s to space the values out, just like you can between `emit`s inside `flow { }`.",
+      "question": "A ViewModel sets `_state.value = UiState(loading = false)` twice in a row on a `MutableStateFlow` (UiState is a data class). How many times does an active collector receive it?",
       "options": [
-        "True",
-        "False"
+        "Twice, unless `distinctUntilChanged()` is added before `collect`",
+        "Zero times: StateFlow only emits when the value's reference changes",
+        "Once: StateFlow skips a new value that is equal to the current one",
+        "Twice: every assignment to value is delivered to every collector"
       ],
       "answer": [
-        1
+        2
       ],
-      "explanation": "`SequenceScope` is marked `@RestrictsSuspension`, so the block may only call its own suspend functions (`yield`, `yieldAll`), and `delay` is a compile error. A sequence is pulled synchronously through a plain `Iterator`, so it can't really wait. Use `flow { }` when producing values needs to suspend."
+      "explanation": "StateFlow is conflated and compares with `equals()`, so assigning an equal data class instance is a no-op. That is why `distinctUntilChanged()` on a StateFlow is redundant. If you need every event delivered, even equal ones, use a SharedFlow or a Channel instead."
     },
     {
       "id": "d57q03",
-      "type": "mcq",
-      "topic": "async in map",
-      "difficulty": "Easy",
-      "question": "Inside `runBlocking`, what is the type of `results`?",
-      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking {\n    val results = listOf(1, 2, 3)\n        .map { async { it * 2 } }\n        .awaitAll()\n    println(results)\n}",
+      "type": "output",
+      "topic": "catch is upstream only",
+      "difficulty": "Hard",
+      "question": "What does this print?",
+      "code": "import kotlinx.coroutines.*\nimport kotlinx.coroutines.flow.*\n\nfun main() = runBlocking {\n    try {\n        flow { emit(1); emit(2) }\n            .catch { println(\"upstream caught\") }\n            .collect {\n                println(\"got $it\")\n                check(it != 1)\n            }\n    } catch (e: IllegalStateException) {\n        println(\"outer caught\")\n    }\n}",
       "options": [
-        "`List<Int>`",
-        "`List<Deferred<Int>>`",
-        "`Deferred<List<Int>>`",
-        "It doesn't compile, because `map` is not a suspend function"
+        "got 1\nupstream caught",
+        "got 1\ngot 2\nouter caught",
+        "got 1\nouter caught",
+        "got 1\nupstream caught\ngot 2"
       ],
       "answer": [
-        0
+        2
       ],
-      "explanation": "`async` is not a suspend function, so it can be called inside `map`'s lambda, and `map` returns `List<Deferred<Int>>`. `awaitAll()` on that list suspends and returns `List<Int>`, here `[2, 4, 6]`."
+      "explanation": "`catch` only handles exceptions from the operators above it; it cannot see an exception thrown in the `collect` block below it. So `check(it != 1)` throws IllegalStateException in the collector, the flow is cancelled and the exception reaches the outer `try`. That is why errors in collect logic are often moved into `onEach` placed before `catch`."
     },
     {
       "id": "d57q04",
-      "type": "output",
-      "topic": "cold flow re-collection",
-      "difficulty": "Easy",
-      "question": "What does this print?",
-      "code": "import kotlinx.coroutines.*\nimport kotlinx.coroutines.flow.*\n\nfun main() = runBlocking {\n    val f = flow { println(\"start\"); emit(1); emit(2) }\n    println(\"built\")\n    println(f.map { it * 10 }.toList())\n    println(f.first())\n}",
+      "type": "mcq",
+      "topic": "structured concurrency",
+      "difficulty": "Medium",
+      "question": "Inside `coroutineScope { }` you start `val a = async { fetchA() }` and `val b = async { fetchB() }`. `fetchA()` throws an IOException before anyone calls `await()`. What happens?",
       "options": [
-        "built\nstart\n[10, 20]\nstart\n1",
-        "start\nbuilt\n[10, 20]\n1",
-        "built\nstart\n[10, 20]\n1",
-        "built\nstart\n[10, 20]\nstart\n10"
+        "`b` is cancelled, and `coroutineScope` throws the IOException to its caller once its children have finished",
+        "`b` keeps running, and the IOException is handed to the CoroutineExceptionHandler in the context",
+        "Nothing happens until `a.await()` is called, so `b` keeps running and its result can still be used",
+        "Only `a` fails; `coroutineScope` returns normally with `b`'s result because async isolates its failure"
       ],
       "answer": [
         0
       ],
-      "explanation": "Building the flow runs nothing, so `built` comes first. Each terminal operator runs the block again, so `start` prints twice. `first()` uses the original flow without the `map`, so it gives 1, not 10."
+      "explanation": "In a regular scope a failing child cancels its parent, which cancels the siblings, and `coroutineScope` rethrows the failure. `async` stores the exception for `await()`, but it still propagates the failure through the job hierarchy right away. To keep `b` alive you would use `supervisorScope`, and then handle the exception at `a.await()`."
     },
     {
       "id": "d57q05",
-      "type": "output",
-      "topic": "lazy + init order",
+      "type": "mcq",
+      "topic": "NonCancellable",
       "difficulty": "Medium",
-      "question": "What does this print?",
-      "code": "class Repo {\n    val name = \"repo\".also { println(\"name\") }\n    val db by lazy { println(\"db\"); \"db\" }\n    init { println(\"init\") }\n}\n\nfun main() {\n    val r = Repo()\n    println(\"created\")\n    println(r.db + r.db)\n}",
+      "question": "Why would you wrap cleanup in `withContext(NonCancellable) { ... }` inside a `finally` block of a coroutine?",
       "options": [
-        "name\ninit\ncreated\ndb\ndbdb",
-        "name\ndb\ninit\ncreated\ndbdb",
-        "name\ninit\ncreated\ndb\ndb\ndbdb",
-        "init\nname\ncreated\ndb\ndbdb"
+        "Without it the `finally` block is skipped completely when a coroutine is cancelled, so the cleanup never runs",
+        "It stops the parent scope from cancelling any other children while this coroutine is busy cleaning up",
+        "It moves the cleanup onto a background thread so a slow cleanup cannot block the main thread of the app",
+        "Once the coroutine is cancelled, any suspending call in `finally` throws CancellationException right away; NonCancellable lets the cleanup suspend and finish"
       ],
       "answer": [
-        0
+        3
       ],
-      "explanation": "Property initializers and `init` blocks run in source order, so `name` prints before `init`. A `lazy` delegate's initializer doesn't run during construction. It runs once on the first read, and the second read uses the cached value."
+      "explanation": "`finally` still runs on cancellation, but the coroutine's Job is already cancelled, so cancellable suspend functions (e.g. `delay`, a suspending DAO call) throw immediately. `NonCancellable` gives that block a Job that is never cancelled so cleanup such as 'mark upload as paused' completes. It does not change the dispatcher and should only wrap short cleanup work."
     },
     {
       "id": "d57q06",
-      "type": "mcq",
-      "topic": "nullable receiver + safe call",
-      "difficulty": "Medium",
-      "question": "What happens when you compile this?",
-      "code": "fun String?.isTiny(): Boolean = this == null || length < 3\n\nfun main() {\n    val s: String? = null\n    if (s?.isTiny()) println(\"tiny\")\n}",
-      "options": [
-        "Compile error: the condition is `Boolean?`, not `Boolean`",
-        "It prints `tiny`",
-        "It prints nothing, because `s?.` skips the call",
-        "Compile error: `length` needs a smart cast inside the extension"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "The extension already accepts a nullable receiver, but `?.` still makes the whole expression `Boolean?`, and `if` needs a `Boolean`. Calling `s.isTiny()` without `?.` would compile and print `tiny`. Inside the extension, `length` is fine because `this == null ||` smart-casts `this`.",
-      "compiles": false
-    },
-    {
-      "id": "d57q07",
       "type": "multi",
-      "topic": "scope functions & null",
+      "topic": "cancellation pitfalls",
       "difficulty": "Medium",
-      "question": "Which of these expressions evaluate to `null`? Select all that apply.",
+      "question": "Which statements about handling cancellation in coroutines are correct? Select all that apply.",
       "options": [
-        "`\"\".takeIf { it.isNotEmpty() }?.length`",
-        "`\"abc\".let { null }`",
-        "`\"abc\".also { null }`",
-        "`listOf<Int>().firstOrNull()?.plus(1)`",
-        "`\"5\".toIntOrNull()?.takeUnless { it > 3 }`"
+        "A child failing with CancellationException makes its parent fail and cancels every sibling as a result",
+        "A `catch (e: Exception)` that does not rethrow CancellationException lets code continue after the coroutine was cancelled",
+        "Coroutines running on Dispatchers.IO ignore cancellation, so `cancel()` has no effect on blocking calls there",
+        "`runCatching { suspendingCall() }` also catches CancellationException, which can keep a cancelled coroutine running",
+        "Rethrowing CancellationException (or calling `ensureActive()` after catching) keeps cooperative cancellation working"
       ],
       "answer": [
-        0,
         1,
         3,
         4
       ],
-      "explanation": "`let` returns its lambda result, so `let { null }` is null. `also` ignores the lambda result and returns the receiver, so it gives `\"abc\"`. `takeIf`/`takeUnless` return null when the check fails (`5 > 3` is true, so `takeUnless` drops it), and `firstOrNull()` on an empty list short-circuits the `?.plus`."
+      "explanation": "CancellationException is how cancellation is delivered, so swallowing it (often via broad catches or `runCatching`) breaks structured concurrency. A CancellationException is treated as normal cancellation, so it does not fail the parent. Dispatchers.IO coroutines are cancellable like any other, though a blocking Java call itself will not be interrupted unless you use something like `runInterruptible`."
     },
     {
-      "id": "d57q08",
-      "type": "output",
-      "topic": "async + supervisorScope",
-      "difficulty": "Medium",
-      "question": "What does this print?",
-      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking {\n    supervisorScope {\n        val a = async { delay(10); throw IllegalStateException(\"boom\") }\n        val b = async { delay(50); \"ok\" }\n        println(b.await())\n        try { a.await() } catch (e: IllegalStateException) { println(\"caught ${e.message}\") }\n    }\n    println(\"end\")\n}",
-      "options": [
-        "ok\ncaught boom\nend",
-        "caught boom\nend",
-        "ok\ncaught boom",
-        "caught boom\nok\nend"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "In `supervisorScope`, a failing child doesn't cancel its siblings, so `b` still finishes with `ok`. A failed `async` keeps its exception in the `Deferred` until `await()` rethrows it. It's caught there, so the scope completes normally and `end` prints."
-    },
-    {
-      "id": "d57q09",
-      "type": "mcq",
-      "topic": "lazy + sequence",
-      "difficulty": "Medium",
-      "question": "What number does the last line print?",
-      "code": "var calls = 0\nval evens by lazy {\n    println(\"build\")\n    (1..10).asSequence().map { calls++; it * 2 }\n}\n\nfun main() {\n    println(evens.first { it > 4 })\n    println(evens.first { it > 4 })\n    println(calls)\n}",
-      "options": [
-        "6",
-        "3",
-        "10",
-        "20"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`lazy` caches the `Sequence` object, not its results. Every terminal call runs the pipeline again. Each `first { it > 4 }` stops at the third element (2, 4, 6), so `map` runs 3 times per call, 6 in total. `build` prints only once."
-    },
-    {
-      "id": "d57q10",
+      "id": "d57q07",
       "type": "truefalse",
-      "topic": "inline + suspend",
+      "topic": "flowOn",
       "difficulty": "Medium",
-      "question": "This compiles, even though the lambda passed to `forEach` is a regular (non-suspend) function type.",
-      "code": "import kotlinx.coroutines.*\n\nsuspend fun pauseEach(ids: List<Int>) {\n    ids.forEach { delay(10L * it) }\n}\n\nfun main() = runBlocking { pauseEach(listOf(1, 2)) }",
+      "question": "`flowOn(Dispatchers.IO)` changes the context of the operators before it (upstream), while the collector and the operators after it keep running in the collecting coroutine's context.",
       "options": [
         "True",
         "False"
@@ -179,195 +122,59 @@
       "answer": [
         0
       ],
-      "explanation": "`forEach` is `inline`, so its lambda body is copied into `pauseEach`, which is a suspend function, and calling `delay` there is allowed. With a non-inline higher-order function, such as a stored callback, the same call would fail to compile.",
-      "compiles": true
+      "explanation": "`flowOn` only affects upstream, which keeps context preservation intact: the collector always runs where `collect` was called. That is why you put `flowOn` right after the expensive producer and collect from the main thread. Inside a plain `flow { }` builder, using `withContext` to emit from another dispatcher is an error, and `flowOn` is the supported way."
     },
     {
-      "id": "d57q11",
-      "type": "mcq",
-      "topic": "stateflow type inference",
-      "difficulty": "Medium",
-      "question": "Why doesn't this compile?",
-      "code": "import kotlinx.coroutines.*\nimport kotlinx.coroutines.flow.*\n\nsealed interface UiState {\n    data object Loading : UiState\n    data class Ok(val n: Int) : UiState\n}\n\nfun main() {\n    val state = MutableStateFlow(UiState.Loading)\n    state.value = UiState.Ok(1)\n    println(state.value)\n}",
-      "options": [
-        "`state` is inferred as `MutableStateFlow<UiState.Loading>`, so `Ok` can't be assigned",
-        "A `data object` can't be the initial value of a `MutableStateFlow`",
-        "`state.value` can only be set from inside a coroutine, because the setter suspends",
-        "`MutableStateFlow` needs a `data class` type for equality checks, not a sealed interface"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Type inference picks the most specific type of the argument, so `T` becomes `UiState.Loading`. Since `MutableStateFlow` is invariant, you need `MutableStateFlow<UiState>(UiState.Loading)`. Setting `value` isn't a suspend call, so it works outside coroutines.",
-      "compiles": false
-    },
-    {
-      "id": "d57q12",
+      "id": "d57q08",
       "type": "output",
-      "topic": "static dispatch + generics",
+      "topic": "supervisorScope & handler",
       "difficulty": "Hard",
       "question": "What does this print?",
-      "code": "open class Animal\nclass Dog : Animal()\n\nfun Animal.sound() = \"...\"\nfun Dog.sound() = \"woof\"\nfun <T : Animal> T.speak() = sound()\n\nfun main() {\n    println(Dog().speak())\n    println(listOf(Dog()).map { it.sound() })\n}",
+      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking {\n    val h = CoroutineExceptionHandler { _, e -> println(\"caught ${e.message}\") }\n    supervisorScope {\n        launch(h) { throw IllegalStateException(\"x\") }\n        launch { delay(10); println(\"sibling ok\") }\n    }\n    println(\"done\")\n}",
       "options": [
-        "...\n[woof]",
-        "woof\n[woof]",
-        "...\n[...]",
-        "woof\n[...]"
+        "caught x\nsibling ok",
+        "caught x\ndone",
+        "sibling ok\ncaught x\ndone",
+        "caught x\nsibling ok\ndone"
       ],
       "answer": [
-        0
-      ],
-      "explanation": "Extensions are chosen at compile time. Inside `speak`, the compiler only knows `T : Animal`, so `sound()` is `Animal.sound()` for every caller. Generics are not reified dispatch. In the `map`, `it` is statically a `Dog`, so `Dog.sound()` is chosen."
-    },
-    {
-      "id": "d57q13",
-      "type": "multi",
-      "topic": "inline + coroutine builder",
-      "difficulty": "Medium",
-      "question": "This doesn't compile. Which single changes make it compile? Select all that apply.",
-      "code": "inline fun CoroutineScope.safeLaunch(block: suspend () -> Unit) =\n    launch { block() }",
-      "options": [
-        "Mark the parameter `crossinline block`",
-        "Mark the parameter `noinline block`",
-        "Remove `inline` from the function",
-        "Change the type to `suspend CoroutineScope.() -> Unit`",
-        "Write `launch(block = block)` instead of `launch { block() }`"
-      ],
-      "answer": [
-        0,
-        1,
-        2
-      ],
-      "explanation": "`safeLaunch` isn't a suspend function, so it can't take an inlined `suspend` lambda, and `block` is also called inside `launch`'s lambda, which isn't inlined, so a non-local `return` from it would be impossible. `crossinline`, `noinline` or dropping `inline` fixes both. Changing the receiver fixes neither, and passing `block` as a value still requires `noinline`."
-    },
-    {
-      "id": "d57q14",
-      "type": "mcq",
-      "topic": "stateflow operator fusion",
-      "difficulty": "Medium",
-      "question": "What happens when you compile this?",
-      "code": "import kotlinx.coroutines.*\nimport kotlinx.coroutines.flow.*\n\nfun main() = runBlocking {\n    val s = MutableStateFlow(0)\n    val job = launch { s.distinctUntilChanged().collect { println(it) } }\n    delay(10)\n    job.cancel()\n}",
-      "options": [
-        "Compile error: `distinctUntilChanged` on a `StateFlow` is deprecated at ERROR level",
-        "It compiles and prints `0`",
-        "It compiles and prints nothing, because `distinctUntilChanged` drops the first value",
-        "It compiles but throws `IllegalStateException` when the flow is first collected"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "A `StateFlow` already skips values equal to the current one, so adding `distinctUntilChanged()` does nothing. kotlinx.coroutines marks that overload as deprecated at ERROR level to catch the mistake. Remove the call and the code prints `0`.",
-      "compiles": false
-    },
-    {
-      "id": "d57q15",
-      "type": "output",
-      "topic": "copy + stateflow dedupe",
-      "difficulty": "Hard",
-      "question": "What does this print?",
-      "code": "import kotlinx.coroutines.*\nimport kotlinx.coroutines.flow.*\n\ndata class Cart(val items: MutableList<String>)\n\nfun main() = runBlocking {\n    val state = MutableStateFlow(Cart(mutableListOf(\"a\")))\n    val job = launch { state.collect { println(it.items) } }\n    yield()\n    val next = state.value.copy()\n    next.items.add(\"b\")\n    state.value = next\n    yield()\n    job.cancel()\n}",
-      "options": [
-        "[a]",
-        "[a]\n[a, b]",
-        "[a, b]",
-        "[a]\n[a]"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`copy()` is shallow, so `next` shares the same `MutableList` as the current value. Adding `\"b\"` changes both. Now `next == state.value`, so the `StateFlow` treats the assignment as no change and emits nothing. Use immutable lists and `copy(items = items + \"b\")`."
-    },
-    {
-      "id": "d57q16",
-      "type": "mcq",
-      "topic": "non-local return in launch",
-      "difficulty": "Hard",
-      "question": "What happens when you compile this?",
-      "code": "import kotlinx.coroutines.*\n\nfun CoroutineScope.load(ids: List<Int>) {\n    launch {\n        ids.forEach { if (it < 0) return }\n        println(\"loaded\")\n    }\n}\n\nfun main() = runBlocking { load(listOf(1, -1)) }",
-      "options": [
-        "Compile error: `return` is not allowed here",
-        "It prints nothing, because `return` exits the launched coroutine",
-        "It prints `loaded`, because `return` only skips the current `forEach` item",
-        "It returns from `load` before the coroutine starts"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "A bare `return` targets the nearest enclosing `fun`, here `load`. `forEach` is inline, but `launch`'s lambda isn't, and you can't return from `load` inside a coroutine that runs later. Write `return@launch` to end the coroutine or `return@forEach` to skip an item.",
-      "compiles": false
-    },
-    {
-      "id": "d57q17",
-      "type": "output",
-      "topic": "withTimeoutOrNull + finally",
-      "difficulty": "Hard",
-      "question": "What does this print?",
-      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking {\n    val r = withTimeoutOrNull(100) {\n        try {\n            delay(500)\n            \"done\"\n        } finally {\n            println(\"cleanup\")\n            delay(10)\n            println(\"closed\")\n        }\n    }\n    println(r ?: \"timeout\")\n}",
-      "options": [
-        "cleanup\ntimeout",
-        "cleanup\nclosed\ntimeout",
-        "timeout",
-        "cleanup\nclosed\ndone"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "When the timeout hits, `delay(500)` throws a cancellation exception, so `finally` runs, but the coroutine is already cancelled. The `delay(10)` in `finally` throws right away, so `closed` never prints. Wrap the cleanup in `withContext(NonCancellable)`. `withTimeoutOrNull` then returns null."
-    },
-    {
-      "id": "d57q18",
-      "type": "multi",
-      "topic": "failure propagation",
-      "difficulty": "Hard",
-      "question": "In each setup, child `a` throws and child `b` is still in a long `delay`. In which setups is `b` cancelled? Select all that apply.",
-      "options": [
-        "`coroutineScope { launch { a() }; launch { b() } }`",
-        "`supervisorScope { launch { a() }; launch { b() } }`",
-        "`supervisorScope { async { a() }; async { b() } }`",
-        "With `scope = CoroutineScope(SupervisorJob())`: `scope.launch { launch { a() }; launch { b() } }`",
-        "With `scope = CoroutineScope(SupervisorJob())`: `scope.launch { a() }; scope.launch { b() }`"
-      ],
-      "answer": [
-        0,
         3
       ],
-      "explanation": "A regular Job cancels all its children when one child fails. A supervisor only protects its direct children. In the nested `scope.launch { ... }` case, `a` and `b` are children of that outer `launch`, which has an ordinary Job, so `b` is cancelled. In the other supervisor setups, `a` and `b` are direct children, so `b` keeps running."
+      "explanation": "In `supervisorScope` a child failure does not cancel the scope or its siblings, and the failing child's own CoroutineExceptionHandler handles the exception, so 'caught x' prints first when the first child runs. The second child is unaffected and prints after its delay. `supervisorScope` waits for all children, then 'done' prints."
     },
     {
-      "id": "d57q19",
-      "type": "output",
-      "topic": "catch + onCompletion",
-      "difficulty": "Hard",
-      "question": "What does this print?",
-      "code": "import kotlinx.coroutines.*\nimport kotlinx.coroutines.flow.*\n\nfun main() = runBlocking {\n    flowOf(1, 2, 3)\n        .map { if (it == 2) error(\"boom\") else it }\n        .onCompletion { println(\"completed: ${it?.message}\") }\n        .catch { emit(-1) }\n        .collect { println(it) }\n}",
-      "options": [
-        "1\ncompleted: boom\n-1",
-        "1\n-1\ncompleted: null",
-        "1\n-1\n3\ncompleted: boom",
-        "1\ncompleted: null\n-1"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`map` throws on 2, which stops the flow, so 3 is never emitted. `onCompletion` sits above `catch`, so it sees the exception as its cause and prints `boom`. It doesn't handle the exception, which keeps going down to `catch`, and `catch` emits `-1`."
-    },
-    {
-      "id": "d57q20",
+      "id": "d57q09",
       "type": "mcq",
-      "topic": "lazy async + scope",
+      "topic": "stateIn WhileSubscribed",
       "difficulty": "Hard",
-      "question": "`loadProfile(cached)` is called with a non-null `cached`. What happens?",
-      "code": "suspend fun loadProfile(cached: Profile?): Profile = coroutineScope {\n    val fresh = async(start = CoroutineStart.LAZY) { api.fetchProfile() }\n    if (cached != null) return@coroutineScope cached\n    fresh.await()\n}",
+      "question": "Why is `stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), initial)` a common choice for UI state backed by a database or location flow?",
       "options": [
-        "It suspends forever: `coroutineScope` waits for the never-started `fresh` child",
-        "It returns `cached` right away, and `fresh` is cancelled automatically when the scope ends",
-        "It returns `cached`, and `fetchProfile()` keeps running in the background",
-        "It throws `IllegalStateException` because a lazy `Deferred` was never awaited"
+        "It caches the last value for five seconds and then resets the StateFlow back to the initial value each time",
+        "It keeps the upstream alive through a short gap such as a rotation, but stops it a few seconds after the UI really goes away",
+        "It restarts the upstream every five seconds so the UI always shows data fresher than five seconds old",
+        "It delays the first collection by five seconds so the screen's first frame is drawn before any data loading begins"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "During a configuration change the collector disappears for a moment and comes back; a short timeout avoids restarting an expensive upstream. When the app goes to the background, collection stops and after the timeout the upstream is cancelled, saving battery. The replay value is kept by default (the expiration parameter controls resetting), and nothing is delayed or polled."
+    },
+    {
+      "id": "d57q10",
+      "type": "mcq",
+      "topic": "Mutex",
+      "difficulty": "Hard",
+      "question": "A repository guards a token refresh with `mutex.withLock { ... }`. Inside the block it calls a helper that also does `mutex.withLock { }` on the same Mutex. What happens?",
+      "options": [
+        "The coroutine suspends forever: kotlinx.coroutines Mutex is not reentrant, so it waits on a lock it already holds",
+        "It throws IllegalStateException at once, because Mutex detects a nested lock by the same owner by default",
+        "It works, because Mutex is reentrant for the same coroutine just like a Java ReentrantLock is for a thread",
+        "It blocks the underlying thread until the outer block finishes, which then lets the inner block continue"
       ],
       "answer": [
         0
       ],
-      "explanation": "A `LAZY` async is still a child of the scope. `coroutineScope` can only complete when all its children have finished, and nothing ever starts `fresh`. The call hangs, for example leaving a ViewModel's loading spinner up. Call `fresh.cancel()` before returning, or only create the `async` when it's needed."
+      "explanation": "`Mutex` is non-reentrant; a nested `withLock` on the same instance suspends waiting for itself, which is a deadlock with no error. (Passing an `owner` to `lock` can turn a double lock by the same owner into an exception, but `withLock` without an owner does not.) Mutex suspends rather than blocking threads, so the fix is to restructure so the lock is taken once."
     }
   ]
 }

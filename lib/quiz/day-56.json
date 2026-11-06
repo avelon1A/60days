@@ -1,355 +1,178 @@
 {
   "day": 56,
-  "topic": "Design case studies: location tracking, media upload & search",
+  "topic": "Design cases: chat, feed & ride tracking apps",
   "questions": [
     {
       "id": "d56q01",
       "type": "mcq",
-      "topic": "foreground service",
+      "topic": "chat ordering",
       "difficulty": "Easy",
-      "question": "Ride-hailing driver app: during an active trip the driver switches to a navigation app, and the rider must still see the car move. How should the driver app keep sending location?",
+      "question": "Two people in a chat send messages at almost the same moment. How should every client order the conversation?",
       "options": [
-        "A foreground service of type `location` with an ongoing trip notification",
-        "A periodic WorkManager job that reads the location every 15 minutes",
-        "A coroutine launched in the trip screen's `viewModelScope`",
-        "An exact alarm that wakes the app every 5 seconds"
+        "By the order each client received the messages, since that is how the conversation happened from its view",
+        "By a sequence number the server assigns per conversation, with the user's own unacked messages shown as pending at the end",
+        "By message ID sorted as text, since UUIDs generated on the devices increase over time",
+        "By the sender's device timestamp, since that records when each person actually pressed the send button"
       ],
       "answer": [
-        0
+        1
       ],
-      "explanation": "Continuous, user-visible tracking is exactly what a location-type foreground service is for, and the notification tells the driver tracking is on. The cost is a permanent notification and more battery use, which is acceptable during a trip. Periodic WorkManager has a 15-minute minimum, a ViewModel scope dies with the screen, and frequent exact alarms are restricted and drain the battery."
+      "explanation": "A server-assigned sequence gives every participant the same order, which device clocks (skew) and arrival order (network jitter) cannot. Pending local messages sit at the end until the ack gives them their real position. Random UUIDs (v4) are not ordered at all."
     },
     {
       "id": "d56q02",
-      "type": "multi",
-      "topic": "location battery",
-      "difficulty": "Medium",
-      "question": "Delivery driver app: couriers complain that live tracking drains the battery during an 8-hour shift. Which changes cut battery use while keeping tracking useful? Select all that apply.",
-      "options": [
-        "Use `setMaxUpdateDelayMillis` so fixes are batched and delivered together, letting the radio and CPU sleep in between",
-        "Lower the priority and interval (e.g. balanced power, 30s) while the courier is idle between orders, and switch to high accuracy only during an active delivery",
-        "Skip the upload when the courier hasn't moved more than a small distance since the last sent point",
-        "Request `PRIORITY_HIGH_ACCURACY` at 1-second intervals for the whole shift so the fix is always fresh",
-        "Open a new HTTPS connection for every single fix so no connection stays open"
-      ],
-      "answer": [
-        0,
-        1,
-        2
-      ],
-      "explanation": "The trade-off is freshness and accuracy against battery: batching, state-based priority and distance thresholds give up a little latency where nobody needs it. Constant 1-second high-accuracy GPS is the main drain, and a new TLS connection per fix wakes the radio far more often than one batched upload."
-    },
-    {
-      "id": "d56q03",
       "type": "truefalse",
-      "topic": "background location",
+      "topic": "marker animation",
       "difficulty": "Easy",
-      "question": "Driver app: tracking runs only in a location foreground service that the driver starts from the visible app with a Start trip button. On Android 10+ the app must also hold `ACCESS_BACKGROUND_LOCATION` for this to work.",
+      "question": "In a ride-tracking map, the rider's app should animate or interpolate the driver's marker between location updates instead of jumping it each time an update arrives a few seconds apart.",
       "options": [
         "True",
         "False"
       ],
       "answer": [
-        1
+        0
       ],
-      "explanation": "A location-type foreground service started while the app is visible counts as while-in-use access, so foreground location permission (plus the foreground service permissions) is enough. Background location is a separate permission that Play reviews closely, and you only need it when location is read with no visible UI or foreground service, so avoiding it keeps both the permission flow and the policy review simple."
+      "explanation": "Updates arrive every few seconds and with jitter, so drawing each raw point makes the car teleport. Interpolating along the path (often after the server snaps points to the road) with the bearing for rotation makes it look continuous. If an update is late, the client can keep extrapolating briefly, then correct smoothly."
+    },
+    {
+      "id": "d56q03",
+      "type": "mcq",
+      "topic": "feed ranking",
+      "difficulty": "Easy",
+      "question": "In a design for a personalised home feed, where should ranking happen and why?",
+      "options": [
+        "Entirely on the client, so the server only returns raw posts and the device sorts them by its own signals",
+        "On the client for Android and on the server for iOS, since iOS background limits stop local computation",
+        "Mostly on the server, so ranking can change and be A/B tested without an app release; the client caches and renders the result",
+        "In the push service, which ranks posts before delivering them so the app never needs to request the feed"
+      ],
+      "answer": [
+        2
+      ],
+      "explanation": "Ranking depends on large models and global signals, and needs to change often, which a server can do instantly for every app version. The client still does light work such as removing already-seen items or reordering for local actions. Putting ranking only in the app ties every change to store releases and old versions."
     },
     {
       "id": "d56q04",
       "type": "mcq",
-      "topic": "offline buffer",
-      "difficulty": "Easy",
-      "question": "Ride-hailing driver app: the car drives through a 2-minute tunnel with no signal. What should happen to the location fixes collected meanwhile?",
+      "topic": "location batching",
+      "difficulty": "Medium",
+      "question": "How should a driver app collect and send location during an active trip to balance accuracy and battery?",
       "options": [
-        "Discard them, since only the newest position matters",
-        "Stop requesting location until the network comes back",
-        "Buffer timestamped fixes locally and upload them as a batch on reconnect",
-        "Keep each failed request retrying in memory until it succeeds, so no point is lost"
+        "Have the server send a push every few seconds asking the driver app to report its current location",
+        "Read raw GPS every second all the time and send each fix in its own HTTPS POST so the server has every point",
+        "Use the fused provider / CLLocationManager with intervals tied to trip state, batch a few fixes, and send them over the open connection",
+        "Use only significant-location-change updates during the trip, since they are the most battery-efficient option"
       ],
       "answer": [
         2
       ],
-      "explanation": "The live marker only needs the latest point, but the server also needs the full trail for trip distance, fare and disputes. A bounded, persisted buffer of timestamped points serves both. In-memory retries are lost if the process dies and pile up into many parallel requests, and dropping points breaks fare calculation."
+      "explanation": "Active trips need fixes every few seconds, but idle drivers do not, so intervals and accuracy should follow the trip state; batching and reusing one connection cuts radio wake-ups, which dominate battery cost. One POST per second keeps the radio on permanently. Significant-change updates are far too coarse for a live trip, and push-driven polling is unreliable and wasteful."
     },
     {
       "id": "d56q05",
-      "type": "mcq",
-      "topic": "marker smoothing",
-      "difficulty": "Medium",
-      "question": "Ride-hailing rider app: the driver's position arrives every ~4 seconds and the car icon jumps across the map. What is the best fix?",
-      "options": [
-        "Ask the driver app to send a fix every 200ms so the marker moves smoothly",
-        "Animate the marker from its last position and bearing to the new one",
-        "Redraw the whole map each time an update arrives",
-        "Show the driver's position only when the rider taps a refresh button"
-      ],
-      "answer": [
-        1
-      ],
-      "explanation": "Interpolating on the client makes the movement look smooth at no network or battery cost, in exchange for showing the car slightly behind real time. Sending updates 20x more often would drain the driver's battery and data just to hide a rendering problem."
-    },
-    {
-      "id": "d56q06",
       "type": "multi",
-      "topic": "rider updates",
-      "difficulty": "Hard",
-      "question": "Ride-hailing rider app: how should it receive the driver's live position and trip events? Select all sound choices.",
+      "topic": "chat storage & sync",
+      "difficulty": "Medium",
+      "question": "Which choices fit the local data layer of a mobile chat app? Select all that apply.",
       "options": [
-        "Keep a WebSocket (or similar stream) open while the trip screen is visible, and close it when the app goes to the background",
-        "While backgrounded, rely on push notifications for milestones such as \"Driver has arrived\" instead of the live stream",
-        "If the socket can't connect (e.g. a proxy blocks it), fall back to polling the trip endpoint every few seconds while the screen is visible",
-        "Keep the WebSocket open in a background service for the whole trip so the hidden map is always current",
-        "Send the driver's position as an FCM data message every second"
+        "Per-conversation sync from the last known sequence number on reconnect or app open",
+        "Downloading the full history of every conversation on each launch so search always has all the data",
+        "A local table indexed by (conversationId, sequence) so history pages quickly from disk",
+        "Storing images and videos as BLOB columns in the message table so a message and its media load together",
+        "An outbox of unsent messages retried with the same client-generated ID until acked"
       ],
       "answer": [
         0,
-        1,
-        2
+        2,
+        4
       ],
-      "explanation": "Stream while the user is watching, push for the few events that matter when they're not, and poll only as a fallback. That spends battery and sockets only when they buy something visible. A background socket updating an unseen map wastes battery, and FCM is not a real-time transport: high-frequency messages get throttled, deprioritised or collapsed."
+      "explanation": "Indexed local history, gap-based sync and an idempotent outbox are the core of an offline-capable chat client on both platforms. Large media belongs in files (with a path or URL in the row); big BLOBs bloat the database and slow every query and cursor window. Full re-downloads do not scale with long histories."
+    },
+    {
+      "id": "d56q06",
+      "type": "mcq",
+      "topic": "typing & presence",
+      "difficulty": "Medium",
+      "question": "How should typing indicators be delivered in a chat app?",
+      "options": [
+        "By polling a REST endpoint every second while the conversation is open, to keep the logic simple",
+        "Sent as FCM / APNs notifications so that users who have the app closed can see who is typing",
+        "Stored in the local database and synced through the outbox so that no typing event is ever lost",
+        "As short-lived, best-effort events over the live connection with a short expiry, not stored and not sent as push"
+      ],
+      "answer": [
+        3
+      ],
+      "explanation": "Typing state is only useful for a few seconds, so losing one is harmless and storing or retrying it is waste. An expiry (e.g. hide after a few seconds without a refresh) handles dropped 'stopped typing' events. Pushing it would spam devices, and per-second polling burns battery and server capacity."
     },
     {
       "id": "d56q07",
       "type": "truefalse",
-      "topic": "server eta",
+      "topic": "feed fan-out",
       "difficulty": "Medium",
-      "question": "Ride-hailing case study: the ETA shown to the rider should be computed on the server from the driver's reported positions, not computed in the rider's app.",
+      "question": "Fan-out on write (precomputing each follower's feed when someone posts) is the best default for every account, because it keeps both posting and reading cheap whatever the follower count.",
       "options": [
         "True",
         "False"
       ],
       "answer": [
-        0
+        1
       ],
-      "explanation": "The server has live traffic, the routing engine and both parties' data, and it can give the rider, the driver and support the same number. Computing on the client would mean shipping routing data to phones, and each client would show a different ETA. The cost is that ETA updates depend on connectivity, which is acceptable."
+      "explanation": "Fan-out on write makes reads cheap but posting expensive: a celebrity post must be written into millions of feeds. Large systems use a hybrid, fanning out for normal accounts and merging posts from very popular accounts at read time. As a mobile engineer you mainly need to know that this is why feed freshness can differ per author."
     },
     {
       "id": "d56q08",
       "type": "mcq",
-      "topic": "client compression",
-      "difficulty": "Easy",
-      "question": "Instagram-style post: the user picks an 8 MB, 12-megapixel photo, but the feed never displays images wider than 1080px. What should the app do before uploading?",
+      "topic": "lock-screen trip status",
+      "difficulty": "Hard",
+      "question": "A rider books a trip and then locks the phone. Product wants live ETA on the lock screen. Which approach is realistic?",
       "options": [
-        "Upload the original, since the server can resize it later and keep a full-quality copy",
-        "Convert it to PNG so no quality is lost",
-        "Base64-encode it and send it inside the JSON post body",
-        "Downscale it to about 1080px wide and re-encode it as JPEG/WebP at ~80%"
+        "Schedule BGAppRefreshTask / periodic WorkManager to poll the trip API every five seconds while it is locked",
+        "Ask the rider for background location and work out the ETA on the rider's own phone every few seconds",
+        "Keep the WebSocket open in the background on both platforms and redraw a notification from every socket message",
+        "iOS: a Live Activity updated with ActivityKit push updates. Android: an ongoing notification refreshed by server pushes"
       ],
       "answer": [
         3
       ],
-      "explanation": "Spending a little device CPU on resizing cuts the upload to a few hundred KB, which makes it faster, cheaper on cellular data and less likely to fail. The trade-off is losing pixels the product never shows. PNG makes photos much larger, and Base64 adds ~33% overhead and forces the whole image into memory."
+      "explanation": "Live Activities are designed for this and can be updated through APNs without the app running; on Android an ongoing notification updated from FCM messages works. Background sockets get suspended on iOS and are costly on Android. The rider's location is irrelevant to the driver's ETA, and neither scheduler runs anywhere near every five seconds."
     },
     {
       "id": "d56q09",
       "type": "mcq",
-      "topic": "pre-signed url",
-      "difficulty": "Medium",
-      "question": "Media upload case study: the app first asks the API for a pre-signed URL, then PUTs the file straight to object storage. What is the main reason for this design?",
-      "options": [
-        "It lets the app embed the storage account's secret key safely, since the URL hides it",
-        "Big uploads bypass the API servers, using a short-lived credential for one object",
-        "It removes the need for the user to be authenticated",
-        "It means the server never has to validate the uploaded file, since storage checks it"
-      ],
-      "answer": [
-        1
-      ],
-      "explanation": "The API stays in control (it authenticates the user and decides the object key, size and expiry) without carrying the heavy traffic. The cost is an extra round trip to get the URL. Secret keys must never ship in an app, and the server should still validate the object (type, size, scanning) before publishing it."
-    },
-    {
-      "id": "d56q10",
-      "type": "multi",
-      "topic": "resumable upload",
-      "difficulty": "Medium",
-      "question": "Media upload case study: users post 300 MB videos over flaky mobile networks. Which belong in a robust design? Select all that apply.",
-      "options": [
-        "A chunked, resumable protocol where the client asks the server for the last committed offset and continues from there",
-        "Running the upload as WorkManager work with a network constraint, shown as a foreground notification, so it survives app exit and process death",
-        "Transcoding on the server into adaptive-bitrate renditions (e.g. HLS) after the upload completes",
-        "One big multipart POST that restarts from byte 0 on any failure",
-        "Transcoding into every rendition on the device before uploading"
-      ],
-      "answer": [
-        0,
-        1,
-        2
-      ],
-      "explanation": "Resumable chunks mean a dropped connection costs at most one chunk, and WorkManager keeps the job alive after the user leaves the app. Server-side transcoding moves the heavy CPU work off the battery. Restarting a 300 MB upload from zero may never finish on a bad network, and encoding many renditions on the phone multiplies both battery use and upload size."
-    },
-    {
-      "id": "d56q11",
-      "type": "mcq",
-      "topic": "idempotent create",
+      "topic": "read receipts at scale",
       "difficulty": "Hard",
-      "question": "Instagram-style post: the media is uploaded, then the app calls `createPost`. The request reaches the server but the response times out, the worker retries, and the user ends up with two identical posts. What is the right fix?",
-      "code": "POST /posts\n{ \"mediaIds\": [\"m_81\"], \"caption\": \"Sunset\" }",
+      "question": "A group chat has 5,000 members. Per-message, per-user read receipts are overwhelming the backend and clients. What is the better design?",
       "options": [
-        "Never retry `createPost`, and show an error instead",
-        "Before retrying, fetch the user's feed and check whether the post already appears there",
-        "Generate a post UUID once on Share and send it as an idempotency key with every attempt",
-        "Have the server reject posts with the same caption within 10 seconds"
-      ],
-      "answer": [
-        2
-      ],
-      "explanation": "With an idempotency key, retries are safe because the server stores one key per post and replays the result. The cost is a little server state. Not retrying loses posts on flaky networks, checking the feed races with feed indexing, and deduping on the caption blocks legitimate identical posts. The key is generated once, when the user taps Share, and the server returns the existing post for a repeated key."
-    },
-    {
-      "id": "d56q12",
-      "type": "truefalse",
-      "topic": "optimistic post",
-      "difficulty": "Easy",
-      "question": "Instagram-style post: right after the user taps Share, it is reasonable to show the post on their profile using the local image, marked as posting, and to switch it to a failed state with Retry if the upload ultimately fails.",
-      "options": [
-        "True",
-        "False"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Optimistic UI makes posting feel instant, and the visible pending and failed states keep it honest. The trade-off is extra state to reconcile: the local item is replaced by the server post (matched by client ID) when it succeeds. Hiding the post until a big upload finishes feels broken."
-    },
-    {
-      "id": "d56q13",
-      "type": "mcq",
-      "topic": "upload cancellation",
-      "difficulty": "Medium",
-      "question": "Media upload case study: the progress bar shows chunk 7 of 20 and the user taps Cancel. What should the app do?",
-      "options": [
-        "Hide the progress bar but let the upload finish quietly in case the user changes their mind",
-        "Cancel the upload work, abort the multipart upload on the server, and drop the pending post",
-        "Pause the upload and resume it automatically the next time the app opens, so no bytes are wasted",
-        "Delete the source photo from the user's gallery"
-      ],
-      "answer": [
-        1
-      ],
-      "explanation": "Cancel must really stop the work: it saves the user's data, frees the worker, and aborting the multipart upload stops orphaned parts from costing storage (with a lifecycle rule as a backstop if the abort call is lost). Uploading anyway ignores the user's intent, and auto-resuming something they cancelled is a surprise. Cancelling the unique work also cancels the in-flight chunk request."
-    },
-    {
-      "id": "d56q14",
-      "type": "multi",
-      "topic": "upload vs post",
-      "difficulty": "Hard",
-      "question": "Instagram-style post: the API separates media upload (which returns a `mediaId`) from `createPost(mediaIds, caption)`. Which statements about this split are correct? Select all that apply.",
-      "options": [
-        "The app can start uploading as soon as the photo is picked, while the user is still writing the caption",
-        "Media upload can be retried and resumed on its own, while `createPost` stays a small request that is easy to make idempotent",
-        "The server can check that each `mediaId` belongs to the user and has finished processing before it publishes the post",
-        "It guarantees there are never orphaned uploads in storage",
-        "Upload requests no longer need authentication, because `createPost` is authenticated"
-      ],
-      "answer": [
-        0,
-        1,
-        2
-      ],
-      "explanation": "Splitting the two hides upload time behind caption writing and keeps the publish step small and safe to retry. The trade-off is the opposite of the tempting option: media that is uploaded but never posted becomes orphaned, so you need a TTL or cleanup job. Each upload must still be authorised, otherwise anyone could fill your storage."
-    },
-    {
-      "id": "d56q15",
-      "type": "mcq",
-      "topic": "debounce",
-      "difficulty": "Easy",
-      "question": "Search autocomplete case study: the app sends a request on every keystroke, so typing \"kotlin\" sends 6 requests. What is the standard first fix?",
-      "options": [
-        "Debounce the input (~300ms) so requests go out only when typing pauses",
-        "Search only when the user presses the keyboard's search key, like a normal search form",
-        "Send every keystroke over a WebSocket instead of HTTP",
-        "Show suggestions only after a 2-second spinner"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Debouncing trades a few hundred milliseconds of latency for far fewer requests, and the suggestions still feel live. Searching only on submit removes autocomplete altogether, and changing the transport doesn't reduce how many queries the backend has to run."
-    },
-    {
-      "id": "d56q16",
-      "type": "mcq",
-      "topic": "stale requests",
-      "difficulty": "Medium",
-      "question": "Search autocomplete case study: the user types \"ko\", pauses, then types \"kotlin\". The slow \"ko\" response arrives last and overwrites the \"kotlin\" results. Which operator should replace `???` to prevent this?",
-      "code": "queryFlow\n    .debounce(300)\n    .distinctUntilChanged()\n    .??? { q -> flow { emit(api.search(q)) } }\n    .collect { results -> render(results) }",
-      "options": [
-        "flatMapConcat",
-        "flatMapMerge",
-        "flatMapLatest",
-        "map"
-      ],
-      "answer": [
-        2
-      ],
-      "explanation": "`flatMapLatest` cancels the inner flow for the previous query as soon as a new query arrives, so an old response can never be shown over a newer one. The cancelled request may be wasted, which is the trade-off. `flatMapMerge` runs the requests in parallel and emits whichever finishes, the exact out-of-order bug, and `flatMapConcat` queues them, adding latency."
-    },
-    {
-      "id": "d56q17",
-      "type": "truefalse",
-      "topic": "suggestion a11y",
-      "difficulty": "Medium",
-      "question": "Search autocomplete case study: since suggestions appear visually under the field, TalkBack users need no extra handling, and they can find the list on their own.",
-      "options": [
-        "True",
-        "False"
-      ],
-      "answer": [
-        1
-      ],
-      "explanation": "A list that appears without moving focus is silent to a screen reader user. Announce a change (e.g. a polite live region saying \"5 suggestions\") and make each row a focusable item with a clear label. Use a polite announcement rather than moving focus, because stealing focus while the user is typing is worse."
-    },
-    {
-      "id": "d56q18",
-      "type": "mcq",
-      "topic": "recent searches",
-      "difficulty": "Easy",
-      "question": "Search autocomplete case study: when the search field is focused and still empty, the app shows the user's recent searches. Where should those come from?",
-      "options": [
-        "A server request made every time the field gains focus, so history syncs across devices",
-        "A small, capped, clearable list stored on the device (e.g. DataStore or Room)",
-        "An in-memory list that is lost when the process dies",
-        "The keyboard's autocorrect dictionary"
-      ],
-      "answer": [
-        1
-      ],
-      "explanation": "A local, capped list shows up instantly, works offline and keeps private history on the device, and the clear option respects privacy. A network call adds latency and fails offline just to show the user's own history, and an in-memory list disappears after process death."
-    },
-    {
-      "id": "d56q19",
-      "type": "multi",
-      "topic": "search load",
-      "difficulty": "Hard",
-      "question": "Search autocomplete case study: the backend team says suggestion traffic is too high. Which client changes are sound? Select all that apply.",
-      "options": [
-        "Send a query only once it reaches a minimum length (e.g. 2 characters), since one-letter queries are expensive and rarely useful",
-        "Keep a small in-memory LRU cache of recent query results keyed by the normalised query, so backspacing and retyping hits the cache",
-        "On HTTP 429, pause remote suggestions until `Retry-After` has passed and keep showing local suggestions",
-        "Remove the debounce, because `flatMapLatest` already cancels stale requests",
-        "Cache every query result forever in an unbounded `HashMap`"
-      ],
-      "answer": [
-        0,
-        1,
-        2
-      ],
-      "explanation": "Minimum length, a bounded LRU cache and respecting rate limits each cut server calls with little UX cost. A cached result might be slightly stale, which is fine for suggestions. `flatMapLatest` cancels requests on the client only after they've been sent, so without debounce the server still gets every keystroke, and an unbounded cache is a memory leak."
-    },
-    {
-      "id": "d56q20",
-      "type": "mcq",
-      "topic": "local then remote",
-      "difficulty": "Medium",
-      "question": "Messaging app search case study: contacts are in a local Room database, and a global user directory is on the server. What should the results list do as the user types, including when the device is offline?",
-      "options": [
-        "Show a spinner until the server responds, then show local and remote results together in one sorted list",
-        "Search only the server, since it has a superset of the data",
-        "Search only the local database, so results never change while the user is looking at them",
-        "Show local matches at once, merge in deduplicated remote results, and keep local ones when offline"
+        "Keep per-message receipts and push every receipt to all 5,000 members, but batch them every ten seconds",
+        "Drop the server entirely for receipts and have members' devices send them peer-to-peer to each other",
+        "Keep per-message receipts but send them over FCM / APNs instead of the socket so the server does less work",
+        "Track one 'last read sequence' per user per conversation, and derive counts or 'seen by' lazily when someone asks"
       ],
       "answer": [
         3
       ],
-      "explanation": "Local-first gives instant results and works offline, and the remote results add coverage when the network is available. The trade-off is a list that grows after a moment, which is handled by deduplicating on a stable ID and appending rather than reshuffling. Waiting on the server makes every search as slow as the network and leaves offline users with nothing. When offline, keep the local results and show a short note that the directory is unavailable."
+      "explanation": "Reading is monotonic, so a single watermark per user implies every earlier message is read: storage is O(members) instead of O(messages × members). 'Seen by' lists can be computed on demand for a single message. Changing the transport or batching keeps the same huge fan-out."
+    },
+    {
+      "id": "d56q10",
+      "type": "multi",
+      "topic": "GPS quality",
+      "difficulty": "Hard",
+      "question": "Driver location in your ride app is noisy (jumps, tunnels, late uploads). Which measures improve the tracked route and its use? Select all that apply.",
+      "options": [
+        "Snap points to the road network (map matching) on the server before drawing or using them",
+        "Draw straight lines between every raw point as it arrives, since that is the most accurate record of the trip",
+        "Compute the final fare on the driver's phone from its local GPS trace, then upload only the total",
+        "Send a timestamp and sequence number with each point so late or out-of-order batches are handled correctly",
+        "Drop or down-weight fixes with poor reported horizontal accuracy before sending or using them"
+      ],
+      "answer": [
+        0,
+        3,
+        4
+      ],
+      "explanation": "Map matching, accuracy filtering and ordering metadata are standard ways to turn noisy fixes into a usable route. Raw points include jumps across buildings and rivers. Fare must be computed on the server from validated data; a client-side total is easy to tamper with and cannot be audited."
     }
   ]
 }

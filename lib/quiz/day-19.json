@@ -1,66 +1,31 @@
 {
   "day": 19,
-  "topic": "Delegation: by, lazy, observable & custom delegates",
+  "topic": "Room: entities, DAOs, relations, migrations & Flow",
   "questions": [
     {
       "id": "d19q01",
-      "type": "output",
-      "topic": "lazy",
-      "difficulty": "Easy",
-      "question": "What does this print?",
-      "code": "val greeting by lazy {\n    println(\"computing\")\n    \"Hello\"\n}\n\nfun main() {\n    println(\"start\")\n    println(greeting)\n    println(greeting)\n}",
+      "type": "mcq",
+      "topic": "Flow invalidation",
+      "difficulty": "Medium",
+      "question": "When does this Flow emit again?",
+      "code": "@Query(\"SELECT * FROM user WHERE active = 1\")\nfun observeActiveUsers(): Flow<List<User>>",
       "options": [
-        "start\ncomputing\nHello\nHello",
-        "computing\nstart\nHello\nHello",
-        "start\ncomputing\nHello\ncomputing\nHello",
-        "start\nHello\nHello"
+        "After any write to the user table, even if these rows didn't change",
+        "Only when the rows returned by this exact query differ from the last ones",
+        "Never: it emits once, and the query must be called again to get new rows",
+        "Each time the app returns to the foreground and the database is reopened"
       ],
       "answer": [
         0
       ],
-      "explanation": "The `lazy` initializer runs only on the first read of `greeting`, which happens after `start` is printed. The result is cached, so the second read returns `Hello` without running the lambda again."
+      "explanation": "Room tracks invalidation per table, not per row or query result, so any insert, update or delete in `user` re-runs the query and emits. That can produce duplicate lists, which is why `distinctUntilChanged()` is often added. It is a live stream for as long as it is collected, not a one-shot."
     },
     {
       "id": "d19q02",
-      "type": "mcq",
-      "topic": "by viewModels",
-      "difficulty": "Easy",
-      "question": "In a Fragment you declare `private val vm: MainViewModel by viewModels()`. When is the ViewModel actually obtained from the `ViewModelProvider`?",
-      "options": [
-        "On the first access of `vm`",
-        "When the Fragment's constructor runs",
-        "Automatically at the start of `onCreate`",
-        "When the Fragment is attached in `onAttach`"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`viewModels()` returns a `Lazy<VM>`, so nothing happens until `vm` is first read. That is also why touching `vm` before the Fragment is attached (e.g. in a field initializer that reads it) throws."
-    },
-    {
-      "id": "d19q03",
-      "type": "output",
-      "topic": "vetoable",
-      "difficulty": "Easy",
-      "question": "What does this print?",
-      "code": "import kotlin.properties.Delegates\n\nvar age: Int by Delegates.vetoable(0) { _, old, new ->\n    new >= old\n}\n\nfun main() {\n    age = 10\n    println(age)\n    age = 5\n    println(age)\n    age = 20\n    println(age)\n}",
-      "options": [
-        "10\n10\n20",
-        "10\n5\n20",
-        "0\n0\n0",
-        "10\n5\n5"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`vetoable` runs its callback before the change and only stores the new value if the lambda returns `true`. Assigning `5` when the old value is `10` returns `false`, so `age` stays `10`."
-    },
-    {
-      "id": "d19q04",
       "type": "truefalse",
-      "topic": "observable timing",
+      "topic": "main thread queries",
       "difficulty": "Easy",
-      "question": "The callback passed to `Delegates.observable` runs after the new value has already been stored, so it cannot reject the assignment.",
+      "question": "By default Room throws if you run a blocking query on the main thread, unless the database was built with `allowMainThreadQueries()`.",
       "options": [
         "True",
         "False"
@@ -68,291 +33,146 @@
       "answer": [
         0
       ],
-      "explanation": "`observable` is notified after the change and its lambda returns `Unit`. If you need to reject a value, use `Delegates.vetoable`, whose lambda runs before the change and returns a `Boolean`."
+      "explanation": "Room checks the thread for synchronous DAO calls and throws `IllegalStateException` on the main thread, because disk I/O there causes jank and ANRs. `suspend` DAO functions and `Flow` queries avoid the problem because Room moves the work to its own executor."
+    },
+    {
+      "id": "d19q03",
+      "type": "multi",
+      "topic": "main-safe DAOs",
+      "difficulty": "Easy",
+      "question": "Which DAO functions are safe to call from a coroutine running on `Dispatchers.Main`? Select all that apply.",
+      "options": [
+        "`suspend fun insert(user: User)`",
+        "`fun observe(): Flow<List<User>>`, then collect it",
+        "`fun getAll(): List<User>`",
+        "`fun insertNow(user: User)` (not suspend)"
+      ],
+      "answer": [
+        0,
+        1
+      ],
+      "explanation": "For `suspend` and `Flow` DAO functions, Room's generated code runs the query on its own background executor, so callers on Main are not blocked. Plain blocking functions run on the caller's thread, which Room rejects on Main. Those need a background dispatcher or should be made `suspend`."
+    },
+    {
+      "id": "d19q04",
+      "type": "mcq",
+      "topic": "autoGenerate",
+      "difficulty": "Easy",
+      "question": "`@PrimaryKey(autoGenerate = true) val id: Long = 0`. You insert `Note(id = 0, text = \"hi\")` twice. What ends up in the table?",
+      "options": [
+        "Two rows with new ids, because 0 is treated as \"no id set\"",
+        "One row with id 0, replaced by the second insert of the note",
+        "A crash on the second insert, because id 0 is already taken",
+        "Two rows that both have id 0, since the key is not checked"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "With `autoGenerate`, Room treats 0 (or null) as not set and lets SQLite assign the next rowid, so each insert gets a new id. That is why the default value is 0. A primary key is always unique, so two rows with the same id are impossible."
     },
     {
       "id": "d19q05",
       "type": "mcq",
-      "topic": "by navArgs",
-      "difficulty": "Easy",
-      "question": "With Safe Args, a Fragment declares `val args: DetailFragmentArgs by navArgs()`. Where do the values come from?",
-      "code": "class DetailFragment : Fragment() {\n    private val args: DetailFragmentArgs by navArgs()\n\n    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {\n        showItem(args.itemId)\n    }\n}",
+      "topic": "missing migration",
+      "difficulty": "Medium",
+      "question": "You add a column to an entity and bump the database version from 1 to 2, without a Migration, AutoMigration or destructive fallback. What happens on a device that has version 1?",
       "options": [
-        "The Fragment's `arguments` Bundle, read lazily on first access",
-        "The host Activity's `intent` extras",
-        "The ViewModel's `SavedStateHandle`",
-        "The previous destination's `NavBackStackEntry`, copied over at navigation time"
+        "The app crashes when the database opens: there's no path from version 1 to 2",
+        "Room adds the new column on its own, using the entity's default value for it",
+        "Room quietly deletes and recreates the database, losing all of the old data",
+        "The build fails, because KSP can see that the schema changed without a migration"
       ],
       "answer": [
         0
       ],
-      "explanation": "`navArgs()` is a lazy delegate that calls `fromBundle(arguments)` the first time `args` is read. Navigation puts the destination's arguments into the Fragment's `arguments`, not the Activity intent; if `arguments` is null it throws."
+      "explanation": "Room needs an explicit path between versions; without one it throws `IllegalStateException` when the database is first opened. It never alters tables unless you declare a Migration or AutoMigration, and data is only wiped if you opt in with `fallbackToDestructiveMigration()`. The build cannot know which versions already exist on devices, so it does not fail."
     },
     {
       "id": "d19q06",
-      "type": "output",
-      "topic": "observable",
-      "difficulty": "Medium",
-      "question": "What does this print?",
-      "code": "import kotlin.properties.Delegates\n\nclass User {\n    var name: String by Delegates.observable(\"<none>\") { prop, old, new ->\n        println(\"${prop.name}: $old -> $new\")\n    }\n}\n\nfun main() {\n    val u = User()\n    u.name = \"Ann\"\n    u.name = \"Ann\"\n    println(u.name)\n}",
+      "type": "mcq",
+      "topic": "@Relation",
+      "difficulty": "Hard",
+      "question": "Why does this DAO method need `@Transaction`?",
+      "code": "data class UserWithPlaylists(\n    @Embedded val user: User,\n    @Relation(parentColumn = \"userId\", entityColumn = \"ownerId\")\n    val playlists: List<Playlist>\n)\n\n@Transaction\n@Query(\"SELECT * FROM User\")\nsuspend fun getUsersWithPlaylists(): List<UserWithPlaylists>",
       "options": [
-        "name: <none> -> Ann\nname: Ann -> Ann\nAnn",
-        "name: <none> -> Ann\nAnn",
-        "name: Ann -> <none>\nname: Ann -> Ann\nAnn",
-        "Ann"
+        "Room runs separate queries for users and playlists; the transaction keeps them consistent",
+        "@Relation compiles to a SQL JOIN, and SQLite only allows JOIN statements inside a transaction",
+        "@Transaction moves the query onto a background thread, which a List return type requires",
+        "Every DAO query that returns a List needs @Transaction or Room refuses to generate code"
       ],
       "answer": [
         0
       ],
-      "explanation": "`observable` fires on every assignment, even when the new value equals the old one. It does not compare values, so add an `if (old != new)` check yourself if you only want real changes."
+      "explanation": "Room loads `@Relation` data with separate queries: first the parents, then the children for those parent ids. Without a transaction, a write between those queries could pair users with inconsistent playlists, and Room warns about it at compile time. It does not use a JOIN, and `@Transaction` has nothing to do with threading."
     },
     {
       "id": "d19q07",
-      "type": "truefalse",
-      "topic": "notNull",
-      "difficulty": "Easy",
-      "question": "Reading a `var count: Int by Delegates.notNull()` property before anything has been assigned to it returns `null`.",
+      "type": "multi",
+      "topic": "migrations",
+      "difficulty": "Hard",
+      "question": "Which statements about Room migrations are true? Select all that apply.",
       "options": [
-        "True",
-        "False"
+        "Exporting the schema (exportSchema with a schema location) is needed for AutoMigrations and MigrationTestHelper",
+        "An AutoMigration needs an AutoMigrationSpec when you rename or delete a column or table",
+        "fallbackToDestructiveMigration() keeps the users' data and only resets the version number",
+        "After migrating, Room checks the resulting schema against the entities and throws on mismatch"
       ],
       "answer": [
-        1
+        0,
+        1,
+        3
       ],
-      "explanation": "The property type is the non-null `Int`, so it can never return `null`. Reading it before the first assignment throws `IllegalStateException` (\"Property count should be initialized before get.\")."
+      "explanation": "AutoMigrations and `MigrationTestHelper` compare the exported JSON schemas, so exporting is required. Renames and deletions are ambiguous (a rename looks like a drop plus an add), so you describe them with an `AutoMigrationSpec`. Room validates the migrated schema and throws if it does not match; the destructive fallback, as its name says, drops all data."
     },
     {
       "id": "d19q08",
-      "type": "output",
-      "topic": "delegate to property",
-      "difficulty": "Medium",
-      "question": "What does this print?",
-      "code": "class Settings {\n    var newName: String = \"a\"\n    var oldName: String by this::newName\n}\n\nfun main() {\n    val s = Settings()\n    s.oldName = \"b\"\n    println(s.newName)\n    s.newName = \"c\"\n    println(s.oldName)\n}",
+      "type": "mcq",
+      "topic": "REPLACE vs upsert",
+      "difficulty": "Hard",
+      "question": "`Playlist` has a foreign key to `User` with `onDelete = CASCADE`. After this call updates an existing user, all of that user's playlists are gone. Why?",
+      "code": "@Insert(onConflict = OnConflictStrategy.REPLACE)\nsuspend fun saveUser(user: User)",
       "options": [
-        "b\nc",
-        "a\nc",
-        "b\nb",
-        "a\na"
+        "REPLACE deletes the conflicting row and inserts a new one, so the cascade deletes the children",
+        "REPLACE turns off foreign key checks for the transaction, so the child rows become orphaned",
+        "Room runs the insert in a batch, and SQLite removes the playlists afterwards during a vacuum",
+        "The Flow briefly emits an empty list after the write, but the playlists are still in the table"
       ],
       "answer": [
         0
       ],
-      "explanation": "Delegating to a property reference (`by this::newName`) makes `oldName` an alias: every get and set goes straight to `newName`. It's a common way to rename a property while keeping the old name working, usually marked `@Deprecated`."
+      "explanation": "SQLite's `REPLACE` resolves a conflict by deleting the existing row and inserting a new one, and that delete fires `ON DELETE CASCADE`. Use `@Upsert` (Room 2.5+) or `@Update`, which update the row in place and leave children alone. The data really is deleted; it is not a display glitch."
     },
     {
       "id": "d19q09",
-      "type": "mcq",
-      "topic": "by activityViewModels",
-      "difficulty": "Easy",
-      "question": "A `CartFragment` and a `CheckoutFragment` live in the same Activity and must share one `CartViewModel` instance. Which declaration should both Fragments use?",
+      "type": "truefalse",
+      "topic": "nullable Flow",
+      "difficulty": "Medium",
+      "question": "A `@Query` returning `Flow<User?>` for a single row emits `null` when no row matches, instead of never emitting.",
       "options": [
-        "`val cart: CartViewModel by activityViewModels()`",
-        "`val cart: CartViewModel by viewModels()`",
-        "`val cart by lazy { CartViewModel() }`",
-        "`val cart: CartViewModel by navArgs()`"
+        "True",
+        "False"
       ],
       "answer": [
         0
       ],
-      "explanation": "`activityViewModels()` scopes the ViewModel to the host Activity's `ViewModelStore`, so both Fragments get the same instance. `viewModels()` scopes it to each Fragment, giving two separate instances, and `lazy { CartViewModel() }` just creates a plain object that isn't kept across configuration changes."
+      "explanation": "Room runs the query when collection starts and emits its result, which is `null` for a nullable single-row return type with no match. It emits again after each change to the table, so the UI can show the user once the row is inserted."
     },
     {
       "id": "d19q10",
-      "type": "multi",
-      "topic": "lazy thread safety",
-      "difficulty": "Medium",
-      "question": "Which statements about `LazyThreadSafetyMode` are correct? Select all that apply.",
-      "options": [
-        "`SYNCHRONIZED` is the default used by `lazy { }`",
-        "With `PUBLICATION` the initializer may run more than once concurrently, but every caller sees the first value that was stored",
-        "`NONE` does no locking, so it is only safe when the property is accessed from a single thread",
-        "`NONE` throws an exception if two threads read the property",
-        "`PUBLICATION` guarantees the initializer runs exactly once"
-      ],
-      "answer": [
-        0,
-        1,
-        2
-      ],
-      "explanation": "`SYNCHRONIZED` (the default) locks so the initializer runs once. `PUBLICATION` lets racing threads each run it but publishes only the first result. `NONE` skips synchronization entirely; it doesn't detect multithreaded use, it just gives undefined behaviour, which is why it suits main-thread-only Android code."
-    },
-    {
-      "id": "d19q11",
       "type": "mcq",
-      "topic": "map delegate",
+      "topic": "transactions",
       "difficulty": "Medium",
-      "question": "What happens when this code reads `c.retries`?",
-      "code": "class Config(map: Map<String, Any?>) {\n    val name: String by map\n    val retries: Int by map\n}\n\nval c = Config(mapOf(\"name\" to \"prod\"))\nprintln(c.retries)",
+      "question": "A repository must debit one account and credit another as one atomic operation, using two DAO calls. What should it use?",
       "options": [
-        "It throws `NoSuchElementException`",
-        "It prints `0`",
-        "It prints `null`",
-        "It fails to compile because the map has no `retries` key"
+        "db.withTransaction { } around both, or a @Transaction DAO method calling both",
+        "coroutineScope { } with a launch for each call, so that they both finish together",
+        "A @Transaction annotation on the repository function that performs the two calls",
+        "A Mutex around the two calls, so that no other coroutine can run them at once"
       ],
       "answer": [
         0
       ],
-      "explanation": "A map-backed property looks up `map[property.name]` on every read. If the key is missing it throws `NoSuchElementException` (\"Key retries is missing in the map.\"). The compiler can't know the map's contents, so it compiles fine, and there is no default value."
-    },
-    {
-      "id": "d19q12",
-      "type": "mcq",
-      "topic": "class delegation",
-      "difficulty": "Medium",
-      "question": "For `class Logged(private val inner: Repo) : Repo by inner`, where `Repo` is an interface, what does the compiler generate?",
-      "options": [
-        "Forwarding methods for every `Repo` member it doesn't override, including ones with default bodies, calling `inner`",
-        "Forwarding methods only for abstract members, while members with default bodies use the interface's default implementation",
-        "A runtime proxy that uses reflection to dispatch calls to `inner`",
-        "A subclass of `inner`'s runtime class, so `Logged` inherits its implementation"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Delegation is resolved at compile time. Every member you don't override, even one with a default body, is forwarded to the delegate, so `inner`'s own overrides are used. No reflection or subclassing is involved, which is also why the delegate must be an interface."
-    },
-    {
-      "id": "d19q13",
-      "type": "output",
-      "topic": "delegation gotcha",
-      "difficulty": "Hard",
-      "question": "What does this print?",
-      "code": "interface Repo {\n    fun name(): String\n    fun describe(): String = \"Repo(${name()})\"\n}\n\nclass Base : Repo {\n    override fun name() = \"base\"\n}\n\nclass Logged(private val inner: Repo) : Repo by inner {\n    override fun name() = \"logged\"\n}\n\nfun main() {\n    val r = Logged(Base())\n    println(r.name())\n    println(r.describe())\n}",
-      "options": [
-        "logged\nRepo(base)",
-        "logged\nRepo(logged)",
-        "base\nRepo(base)",
-        "logged\nRepo(Logged)"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`describe()` is forwarded to `inner`, and inside `Base` the call to `name()` goes to `Base.name()`, because `inner` knows nothing about `Logged`. Delegation isn't inheritance: your override only affects calls made through `Logged`, not calls the delegate makes on itself."
-    },
-    {
-      "id": "d19q14",
-      "type": "truefalse",
-      "topic": "lazy val only",
-      "difficulty": "Medium",
-      "question": "This code compiles.",
-      "code": "var token: String by lazy { \"abc\" }\n\nfun main() {\n    println(token)\n}",
-      "options": [
-        "True",
-        "False"
-      ],
-      "answer": [
-        1
-      ],
-      "compiles": false,
-      "explanation": "`Lazy<T>` only provides a `getValue` operator, so it can only delegate a `val`. A `var` also needs `setValue`, and the compiler reports that `Lazy<String>` has no `setValue` method."
-    },
-    {
-      "id": "d19q15",
-      "type": "output",
-      "topic": "shared delegate",
-      "difficulty": "Hard",
-      "question": "What does this print?",
-      "code": "import kotlin.reflect.KProperty\n\nclass Box {\n    private var v = 0\n    operator fun getValue(thisRef: Any?, p: KProperty<*>) = v\n    operator fun setValue(thisRef: Any?, p: KProperty<*>, n: Int) { v = n }\n}\n\nval shared = Box()\nvar a: Int by shared\nvar b: Int by shared\n\nfun main() {\n    a = 1\n    b = 2\n    println(\"$a $b\")\n}",
-      "options": [
-        "2 2",
-        "1 2",
-        "1 1",
-        "0 0"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Both properties delegate to the same `Box` instance, and `Box` stores one value no matter which property is being accessed. Writing `b = 2` overwrites what `a` sees too. A delegate holding state needs one instance per property (or must key its storage by `p.name`)."
-    },
-    {
-      "id": "d19q16",
-      "type": "mcq",
-      "topic": "fragment args delegate",
-      "difficulty": "Medium",
-      "question": "Why does this delegate store `userId` in the Fragment's `arguments` instead of a plain backing field?",
-      "code": "class ArgString : ReadWriteProperty<Fragment, String> {\n    override fun getValue(thisRef: Fragment, property: KProperty<*>): String =\n        thisRef.requireArguments().getString(property.name)!!\n\n    override fun setValue(thisRef: Fragment, property: KProperty<*>, value: String) {\n        val args = thisRef.arguments ?: Bundle().also { thisRef.arguments = it }\n        args.putString(property.name, value)\n    }\n}\n\nclass ProfileFragment : Fragment() {\n    var userId: String by ArgString()\n}",
-      "options": [
-        "`arguments` survives Fragment recreation, so `userId` outlives rotation and process death",
-        "Reading a Bundle is faster than reading a field",
-        "`ReadWriteProperty` can only write to a Bundle, because delegates can't have backing fields",
-        "It makes `userId` visible to the host Activity's `intent`, so the Activity can read it too"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "After a configuration change or process death the system recreates the Fragment through its no-arg constructor and gives it back its saved `arguments`. A plain field would be reset. Using `property.name` as the key also means you don't have to keep key constants in sync."
-    },
-    {
-      "id": "d19q17",
-      "type": "multi",
-      "topic": "prefs delegate",
-      "difficulty": "Medium",
-      "question": "Given this SharedPreferences delegate, which statements are true? Select all that apply.",
-      "code": "class BoolPref(\n    private val prefs: SharedPreferences,\n    private val key: String,\n    private val default: Boolean,\n) : ReadWriteProperty<Any?, Boolean> {\n    override fun getValue(thisRef: Any?, property: KProperty<*>) =\n        prefs.getBoolean(key, default)\n\n    override fun setValue(thisRef: Any?, property: KProperty<*>, value: Boolean) {\n        prefs.edit().putBoolean(key, value).apply()\n    }\n}\n\nclass Settings(prefs: SharedPreferences) {\n    var darkMode by BoolPref(prefs, \"dark_mode\", false)\n}",
-      "options": [
-        "Every read of `darkMode` calls `prefs.getBoolean`; nothing is cached in the delegate",
-        "After `darkMode = true`, a read in the same process immediately returns `true`, even though `apply()` writes to disk asynchronously",
-        "The `key` parameter could be dropped by using `property.name` inside the delegate",
-        "`getValue` runs only once and its result is cached, like `lazy`",
-        "`darkMode` must be declared `lateinit` to use a delegate"
-      ],
-      "answer": [
-        0,
-        1,
-        2
-      ],
-      "explanation": "A delegate's `getValue`/`setValue` run on every access; only `lazy` adds caching. `apply()` updates the in-memory map right away and saves to disk in the background, so reads see the new value immediately. `lateinit` can't be combined with a delegate at all."
-    },
-    {
-      "id": "d19q18",
-      "type": "truefalse",
-      "topic": "interfaces only",
-      "difficulty": "Medium",
-      "question": "Class delegation with `by` only works for interfaces: `class MyList(inner: ArrayList<Int>) : ArrayList<Int> by inner` does not compile.",
-      "options": [
-        "True",
-        "False"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Kotlin only allows delegating the implementation of an interface. To wrap an `ArrayList` you'd write `class MyList(inner: MutableList<Int>) : MutableList<Int> by inner`, delegating the `MutableList` interface instead."
-    },
-    {
-      "id": "d19q19",
-      "type": "output",
-      "topic": "delegate captured once",
-      "difficulty": "Hard",
-      "question": "What does this print?",
-      "code": "interface Greeter { fun greet(): String }\nclass En : Greeter { override fun greet() = \"Hello\" }\nclass Fr : Greeter { override fun greet() = \"Bonjour\" }\n\nclass Wrapper(var inner: Greeter) : Greeter by inner\n\nfun main() {\n    val w = Wrapper(En())\n    w.inner = Fr()\n    println(w.greet())\n    println(w.inner.greet())\n}",
-      "options": [
-        "Hello\nBonjour",
-        "Bonjour\nBonjour",
-        "Hello\nHello",
-        "Bonjour\nHello"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "The `by inner` expression is evaluated once, during construction, and stored in a hidden field. Reassigning the `inner` property later doesn't change that field, so `greet()` still forwards to the original `En`."
-    },
-    {
-      "id": "d19q20",
-      "type": "output",
-      "topic": "provideDelegate",
-      "difficulty": "Hard",
-      "question": "What does this print?",
-      "code": "import kotlin.properties.ReadOnlyProperty\nimport kotlin.reflect.KProperty\n\nclass Loader {\n    operator fun provideDelegate(thisRef: Any?, prop: KProperty<*>): ReadOnlyProperty<Any?, String> {\n        println(\"bind ${prop.name}\")\n        return ReadOnlyProperty { _, p -> \"value of ${p.name}\" }\n    }\n}\n\nclass Screen {\n    val title by Loader()\n    val subtitle by Loader()\n}\n\nfun main() {\n    val s = Screen()\n    println(\"created\")\n    println(s.title)\n    println(s.title)\n}",
-      "options": [
-        "bind title\nbind subtitle\ncreated\nvalue of title\nvalue of title",
-        "created\nbind title\nvalue of title\nvalue of title",
-        "created\nbind title\nvalue of title\nbind title\nvalue of title",
-        "bind title\ncreated\nvalue of title\nvalue of title"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`provideDelegate` runs once per property while the object is being constructed, which is why both `bind` lines print before `created`, even for `subtitle`, which is never read. After that, each read calls only the returned delegate's `getValue`."
+      "explanation": "`withTransaction` (room-ktx) runs suspending DAO calls in a single database transaction, rolling both back if either throws; a `@Transaction` method in the DAO does the same. Room only processes `@Transaction` on DAO methods, so on a repository it does nothing. A `Mutex` serializes callers, but a failure after the debit still leaves the data half-written."
     }
   ]
 }

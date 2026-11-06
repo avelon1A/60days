@@ -1,66 +1,30 @@
 {
   "day": 30,
-  "topic": "Flow operators: flatMapLatest, combine, zip & debounce",
+  "topic": "State restoration: SavedStateHandle, rememberSaveable & Bundles",
   "questions": [
     {
       "id": "d30q01",
-      "type": "output",
-      "topic": "transform",
+      "type": "mcq",
+      "topic": "rememberSaveable",
       "difficulty": "Easy",
-      "question": "What does this print?",
-      "code": "import kotlinx.coroutines.*\nimport kotlinx.coroutines.flow.*\n\nfun main() = runBlocking {\n    val result = flowOf(1, 2, 3)\n        .transform { if (it != 2) { emit(it); emit(it * 10) } }\n        .toList()\n    println(result)\n}",
+      "question": "What does rememberSaveable give you beyond remember?",
       "options": [
-        "[1, 10, 3, 30]",
-        "[1, 10, 2, 20, 3, 30]",
-        "[1, 3]",
-        "[10, 30]"
+        "The value is shared across all composables with the same name",
+        "The value is kept even after the user swipes the app away from Recents",
+        "The value is written to DataStore after every change",
+        "The value also survives config changes and process death"
       ],
       "answer": [
-        0
+        3
       ],
-      "explanation": "`transform` can call `emit` any number of times per upstream value, including zero. For `2` the `if` is false so nothing is emitted; for `1` and `3` it emits twice. `map` would force exactly one value per element."
+      "explanation": "rememberSaveable registers its value with the SaveableStateRegistry, which writes it into the saved instance Bundle. That covers rotation and system-initiated process death, but not the user dismissing the task, which drops saved state. It's not persistent storage."
     },
     {
       "id": "d30q02",
-      "type": "mcq",
-      "topic": "flatMapLatest",
-      "difficulty": "Easy",
-      "question": "A search screen fires a network request for every query the user types. Which operator makes a new query cancel the request still running for the previous one?",
-      "options": [
-        "`flatMapLatest`",
-        "`flatMapConcat`",
-        "`flatMapMerge`",
-        "`buffer`"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`flatMapLatest` cancels the inner flow of the previous value as soon as a new upstream value arrives. `flatMapConcat` waits for each request to finish in order, and `flatMapMerge` runs them all concurrently, so stale results could still arrive."
-    },
-    {
-      "id": "d30q03",
-      "type": "output",
-      "topic": "zip",
-      "difficulty": "Easy",
-      "question": "What does this print?",
-      "code": "import kotlinx.coroutines.*\nimport kotlinx.coroutines.flow.*\n\nfun main() = runBlocking {\n    val result = flowOf(1, 2, 3)\n        .zip(flowOf(\"a\", \"b\")) { n, s -> \"$n$s\" }\n        .toList()\n    println(result)\n}",
-      "options": [
-        "[1a, 2b]",
-        "[1a, 2b, 3b]",
-        "[1a, 2b, 3null]",
-        "[1a, 1b, 2b, 3b]"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`zip` pairs values by index and completes as soon as either flow completes, so the extra `3` is never paired. Re-using the latest value of the other flow is what `combine` does, not `zip`."
-    },
-    {
-      "id": "d30q04",
       "type": "truefalse",
-      "topic": "merge",
+      "topic": "write timing",
       "difficulty": "Easy",
-      "question": "`merge(a, b)` emits every value of `a` first and only then starts emitting the values of `b`.",
+      "question": "Setting `savedStateHandle[\"query\"] = value` immediately writes the value to disk.",
       "options": [
         "True",
         "False"
@@ -68,289 +32,146 @@
       "answer": [
         1
       ],
-      "explanation": "`merge` collects all the flows concurrently and emits values as they arrive, so they can interleave. Running one flow to completion before the next is what `flattenConcat` (or `flatMapConcat`) does."
+      "explanation": "SavedStateHandle keeps values in memory and hands them over when the owner saves its state (onSaveInstanceState), as part of the Bundle the system keeps. Nothing is written to app storage, which is also why the data is lost if the user clears the task."
+    },
+    {
+      "id": "d30q03",
+      "type": "mcq",
+      "topic": "custom Saver",
+      "difficulty": "Medium",
+      "question": "You want to keep a plain (non-Parcelable) data class in rememberSaveable. What is the usual approach?",
+      "options": [
+        "Mark the class @Stable so the registry can save it",
+        "Wrap the value in mutableStateOf before passing it in",
+        "Provide a Saver (e.g. mapSaver) that converts it to Bundle-friendly values",
+        "Store it with plain remember and add a key so the runtime can restore it"
+      ],
+      "answer": [
+        2
+      ],
+      "explanation": "The saved Bundle can only hold types a Bundle supports, such as primitives, Strings, Parcelables and Serializables. A Saver converts the object to and from such values; @Parcelize is the other common option. @Stable is a compiler hint and doesn't make anything saveable."
+    },
+    {
+      "id": "d30q04",
+      "type": "mcq",
+      "topic": "getStateFlow",
+      "difficulty": "Medium",
+      "question": "Which is the right way to expose a search query that survives process death as a Flow from a ViewModel?",
+      "options": [
+        "`savedStateHandle.getStateFlow(\"query\", \"\")`, written via `savedStateHandle[\"query\"] = q`",
+        "`val query = MutableStateFlow(savedStateHandle[\"query\"] ?: \"\")`, updated via `query.value = q`",
+        "`val query = flowOf(savedStateHandle.get<String>(\"query\"))`, updated by recreating the flow",
+        "`val query = savedStateHandle.getLiveData<String>(\"query\").value`, updated via postValue"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "getStateFlow returns a StateFlow backed by the handle, so writing through the handle both emits and persists. A MutableStateFlow seeded from the handle reads the restored value once, but later updates never reach saved state, so they are lost on process death."
     },
     {
       "id": "d30q05",
-      "type": "mcq",
-      "topic": "distinctUntilChangedBy",
-      "difficulty": "Easy",
-      "question": "A Room query re-emits the whole `User` every time any column changes, but the header only shows `user.name`. Which operator skips emissions where the name didn't change?",
-      "code": "userDao.observeUser(id)\n    .distinctUntilChangedBy { it.name }\n    .collect { header.text = it.name }",
-      "options": [
-        "`distinctUntilChangedBy { it.name }`",
-        "`filter { it.name.isNotEmpty() }`",
-        "`distinct()`",
-        "`debounce(300)`"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`distinctUntilChangedBy` compares a key from consecutive values and drops a value whose key equals the previous one. `Flow` has no `distinct()` operator, and `debounce` drops values by timing, not by equality."
-    },
-    {
-      "id": "d30q06",
-      "type": "output",
-      "topic": "distinctUntilChanged",
-      "difficulty": "Easy",
-      "question": "What does this print?",
-      "code": "import kotlinx.coroutines.*\nimport kotlinx.coroutines.flow.*\n\nfun main() = runBlocking {\n    val result = flowOf(1, 1, 2, 1, 1, 3)\n        .distinctUntilChanged()\n        .toList()\n    println(result)\n}",
-      "options": [
-        "[1, 2, 1, 3]",
-        "[1, 2, 3]",
-        "[1, 1, 2, 1, 1, 3]",
-        "[2, 3]"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`distinctUntilChanged` only drops a value that equals the one directly before it. The second `1` group comes after a `2`, so it is emitted again. Removing every duplicate across the whole flow would give `[1, 2, 3]`, which is not what it does."
-    },
-    {
-      "id": "d30q07",
-      "type": "mcq",
-      "topic": "onEmpty",
-      "difficulty": "Easy",
-      "question": "A repository flow can complete without emitting anything when the cache is empty. Which operator lets you emit a placeholder value in exactly that case?",
-      "options": [
-        "`onEmpty { emit(Placeholder) }`",
-        "`catch { emit(Placeholder) }`",
-        "`timeout(5.seconds)`",
-        "`onStart { emit(Placeholder) }`"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`onEmpty` runs its block only if the upstream completes normally without emitting any value, and the block may `emit`. `onStart` would emit the placeholder every time, `catch` reacts only to exceptions, and `timeout` throws if no value arrives in time."
-    },
-    {
-      "id": "d30q08",
       "type": "multi",
-      "topic": "transform",
+      "topic": "what to save",
       "difficulty": "Medium",
-      "question": "Which operators can emit MORE than one downstream value for a single upstream value? Select all that apply.",
+      "question": "Which of these should NOT be put into saved instance state? Select all that apply.",
       "options": [
-        "`transform`",
-        "`flatMapConcat`",
-        "`map`",
-        "`filter`",
-        "`mapNotNull`"
+        "A few hundred items of data loaded from the network",
+        "Text the user has typed into a form but not submitted",
+        "A Bitmap of the user's profile picture",
+        "The index of the currently selected tab",
+        "An object that holds a reference to a Context"
       ],
       "answer": [
         0,
-        1
+        2,
+        4
       ],
-      "explanation": "`transform` can call `emit` many times, and `flatMapConcat` emits every value of the inner flow. `map` emits exactly one value per element, while `filter` and `mapNotNull` emit zero or one."
+      "explanation": "Saved state should be small and describe the UI: user input, selections, IDs. Loaded data and bitmaps risk hitting the Binder size limit and can be refetched. Contexts can't be meaningfully saved and would leak or fail. Typed text and tab index are exactly what it is for."
     },
     {
-      "id": "d30q09",
-      "type": "output",
-      "topic": "take",
-      "difficulty": "Medium",
-      "question": "What does this print?",
-      "code": "import kotlinx.coroutines.*\nimport kotlinx.coroutines.flow.*\n\nfun main() = runBlocking {\n    flow {\n        try {\n            emit(1)\n            emit(2)\n            println(\"after 2\")\n            emit(3)\n        } finally {\n            println(\"cleanup\")\n        }\n    }.take(2).collect { println(it) }\n}",
+      "id": "d30q06",
+      "type": "mcq",
+      "topic": "lazy item state",
+      "difficulty": "Hard",
+      "question": "An item in a LazyColumn (with stable keys) holds one value in remember and another in rememberSaveable. The item scrolls off screen and back. What happens?",
       "options": [
-        "1\n2\ncleanup",
-        "1\n2\nafter 2\ncleanup",
-        "1\n2",
-        "1\n2\nafter 2"
+        "Both values are lost, since the item left the composition",
+        "Both values are kept, since lazy items are never disposed",
+        "The saveable value is restored; the remember one starts over",
+        "The remember value is kept; the rememberSaveable one is cleared"
+      ],
+      "answer": [
+        2
+      ],
+      "explanation": "Lazy layouts dispose items that scroll out, so remember is lost. But they wrap each item in a SaveableStateHolder keyed by the item key, so saveable state is stored when the item leaves and given back when it returns. That's also why keys should be stable and Bundle-friendly."
+    },
+    {
+      "id": "d30q07",
+      "type": "truefalse",
+      "topic": "position key",
+      "difficulty": "Medium",
+      "question": "By default, rememberSaveable saves its value under a key derived from its position in the composition, so restructuring the composable tree between save and restore can stop it from being restored.",
+      "options": [
+        "True",
+        "False"
       ],
       "answer": [
         0
       ],
-      "explanation": "Once `take(2)` receives its second value it cancels the upstream: the `emit(2)` call itself throws an internal cancellation exception, so `after 2` never runs. The `finally` block still runs, which is why resources are released when you take only part of a flow."
+      "explanation": "Without an explicit key, rememberSaveable uses the composite key hash of where it's called. If the tree around it differs when state is restored, the hash differs and the value isn't found. Passing an explicit key avoids that."
+    },
+    {
+      "id": "d30q08",
+      "type": "mcq",
+      "topic": "SavedStateRegistry",
+      "difficulty": "Hard",
+      "question": "A component calls `savedStateRegistry.consumeRestoredStateForKey(\"pager\")` and gets a Bundle. What does a second call with the same key return?",
+      "options": [
+        "The same Bundle again, as restored state is immutable",
+        "An empty Bundle, since the registry never returns null for a registered key",
+        "null, as restored state is released once it is consumed",
+        "It throws IllegalStateException for consuming a key twice"
+      ],
+      "answer": [
+        2
+      ],
+      "explanation": "consumeRestoredStateForKey hands over the restored Bundle once and then drops its reference, so a second call returns null. Components should read restored state once at setup and register a SavedStateProvider to provide fresh state on the next save."
+    },
+    {
+      "id": "d30q09",
+      "type": "multi",
+      "topic": "SaveableStateHolder",
+      "difficulty": "Hard",
+      "question": "Which statements about SaveableStateHolder are true? Select all that apply.",
+      "options": [
+        "Navigation Compose uses it so a destination's rememberSaveable state survives while it is on the back stack",
+        "It keeps ViewModels alive for content that is not currently composed",
+        "SaveableStateProvider(key) restores the saved state for that key when content re-enters composition",
+        "removeState(key) discards the saved state for a key that will not come back"
+      ],
+      "answer": [
+        0,
+        2,
+        3
+      ],
+      "explanation": "SaveableStateHolder stores the rememberSaveable state of content that leaves composition, keyed by an id, and restores it when content with the same key comes back; removeState drops it. ViewModels are not involved: their lifetime comes from the ViewModelStoreOwner, such as the back stack entry."
     },
     {
       "id": "d30q10",
       "type": "mcq",
-      "topic": "combine",
-      "difficulty": "Medium",
-      "question": "The screen shows nothing, even though `query` emits whenever the user types. `filters` is a cold flow that only emits when the user taps a chip. Why?",
-      "code": "val uiState = combine(query, filters) { q, f ->\n    UiState(results = search(q, f))\n}",
+      "topic": "SavedStateHandle source",
+      "difficulty": "Easy",
+      "question": "Where does a ViewModel's SavedStateHandle get its initial values?",
       "options": [
-        "`combine` waits until every source has emitted once, and `filters` hasn't yet",
-        "`combine` pairs values by index, so it waits for `filters` to emit as often as `query`",
-        "`combine` needs a `StateFlow` as its first argument",
-        "`combine` collects its sources one after another, so it is stuck collecting `query`"
+        "From the owner's restored saved state plus default args (e.g. nav arguments)",
+        "From the ViewModel's constructor default parameter values, captured by the factory",
+        "From DataStore, read synchronously at ViewModel creation",
+        "From the previous ViewModel instance's fields after rotation"
       ],
       "answer": [
         0
       ],
-      "explanation": "`combine` needs one value from each source before it can call the transform, so a source that hasn't emitted blocks all output. The usual fix is to give it an initial value, e.g. `filters.onStart { emit(Filters.None) }` or a `StateFlow`. Pairing by index is `zip`, not `combine`."
-    },
-    {
-      "id": "d30q11",
-      "type": "output",
-      "topic": "combine",
-      "difficulty": "Medium",
-      "question": "What does this print?",
-      "code": "import kotlinx.coroutines.*\nimport kotlinx.coroutines.flow.*\n\nfun main() = runBlocking {\n    val a = flow { delay(100); emit(1); delay(200); emit(2) }\n    val b = flow { delay(200); emit(\"x\"); delay(200); emit(\"y\") }\n    combine(a, b) { n, s -> \"$n$s\" }\n        .collect { println(it) }\n}",
-      "options": [
-        "1x\n2x\n2y",
-        "1x\n2y",
-        "1x\n1y\n2x\n2y",
-        "2x\n2y"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`combine` emits whenever any source emits, using the latest value of each. At 200ms `b` sends `x` (latest `a` is 1), at 300ms `a` sends 2 (latest `b` is `x`), and at 400ms `b` sends `y`. `1x\\n2y` would be `zip`, which pairs by index."
-    },
-    {
-      "id": "d30q12",
-      "type": "truefalse",
-      "topic": "catch",
-      "difficulty": "Medium",
-      "question": "In `flow.catch { emit(Error) }.collect { render(it) }`, an exception thrown inside `render` is caught by the `catch` operator.",
-      "options": [
-        "True",
-        "False"
-      ],
-      "answer": [
-        1
-      ],
-      "explanation": "`catch` only catches exceptions from upstream (the flow and operators before it). The `collect` lambda is downstream, so its exception propagates out of `collect`. To cover it, move the work into `onEach { render(it) }` before `catch` and call `collect()` with no arguments."
-    },
-    {
-      "id": "d30q13",
-      "type": "mcq",
-      "topic": "scan",
-      "difficulty": "Medium",
-      "question": "A ViewModel turns a flow of user `Action`s into a `UiState`, where each action updates the previous state. Which operator fits best, and what does it emit first?",
-      "options": [
-        "`scan(initialState) { s, a -> reduce(s, a) }`, which emits `initialState` first",
-        "`fold(initialState) { ... }`, which emits each intermediate state as it is computed",
-        "`reduce { ... }`, which emits the initial state first",
-        "`map { reduce(initialState, it) }`, which keeps the previous state"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`scan` (the same as `runningFold`) emits the initial value and then every accumulated state, so the UI sees each step. `fold` and `reduce` are terminal operators that return only the final result, and `map` has no memory of the previous state."
-    },
-    {
-      "id": "d30q14",
-      "type": "mcq",
-      "topic": "sample vs debounce",
-      "difficulty": "Medium",
-      "question": "A sensor flow emits a position 100 times per second without pausing, and the UI only needs an update about every 500ms. What happens with `debounce(500)` compared to `sample(500)`?",
-      "options": [
-        "`debounce` emits nothing while the stream never pauses; `sample` emits every 500ms",
-        "Both emit the latest value every 500ms",
-        "`debounce` emits the first value of each 500ms window; `sample` emits the last",
-        "`sample` waits for a 500ms pause in the stream; `debounce` emits on a fixed 500ms timer"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`debounce` only emits after the source has been quiet for the timeout, so a stream that never pauses emits nothing until it ends. `sample` ticks on a fixed period and emits the most recent value seen, which suits continuous streams. `debounce` is the right choice for a search box, where typing pauses."
-    },
-    {
-      "id": "d30q15",
-      "type": "output",
-      "topic": "flatMapLatest",
-      "difficulty": "Medium",
-      "question": "What does this print?",
-      "code": "import kotlinx.coroutines.*\nimport kotlinx.coroutines.flow.*\n\n@OptIn(ExperimentalCoroutinesApi::class)\nfun main() = runBlocking {\n    flow { emit(\"a\"); delay(100); emit(\"b\") }\n        .flatMapLatest { q ->\n            flow { emit(\"$q:start\"); delay(300); emit(\"$q:done\") }\n        }\n        .collect { println(it) }\n}",
-      "options": [
-        "a:start\nb:start\nb:done",
-        "a:start\na:done\nb:start\nb:done",
-        "a:start\nb:start\na:done\nb:done",
-        "b:start\nb:done"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "When `b` arrives at 100ms, `flatMapLatest` cancels the inner flow for `a`, which is still in its 300ms `delay`, so `a:done` is never emitted. `a:start` was already emitted before that, so it stays. Keeping both inner flows running is `flatMapMerge` behaviour."
-    },
-    {
-      "id": "d30q16",
-      "type": "mcq",
-      "topic": "retryWhen",
-      "difficulty": "Medium",
-      "question": "With this backoff, the API keeps failing with `IOException`. How long is the delay before the first retry, and how many times is the request made in total?",
-      "code": "api.feedFlow()\n    .retryWhen { cause, attempt ->\n        if (cause is IOException && attempt < 3) {\n            delay(500L * (1 shl attempt.toInt()))\n            true\n        } else false\n    }",
-      "options": [
-        "500ms, 4 requests in total",
-        "1000ms, 3 requests in total",
-        "500ms, 3 requests in total",
-        "1000ms, 4 requests in total"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`attempt` starts at 0 for the first retry, so the delays are 500, 1000 and 2000ms. Retries happen for attempts 0, 1 and 2, giving the original request plus 3 retries. On the fourth failure the predicate returns `false` and the exception goes downstream."
-    },
-    {
-      "id": "d30q17",
-      "type": "output",
-      "topic": "debounce",
-      "difficulty": "Hard",
-      "question": "What does this print?",
-      "code": "import kotlinx.coroutines.*\nimport kotlinx.coroutines.flow.*\n\n@OptIn(FlowPreview::class)\nfun main() = runBlocking {\n    flow {\n        emit(\"k\"); delay(50)\n        emit(\"ko\"); delay(50)\n        emit(\"kot\"); delay(500)\n        emit(\"kotl\"); delay(50)\n        emit(\"kotlin\")\n    }.debounce(200).collect { println(it) }\n}",
-      "options": [
-        "kot\nkotlin",
-        "kotlin",
-        "kot",
-        "k\nkot\nkotlin"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`debounce(200)` emits a value only if no newer value arrives within 200ms. `k` and `ko` are replaced within 50ms, `kot` is followed by a 500ms pause so it is emitted, and `kotl` is replaced by `kotlin`. When the flow completes, `debounce` still emits the latest pending value, so `kotlin` is printed too."
-    },
-    {
-      "id": "d30q18",
-      "type": "mcq",
-      "topic": "catch placement",
-      "difficulty": "Hard",
-      "question": "Which exceptions does the `catch` here handle?",
-      "code": "repo.items()\n    .map { parse(it) }\n    .catch { emit(Item.Error) }\n    .map { format(it) }\n    .collect { show(it) }",
-      "options": [
-        "Those from `repo.items()` and `parse` only",
-        "Those from `repo.items()`, `parse` and `format`",
-        "Only those from `repo.items()`",
-        "Only those from `format`, the operator nearest to `collect`"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`catch` is transparent to downstream: it handles exceptions from everything above it in the chain, so `repo.items()` and `parse` are covered. `format` runs after `catch`, so its exceptions pass straight through to the collector. That's why `catch` usually goes near the end, just before collecting."
-    },
-    {
-      "id": "d30q19",
-      "type": "multi",
-      "topic": "search pipeline",
-      "difficulty": "Hard",
-      "question": "In a ViewModel, `query.debounce(300).distinctUntilChanged().flatMapLatest { repo.search(it) }` drives search results. Which statements are true? Select all that apply.",
-      "options": [
-        "`debounce(300)` avoids a request for every keystroke by waiting for a 300ms pause in typing",
-        "`distinctUntilChanged` skips a new search when the settled query equals the previous one, e.g. after typing a letter and deleting it",
-        "`flatMapLatest` cancels a slow in-flight search when a newer query arrives, so stale results can't overwrite newer ones",
-        "Swapping `flatMapLatest` for `flatMapMerge` gives the same results, just faster",
-        "`distinctUntilChanged` must come before `debounce` or it has no effect"
-      ],
-      "answer": [
-        0,
-        1,
-        2
-      ],
-      "explanation": "Each operator has its own job: `debounce` limits the request rate, `distinctUntilChanged` drops repeated settled queries, and `flatMapLatest` cancels outdated requests. `flatMapMerge` lets old requests keep running and their results can arrive out of order. Putting `distinctUntilChanged` after `debounce` is deliberate, because then it compares settled queries rather than keystrokes. The result is usually exposed with `stateIn` (day 31)."
-    },
-    {
-      "id": "d30q20",
-      "type": "truefalse",
-      "topic": "combine",
-      "difficulty": "Hard",
-      "question": "If flow `a` emits 1, 2 and 3 quickly and only then flow `b` emits its first value `x`, `combine(a, b) { n, s -> \"$n$s\" }` emits `1x`, `2x` and `3x`.",
-      "options": [
-        "True",
-        "False"
-      ],
-      "answer": [
-        1
-      ],
-      "explanation": "`combine` keeps only the latest value of each source. Until `b` has emitted, `a`'s new values just replace the stored one, so when `x` arrives the only combination emitted is `3x`. If every value of `a` must be paired, `combine` is the wrong tool."
+      "explanation": "The handle is built from the owner's SavedStateRegistry (state restored after recreation or process death) merged with default args, which is how navigation arguments appear in it. It is unrelated to DataStore, and it isn't copied from old ViewModel fields."
     }
   ]
 }

@@ -1,99 +1,116 @@
 {
   "day": 53,
-  "topic": "Design a chat app: WebSockets, push & message delivery",
+  "topic": "Real-time & background: WebSockets, push & scheduled work",
   "questions": [
     {
       "id": "d53q01",
       "type": "mcq",
-      "topic": "transport choice",
+      "topic": "push as signal",
       "difficulty": "Easy",
-      "question": "While a chat screen is open, both users send and receive messages many times a minute. Which transport fits best?",
+      "question": "Your chat app gets messages via push. What is the recommended way to use FCM / APNs here?",
       "options": [
-        "Short polling the messages endpoint every 2 seconds",
-        "A WebSocket kept open while the app is in the foreground",
-        "Server-Sent Events for both sending and receiving",
-        "Long polling with a new HTTP request for every outgoing message and incoming batch"
+        "Rely on push for everything and drop the server sync API, because push already reaches every installed device",
+        "Send one push per message with every attachment base64-encoded so the app never needs to make a network call",
+        "Treat a push as a hint that something changed, then fetch the actual messages from your server and dedupe them",
+        "Put the full message history in each push payload, since push delivery is guaranteed and preserves order"
       ],
       "answer": [
-        1
+        2
       ],
-      "explanation": "A WebSocket is one persistent, full-duplex connection, so the server pushes messages instantly and each frame costs little. Short polling wastes radio and battery on empty responses. Long polling adds a round trip per batch. SSE only goes server to client, so sends would still need separate HTTP calls."
+      "explanation": "Both FCM and APNs cap payloads at about 4 KB, can collapse or drop messages, and do not promise order. So the robust pattern is push as a wake-up or display signal, with the server as the source of truth that the app syncs from. Designs that assume guaranteed, ordered push lose messages in exactly the cases users notice."
     },
     {
       "id": "d53q02",
       "type": "truefalse",
-      "topic": "background sockets",
+      "topic": "push guarantees",
       "difficulty": "Easy",
-      "question": "On modern Android, a chat app can reliably keep its WebSocket open in the background for hours to receive messages, without a foreground service, as long as it reconnects when the socket drops.",
+      "question": "Neither FCM nor APNs guarantees that every message is delivered or that messages arrive in order, so the client needs a way to recover missed events from your server.",
       "options": [
         "True",
         "False"
-      ],
-      "answer": [
-        1
-      ],
-      "explanation": "Doze, App Standby and background execution limits cut off network access and can kill the process, so background sockets aren't reliable. They also drain the battery. The standard design is a socket in the foreground and FCM push in the background."
-    },
-    {
-      "id": "d53q03",
-      "type": "multi",
-      "topic": "foreground vs background",
-      "difficulty": "Medium",
-      "question": "The user puts your chat app in the background. Which parts of the design are correct? Select all that apply.",
-      "options": [
-        "Close the WebSocket soon after the app leaves the foreground",
-        "Have the server send an FCM message for new messages while the device has no live socket",
-        "When the push arrives, sync from the server using the last-seen cursor instead of trusting the push payload alone",
-        "Start a foreground service with a permanent notification just to keep the socket alive",
-        "Poll the server every minute with a background thread to stay up to date"
-      ],
-      "answer": [
-        0,
-        1,
-        2
-      ],
-      "explanation": "Foreground socket plus background push is the standard split, and the push works as a wake-up signal that triggers a cursor-based sync. A foreground service just to hold a socket is the wrong use of one and annoys users. Background polling is battery-hungry and gets throttled by Doze anyway."
-    },
-    {
-      "id": "d53q04",
-      "type": "mcq",
-      "topic": "fcm message types",
-      "difficulty": "Medium",
-      "question": "Before showing a notification, your app must check the local database (is the conversation muted? was the message already read on another device?). Which FCM message type should the server send?",
-      "options": [
-        "A notification message, because the system shows it even when the app is killed",
-        "A notification message with a data payload, read in `onMessageReceived` in all cases",
-        "A data message, so `onMessageReceived` decides whether and how to notify",
-        "A topic message to a topic named after the conversation"
-      ],
-      "answer": [
-        2
-      ],
-      "explanation": "Data messages always go to `onMessageReceived`, so your code runs and can check Room before building (or skipping) the notification. When the app is in the background, a notification message (even one with data) is shown straight in the tray by the system and `onMessageReceived` isn't called, so you can't apply this logic."
-    },
-    {
-      "id": "d53q05",
-      "type": "mcq",
-      "topic": "client message id",
-      "difficulty": "Easy",
-      "question": "Each outgoing message gets a UUID generated on the device before it's sent. What is the main reason?",
-      "options": [
-        "So retries are idempotent and the server can drop duplicates",
-        "So messages can be ordered by UUID in the conversation",
-        "So the server doesn't need to store its own id for the message",
-        "So the message is encrypted with the UUID as its key"
       ],
       "answer": [
         0
       ],
-      "explanation": "If the ack is lost and the client retries, the server sees the same client id and returns the existing message instead of storing it twice. The client can also match the server's echo to its local row. Random UUIDs carry no order, so they can't be used for sorting."
+      "explanation": "Messages can be throttled, collapsed, expire while the device is offline, or be dropped (for example after a force-quit on iOS or when a user disables notifications). Ordering is not promised either. Clients therefore keep a last-seen marker and sync the gap from the server."
+    },
+    {
+      "id": "d53q03",
+      "type": "mcq",
+      "topic": "deferrable work",
+      "difficulty": "Easy",
+      "question": "You need to upload diagnostics 'sometime soon, on Wi-Fi and while charging', and it must survive app restarts. Which tools fit on each platform?",
+      "options": [
+        "Android: WorkManager with unmetered-network and charging constraints. iOS: a BGProcessingTask via BGTaskScheduler requiring power and network",
+        "Android: a foreground service started at launch. iOS: a background URLSession started from applicationDidEnterBackground",
+        "Android: an exact AlarmManager alarm every hour. iOS: a silent push from the server every hour to trigger the upload",
+        "Android: a coroutine in viewModelScope that waits for Wi-Fi. iOS: a Task on the main actor that waits for charging"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Deferrable, constraint-based, persistent work is what WorkManager and BGTaskScheduler (BGProcessingTaskRequest has `requiresExternalPower` and `requiresNetworkConnectivity`) are built for. Foreground services are for user-visible ongoing work, and exact alarms or silent pushes are heavy-handed and throttled. ViewModel or in-process tasks die with the process."
+    },
+    {
+      "id": "d53q04",
+      "type": "mcq",
+      "topic": "backoff & jitter",
+      "difficulty": "Medium",
+      "question": "Your WebSocket server restarts and a million clients disconnect at the same moment. Why add random jitter to the exponential reconnect backoff?",
+      "options": [
+        "So the first reconnect attempt happens sooner on average, which gets the user back online with less waiting",
+        "So clients spread out their retries instead of reconnecting in synchronised waves that overload the restarted server",
+        "So messages sent during the outage are replayed in order once the connection is established again",
+        "So TLS session resumption works, since resumed sessions must not all start in the same second"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "Without jitter every client computes the same 1s, 2s, 4s... schedule and they hit the server together: a thundering herd that can knock it over again. Randomising (e.g. 'full jitter': a random delay between 0 and the backoff cap) flattens the load. Jitter is about server load, not latency, ordering or TLS."
+    },
+    {
+      "id": "d53q05",
+      "type": "mcq",
+      "topic": "resume after reconnect",
+      "difficulty": "Medium",
+      "question": "After a WebSocket reconnect, how should a chat client make sure it has not missed messages sent while it was disconnected?",
+      "options": [
+        "Reload the full history of every conversation on each reconnect so the local copy is never incomplete",
+        "Trust TCP, which guarantees in-order delivery, so the server resends what the old connection never delivered",
+        "Keep the old socket in a 'paused' state so the server can buffer messages there until the client resumes it",
+        "Track the last server sequence number per conversation, request everything after it on reconnect, and dedupe by message ID"
+      ],
+      "answer": [
+        3
+      ],
+      "explanation": "TCP's guarantees end when the connection does; a new socket knows nothing about the old one. A per-conversation sequence number (or opaque cursor) lets the client ask for exactly the gap, and IDs make overlaps harmless. Reloading everything is too expensive on mobile data, and a dead socket cannot be resumed."
     },
     {
       "id": "d53q06",
-      "type": "truefalse",
-      "topic": "push reliability",
+      "type": "multi",
+      "topic": "delivery guarantees",
       "difficulty": "Medium",
-      "question": "FCM delivers every message exactly once and in order, so the app can insert each push payload into Room and skip syncing with the server.",
+      "question": "Your messaging pipeline gives at-least-once delivery over a flaky mobile network. Which statements are correct? Select all that apply.",
+      "options": [
+        "At-most-once delivery is the one that requires retries, which is why it is the safer default for chat",
+        "TCP already provides exactly-once delivery end to end, so app-level IDs only matter for logging",
+        "The client must dedupe by a stable message ID, since the same message can arrive more than once",
+        "The sender needs acknowledgements, and resends until it gets an ack or gives up",
+        "'Effectively once' in practice means at-least-once delivery combined with idempotent handling on the receiver"
+      ],
+      "answer": [
+        2,
+        3,
+        4
+      ],
+      "explanation": "At-least-once means retry until acked, which produces duplicates, so receivers must be idempotent (usually by dedupe on ID). True exactly-once delivery over an unreliable network is not achievable; you get the effect through idempotency. At-most-once means no retries, so messages can be lost."
+    },
+    {
+      "id": "d53q07",
+      "type": "truefalse",
+      "topic": "iOS background sockets",
+      "difficulty": "Medium",
+      "question": "On iOS, an app can reliably keep receiving chat messages over a WebSocket while in the background, as long as it asked for extra background execution time when it entered the background.",
       "options": [
         "True",
         "False"
@@ -101,254 +118,61 @@
       "answer": [
         1
       ],
-      "explanation": "FCM is best-effort. Messages can be delayed, collapsed, dropped (for example after too many pending messages or a long time offline) or arrive out of order. Treat a push as a 'something changed, go sync' signal and fetch from the server using your cursor."
-    },
-    {
-      "id": "d53q07",
-      "type": "mcq",
-      "topic": "ordering",
-      "difficulty": "Medium",
-      "question": "Messages in a conversation are sorted by the sender device's `System.currentTimeMillis()`. Users report replies showing up above the message they answer. What's the best fix?",
-      "options": [
-        "Sort by the receiving device's clock instead, since it sees the real order",
-        "Sort by a server-assigned per-conversation sequence number",
-        "Sync every device's clock with NTP before sending",
-        "Sort by the client-generated UUID"
-      ],
-      "answer": [
-        1
-      ],
-      "explanation": "Device clocks drift and can be set wrong, so timestamps from different senders can't be compared. A per-conversation sequence assigned by the server gives one order that every client agrees on. The receiver's clock only records arrival order, and you can't make every client keep an accurate clock."
+      "explanation": "Extra background time is short and ends with the app being suspended, which freezes its sockets. Real-time delivery to a backgrounded iOS app goes through APNs (with PushKit + CallKit reserved for VoIP calls). Android is more permissive with foreground services, but Doze and background limits mean push is still the dependable path there too."
     },
     {
       "id": "d53q08",
       "type": "mcq",
-      "topic": "reconnect sync",
-      "difficulty": "Medium",
-      "question": "The phone was in a tunnel for 10 minutes. The WebSocket reconnects. How should the client get the messages it missed?",
-      "code": "GET /conversations/42/messages?after_seq=1042&limit=100\n\n{ \"messages\": [ ... ], \"has_more\": true }",
+      "topic": "long-running work",
+      "difficulty": "Hard",
+      "question": "A delivery app must track the courier's location continuously for a 40-minute trip while the courier uses other apps. What is the right approach on each platform?",
       "options": [
-        "Reload the latest 50 messages and replace the local list",
-        "Ask for messages sent after the device's local time when the socket dropped",
-        "Page from the last sequence number stored locally",
-        "Wait for the server to replay missed messages over the new socket"
+        "Android: a periodic WorkManager job running every minute. iOS: BGAppRefreshTask scheduled to run every minute",
+        "Android: a foreground service of location type with an ongoing notification. iOS: the location background mode with background location updates enabled",
+        "Android: an exact AlarmManager alarm every 5 seconds. iOS: silent pushes from the server every 5 seconds",
+        "Android: a coroutine in an application-scoped CoroutineScope. iOS: a detached Task kept alive by a strong reference"
       ],
       "answer": [
-        2
+        1
       ],
-      "explanation": "A last-seen sequence cursor is exact: nothing is skipped or fetched twice, however long the gap. The latest 50 can leave holes after a long gap. A local-time cutoff runs into clock skew. A plain socket has no replay unless you build one, and that's the same cursor logic anyway."
+      "explanation": "Continuous, user-visible location work is exactly the foreground-service case on Android, and iOS supports it via the 'location' background mode and `allowsBackgroundLocationUpdates`. Periodic WorkManager work has a 15-minute minimum, and BGAppRefreshTask timing is decided by the system. Plain coroutines or tasks get stopped when the process is cached or suspended."
     },
     {
       "id": "d53q09",
-      "type": "multi",
-      "topic": "reconnect backoff",
+      "type": "mcq",
+      "topic": "heartbeats",
       "difficulty": "Hard",
-      "question": "A chat server deploy drops 2 million WebSocket connections at once. Which client reconnect behaviours stop the clients from overloading the servers when they come back? Select all that apply.",
+      "question": "Users report the chat 'looks connected' but stops receiving messages after a few idle minutes on mobile data. The socket never reports an error. What is the most likely cause and fix?",
       "options": [
-        "Exponential backoff between reconnect attempts",
-        "Random jitter added to each backoff delay",
-        "A maximum cap on the backoff delay",
-        "Retrying every second on a fixed timer until the connection works",
-        "Retrying immediately in a tight loop so users see messages as soon as possible"
+        "The read timeout is too short; set it to infinite so the client never gives up on a quiet connection",
+        "The server is sending frames too fast for the client; add a client-side rate limiter that discards extra frames",
+        "TCP keepalive is already on by default every few seconds, so the server must be closing sockets without sending a frame",
+        "A carrier NAT or proxy silently dropped the idle connection; add an app-level ping/pong with a timeout that triggers reconnect"
       ],
       "answer": [
-        0,
-        1,
-        2
+        3
       ],
-      "explanation": "Without jitter, clients that disconnected together retry together and keep hitting the servers in synchronized waves (the thundering herd). Exponential backoff spreads out the load as failures continue, jitter breaks up the waves, and the cap keeps a user from waiting forever. Fixed or immediate retries keep the herd synchronized."
+      "explanation": "Mobile NATs drop idle mappings without telling either side, so the socket looks alive until you try to use it. A heartbeat (WebSocket ping/pong or an app message) both keeps the mapping warm and detects death, with the interval traded off against battery. OS-level TCP keepalive defaults are measured in hours, and an infinite timeout just hides the dead connection."
     },
     {
       "id": "d53q10",
-      "type": "mcq",
-      "topic": "message states",
-      "difficulty": "Easy",
-      "question": "A message moves through sending → sent → delivered → read. What should flip it from 'sending' to 'sent'?",
-      "options": [
-        "The send call on the WebSocket returning without an error",
-        "The recipient's device confirming it received the message",
-        "The server's ack that it stored the message",
-        "The recipient opening the conversation"
-      ],
-      "answer": [
-        2
-      ],
-      "explanation": "'Sent' means the server has the message for sure, which only its ack (usually carrying its server id and sequence number) proves. A successful local write only means the bytes went into a buffer, and the connection may die before they arrive. The recipient's device confirming is 'delivered', and the recipient opening the conversation is 'read'."
-    },
-    {
-      "id": "d53q11",
-      "type": "mcq",
-      "topic": "heartbeats",
-      "difficulty": "Medium",
-      "question": "The app shows 'connected', but no messages have arrived for 5 minutes. Server logs show the server closed the connection long ago. What should the client add?",
-      "options": [
-        "A bigger socket read buffer so frames aren't dropped",
-        "Ping/pong heartbeats with a reconnect on timeout",
-        "An FCM message every 30 seconds to keep the app awake",
-        "A longer connect timeout on the OkHttp client"
-      ],
-      "answer": [
-        1
-      ],
-      "explanation": "Mobile NATs and carrier proxies silently drop idle connections, which leaves a half-open socket that looks fine on the client. Heartbeats keep the NAT mapping alive and detect dead connections quickly. Pick the interval as a trade-off between how fast you detect drops and how often you wake the radio."
-    },
-    {
-      "id": "d53q12",
-      "type": "truefalse",
-      "topic": "ephemeral events",
-      "difficulty": "Easy",
-      "question": "Typing indicators and online presence should be stored in Room and synced reliably, just like messages.",
-      "options": [
-        "True",
-        "False"
-      ],
-      "answer": [
-        1
-      ],
-      "explanation": "Typing and presence are ephemeral: they only matter right now, so they're sent over the live socket, fire-and-forget, and expire on a timer. Storing and replaying them would show 'typing...' from an hour ago and waste storage and bandwidth."
-    },
-    {
-      "id": "d53q13",
-      "type": "mcq",
-      "topic": "paging history",
-      "difficulty": "Medium",
-      "question": "Some conversations have 50,000 messages. How should the chat screen load history?",
-      "options": [
-        "Load every message from Room into a `List` in the ViewModel when the screen opens",
-        "Page from Room by sequence number, fetching older pages via a `before_seq` cursor",
-        "Always load history straight from the network with `?page=N` offsets and skip the database",
-        "Load the newest 100 messages and stop the user from scrolling further back"
-      ],
-      "answer": [
-        1
-      ],
-      "explanation": "Paging 3 over Room keeps memory bounded and works offline, and a RemoteMediator with a sequence cursor fills older gaps. Loading everything wastes memory and slows startup. Offset pages shift as new messages arrive, which causes duplicates or skipped messages. Capping history is a product regression, not a design."
-    },
-    {
-      "id": "d53q14",
-      "type": "mcq",
-      "topic": "outbox",
-      "difficulty": "Easy",
-      "question": "The user sends a message while in airplane mode. What should happen?",
-      "options": [
-        "Show an error and clear the input field",
-        "Disable the send button until the network comes back",
-        "Keep the message only in ViewModel memory and send it when the socket reconnects",
-        "Save it in Room as 'pending' and send it from a WorkManager outbox"
-      ],
-      "answer": [
-        3
-      ],
-      "explanation": "A persistent outbox makes the message survive process death and appear immediately (local echo), and it's retried automatically, e.g. by WorkManager with a network constraint. Keeping it only in memory loses it if the app is killed. Errors or a disabled send button break the offline-first experience users expect from chat."
-    },
-    {
-      "id": "d53q15",
       "type": "multi",
-      "topic": "media messages",
-      "difficulty": "Medium",
-      "question": "Users can send 200 MB videos. Which parts of the design are correct? Select all that apply.",
+      "topic": "push behaviour",
+      "difficulty": "Hard",
+      "question": "Which statements about push delivery on current Android and iOS are accurate? Select all that apply.",
       "options": [
-        "Upload the file to blob storage separately (for example to a pre-signed URL), then send a chat message that references the media id",
-        "Use a resumable or chunked upload so a dropped connection doesn't restart the whole upload",
-        "Include a small thumbnail or blur placeholder and the dimensions in the message so recipients can lay it out before downloading",
-        "Base64-encode the video and send it as a WebSocket frame so it arrives in order with the text",
-        "Have recipients download the full video automatically on any network so it plays instantly"
+        "FCM high-priority messages that do not lead to a user-visible notification may be deprioritised over time",
+        "Data-only FCM messages bypass Doze completely whatever priority you send them with",
+        "An iOS silent push will relaunch an app that the user has force-quit from the app switcher",
+        "iOS background (content-available) pushes are throttled by the system and may be delayed or not delivered",
+        "Collapse keys (FCM) and `apns-collapse-id` let a newer notification replace an older one still pending"
       ],
       "answer": [
         0,
-        1,
-        2
+        3,
+        4
       ],
-      "explanation": "Separating media upload from the message keeps the socket free for small, real-time frames, and resumable uploads survive flaky mobile networks. Base64 makes the payload about 33% bigger and blocks the socket. Auto-downloading big files on mobile data burns the user's data plan, so most apps download on Wi-Fi only or on tap."
-    },
-    {
-      "id": "d53q16",
-      "type": "mcq",
-      "topic": "e2ee",
-      "difficulty": "Hard",
-      "question": "The chat is end-to-end encrypted. Product asks for 'search all my messages'. How does this have to work?",
-      "options": [
-        "Index messages on the server in Elasticsearch when they arrive",
-        "Send the search query to the server, which decrypts matching conversations",
-        "Store a plaintext copy on the server just for search",
-        "Search on the device, e.g. a Room FTS table"
-      ],
-      "answer": [
-        3
-      ],
-      "explanation": "With E2EE the private keys live only on devices, so the server only sees ciphertext and can't index or decrypt it. Any server-side option breaks the encryption promise. The index is built from the decrypted messages stored locally. The trade-off is that search only covers history that's on the device."
-    },
-    {
-      "id": "d53q17",
-      "type": "mcq",
-      "topic": "local echo dedupe",
-      "difficulty": "Hard",
-      "question": "The app inserts a sent message into Room right away (local echo). The server then pushes the same message back over the socket with its server id and sequence number, and users see it twice. What's the right fix?",
-      "options": [
-        "Skip the local insert and wait for the server echo",
-        "Upsert the echo into the existing row by client message id",
-        "Ignore every incoming socket message whose sender is the current user",
-        "Remove duplicates in the UI by comparing message text and timestamp"
-      ],
-      "answer": [
-        1
-      ],
-      "explanation": "The client-generated id is the shared key between the optimistic row and the server's copy, so a unique index on it plus an upsert that fills in server id, sequence and 'sent' state turns the echo into a state update. Waiting for the echo makes sending feel slow and breaks offline sends. Ignoring your own messages loses the ones you sent from another device. Matching on text and time breaks when you send identical texts."
-    },
-    {
-      "id": "d53q18",
-      "type": "truefalse",
-      "topic": "fcm priority",
-      "difficulty": "Medium",
-      "question": "It's fine to send every chat event (read receipts, presence changes, typing) as a high-priority FCM message so the app always gets them immediately.",
-      "options": [
-        "True",
-        "False"
-      ],
-      "answer": [
-        1
-      ],
-      "explanation": "High priority is meant for messages that lead to a user-visible notification. Android can downgrade an app's high-priority messages to normal if they keep not producing notifications. Send background events as normal priority or let them catch up on the next sync."
-    },
-    {
-      "id": "d53q19",
-      "type": "multi",
-      "topic": "group fan-out",
-      "difficulty": "Hard",
-      "question": "You add groups of up to 5,000 members (no end-to-end encryption). Which choices on the client side are sound? Select all that apply.",
-      "options": [
-        "The client uploads the message once and the server fans it out to members",
-        "Show combined read status (for example 'Read by 312') instead of tracking delivery ticks for every member",
-        "Get presence and typing only for members who are currently visible or active, not the whole group",
-        "The client sends a separate copy to each member to make sure every member gets it",
-        "Open a separate WebSocket for each group the user is in"
-      ],
-      "answer": [
-        0,
-        1,
-        2
-      ],
-      "explanation": "Fan-out belongs on the server, since one upload from a phone is far cheaper than 5,000. Per-member receipts and presence for big groups mean too many events and too much UI, so they're combined or limited to who's visible. One multiplexed socket carries all conversations, and a socket per group multiplies the connection and battery cost."
-    },
-    {
-      "id": "d53q20",
-      "type": "multi",
-      "topic": "notifications",
-      "difficulty": "Easy",
-      "question": "Several friends message the user while the app is closed. Which notification behaviours make sense for a chat app? Select all that apply.",
-      "options": [
-        "Group notifications per conversation (for example with `MessagingStyle`) and add new messages to the existing one",
-        "Offer inline reply with `RemoteInput`, sending the reply through the same outbox",
-        "Clear or update the notification when the conversation is read on another device",
-        "Post a new separate notification for every single message",
-        "Make the reply action always open the full app before sending"
-      ],
-      "answer": [
-        0,
-        1,
-        2
-      ],
-      "explanation": "Grouping per conversation keeps the notification shade readable, and inline reply lets users answer without opening the app. Using the outbox means the reply is retried like any other message. A notification per message floods the shade. A read sync should clear stale notifications so users aren't nagged about messages they've already seen."
+      "explanation": "Firebase documents that high priority is meant for messages that result in a notification, and may deprioritise apps that abuse it. iOS treats background pushes as low-priority hints and budgets them; after a user force-quits, the system does not launch the app for them. Normal-priority FCM messages are batched during Doze, so priority matters."
     }
   ]
 }

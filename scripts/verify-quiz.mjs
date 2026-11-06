@@ -3,6 +3,7 @@
 //   "compiles": false:   code must fail to compile (the question is about a compile error).
 //   "compiles": true:    code must compile.
 // Usage: node scripts/verify-quiz.mjs [day ...]   (no args = every file in lib/quiz)
+// QUIZ_SCHEMA_ONLY=1 checks the format only and skips compiling (no kotlinc needed).
 // Needs kotlinc and kotlin on PATH. kotlinx-coroutines is put on the classpath when found
 // (QUIZ_CLASSPATH, or the newest kotlinx-coroutines-core-jvm jar in ~/.gradle).
 import fs from "node:fs";
@@ -47,7 +48,7 @@ for (const f of files) {
   if (quiz.day !== day) err(f, `"day" should be ${day}`);
   if (!quiz.topic) err(f, "missing topic");
   else if (quiz.topic !== sylTopic(day)) err(f, `topic ${JSON.stringify(quiz.topic)} doesn't match public/quiz-syllabus.json (${JSON.stringify(sylTopic(day))})`);
-  if (!Array.isArray(quiz.questions) || quiz.questions.length !== 20) err(f, `needs exactly 20 questions, has ${quiz.questions?.length}`);
+  if (!Array.isArray(quiz.questions) || quiz.questions.length !== 10) err(f, `needs exactly 10 questions, has ${quiz.questions?.length}`);
   const ids = new Set(), texts = new Set();
   (quiz.questions || []).forEach((q, n) => {
     const want = `d${String(day).padStart(2, "0")}q${String(n + 1).padStart(2, "0")}`;
@@ -77,6 +78,8 @@ for (const f of files) {
     }
   });
 }
+
+if (process.env.QUIZ_SCHEMA_ONLY) { outputs.length = 0; compileChecks.length = 0; }
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "quizkt-"));
 const pkg = q => "quiz." + q.id;

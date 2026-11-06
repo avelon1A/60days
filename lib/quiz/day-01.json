@@ -1,225 +1,184 @@
 {
   "day": 1,
-  "topic": "Basics: val/var, types & string templates",
+  "topic": "Kotlin types, null safety & smart casts",
   "questions": [
     {
       "id": "d01q01",
       "type": "output",
-      "topic": "integer division",
+      "topic": "elvis operator",
       "difficulty": "Easy",
       "question": "What does this print?",
-      "code": "fun main() {\n    println(7 / 2)\n    println(7 % 2)\n}",
-      "options": ["3\n1", "3.5\n1", "3.5\n1.0", "4\n1"],
-      "answer": [0],
-      "explanation": "Both operands are `Int`, so `/` is integer division and truncates toward zero, giving `3`. `%` is the remainder, `1`. You only get `3.5` if at least one operand is a `Double` or `Float`."
+      "code": "fun main() {\n    val s: String? = null\n    println(s?.length ?: -1)\n    println(s.isNullOrEmpty())\n}",
+      "options": [
+        "null\ntrue",
+        "0\ntrue",
+        "-1\nfalse",
+        "-1\ntrue"
+      ],
+      "answer": [
+        3
+      ],
+      "explanation": "`s?.length` evaluates to null because `s` is null, so the elvis operator supplies -1. `isNullOrEmpty()` is an extension on `String?`, so it can be called without `?.` and returns true for null. Nothing prints the literal `null` here."
     },
     {
       "id": "d01q02",
       "type": "mcq",
-      "topic": "val vs var",
+      "topic": "type inference",
       "difficulty": "Easy",
-      "question": "Inside an Activity you write the code below. What happens?",
-      "code": "class LoginActivity : AppCompatActivity() {\n    val retryCount = 0\n\n    fun onLoginFailed() {\n        retryCount++\n    }\n}",
-      "options": ["Compile error: `val` cannot be reassigned", "It compiles and `retryCount` becomes 1", "It compiles but throws at runtime when `onLoginFailed()` runs", "It compiles because `++` mutates the Int in place"],
-      "answer": [0],
-      "explanation": "`retryCount++` is a reassignment (`retryCount = retryCount + 1`), which a read-only `val` doesn't allow. You need `var retryCount = 0`. `Int` is immutable, so nothing can change it \"in place\"."
+      "question": "What is the inferred type of `x`?",
+      "code": "val x = if (flag) 1 else null",
+      "options": [
+        "Nothing?",
+        "Int",
+        "Any?",
+        "Int?"
+      ],
+      "answer": [
+        3
+      ],
+      "explanation": "The compiler takes the common supertype of the branches: `Int` and `Nothing?` (the type of `null`). That common supertype is `Int?`. It does not widen to `Any?` because `Int?` already covers both branches."
     },
     {
       "id": "d01q03",
       "type": "output",
-      "topic": "string templates",
+      "topic": "smart cast in when",
       "difficulty": "Easy",
       "question": "What does this print?",
-      "code": "fun main() {\n    val user = \"Asha\"\n    val count = 3\n    println(\"$user has $count new messages\")\n    println(\"${user.length} letters, $user.length\")\n}",
-      "options": ["Asha has 3 new messages\n4 letters, Asha.length", "Asha has 3 new messages\n4 letters, 4", "$user has $count new messages\n4 letters, Asha.length", "Asha has 3 new messages\n${user.length} letters, Asha.length"],
-      "answer": [0],
-      "explanation": "`$name` substitutes only the simple identifier, so `$user.length` becomes `Asha` followed by the literal text `.length`. To evaluate an expression such as a property access, wrap it in braces: `${user.length}`."
+      "code": "fun describe(x: Any): String = when (x) {\n    is Int -> \"int ${x + 1}\"\n    is String -> \"str ${x.length}\"\n    else -> \"other\"\n}\n\nfun main() {\n    println(describe(41))\n    println(describe(\"hey\"))\n    println(describe(2.0))\n}",
+      "options": [
+        "int 42\nstr 3\nint 3",
+        "int 411\nstr 3\nother",
+        "int 42\nstr 3\nother",
+        "other\nother\nother"
+      ],
+      "answer": [
+        2
+      ],
+      "explanation": "After `is Int` the parameter `x` is smart cast to `Int`, so `x + 1` is arithmetic (42), not string concatenation. `is String` smart casts to `String`, giving length 3. A `Double` matches neither branch, so it falls to `else`."
     },
     {
       "id": "d01q04",
-      "type": "truefalse",
-      "topic": "val vs mutability",
-      "difficulty": "Easy",
-      "question": "In a ViewModel, `val items = mutableListOf<String>()` followed by `items.add(\"Milk\")` compiles, because `val` only makes the reference read-only, not the object it points to.",
-      "options": ["True", "False"],
-      "answer": [0],
-      "explanation": "`val` means the variable can't be reassigned to point at a different list. The `MutableList` itself can still be changed with `add`/`remove`. To prevent mutation you'd expose a read-only `List` type instead."
+      "type": "mcq",
+      "topic": "mutable property smart cast",
+      "difficulty": "Medium",
+      "question": "This code does not compile. What is the reason, and what is the usual fix?",
+      "code": "class User(var name: String?)\n\nfun printLength(u: User) {\n    if (u.name != null) println(u.name.length)\n}",
+      "options": [
+        "The null check must use `!==` instead of `!=` for the compiler to treat it as a type check",
+        "Smart casts never work on properties, only on local variables; the property must be made `lateinit`",
+        "`u.name` is a `var` that could change after the check; copy it to a local `val` or use `?.let`",
+        "`println` cannot take an `Int` from a nullable chain; the call must be written as `u.name!!.length`"
+      ],
+      "answer": [
+        2
+      ],
+      "explanation": "A `var` property can be changed by other code or another thread after the null check, so the compiler cannot prove it is still non-null. Copying it to a local `val` (or using `?.let`) gives a stable value that smart casts. Smart casts do work on stable `val` properties in the same module, so 'never on properties' is wrong.",
+      "compiles": false
     },
     {
       "id": "d01q05",
-      "type": "mcq",
-      "topic": "type inference",
-      "difficulty": "Easy",
-      "question": "What is the inferred type of `x` in `val x = 5 / 2.0`?",
-      "options": ["Double", "Int", "Float", "Number"],
-      "answer": [0],
-      "explanation": "`2.0` is a `Double` literal (a `Float` needs the `f` suffix), and `Int / Double` returns `Double`, so `x` is `Double` with value `2.5`. It is not `Int`, since only `Int / Int` does integer division."
+      "type": "output",
+      "topic": "let returning null",
+      "difficulty": "Medium",
+      "question": "What does this print?",
+      "code": "fun main() {\n    val s: String? = \"kotlin\"\n    val r = s?.let { if (it.length > 3) null else it.uppercase() } ?: \"fallback\"\n    println(r)\n}",
+      "options": [
+        "fallback",
+        "null",
+        "KOTLIN",
+        "kotlin"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "`s` is not null, so the `let` block runs, but it returns null because the length is 6. The elvis operator looks at the result of the whole `s?.let { }` expression, not at `s`, so null from the lambda also triggers \"fallback\". This is a common bug when `?.let { } ?: ...` is used as an if/else."
     },
     {
       "id": "d01q06",
-      "type": "output",
-      "topic": "numeric literals",
-      "difficulty": "Easy",
-      "question": "What does this print?",
-      "code": "fun main() {\n    val million = 1_000_000\n    val mask = 0xFF\n    println(million + mask)\n    println(0b101)\n}",
-      "options": ["1000255\n5", "1000000FF\n101", "1000255\n101", "1000000255\n5"],
-      "answer": [0],
-      "explanation": "Underscores in numeric literals are just for readability, so `1_000_000` is one million. `0xFF` is hex for 255 and `0b101` is binary for 5. They are plain `Int` values, so they add and print in decimal."
+      "type": "truefalse",
+      "topic": "lateinit",
+      "difficulty": "Medium",
+      "question": "`lateinit var count: Int` is a valid declaration inside a class.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "`lateinit` is only allowed on non-null types that are not primitive types, because the 'not initialized' state is represented by a null reference in the field. For an `Int` you would use `Delegates.notNull()`, a nullable type, or a default value."
     },
     {
       "id": "d01q07",
-      "type": "mcq",
-      "topic": "static typing",
-      "difficulty": "Easy",
-      "question": "What happens when you compile this?",
-      "code": "var count = 0\n\nfun reset() {\n    count = \"zero\"\n}",
-      "options": ["Compile error: type mismatch, `count` is an `Int`", "It compiles and `count` becomes a `String`", "It compiles because `var` declarations are dynamically typed", "It compiles but throws `ClassCastException` when `reset()` runs"],
-      "answer": [0],
-      "explanation": "Type inference happens once, at the declaration: `count` is `Int` for good. `var` only allows reassigning another `Int` value. It does not make the variable dynamically typed.",
-      "compiles": false
+      "type": "multi",
+      "topic": "type hierarchy",
+      "difficulty": "Medium",
+      "question": "Which statements about Kotlin's type hierarchy are true? Select all that apply.",
+      "options": [
+        "A block-body function with no declared return type returns `Any`",
+        "`Nothing` is a subtype of every type, so a `throw` can be used where a `String` is expected",
+        "`Int` and `Int?` always compile to the same JVM type",
+        "`Unit` and `Nothing` are interchangeable as function return types",
+        "`Any?` is the top type; `Any` is not a supertype of `String?`"
+      ],
+      "answer": [
+        1,
+        4
+      ],
+      "explanation": "`Nothing` has no values and is a subtype of every type, which is why `val n = x ?: throw ...` keeps the non-null type. `Any` only covers non-null types; `Any?` is the true top. `Unit` is a real value while `Nothing` means the function never returns; `Int?` is boxed to `java.lang.Integer` while `Int` is usually a primitive `int`; and a block-body function without a declared type returns `Unit`."
     },
     {
       "id": "d01q08",
-      "type": "output",
-      "topic": "char",
-      "difficulty": "Easy",
-      "question": "What does this print?",
-      "code": "fun main() {\n    val c = 'A'\n    println(c + 2)\n    println(c.code)\n}",
-      "options": ["C\n65", "67\n65", "A2\n65", "C\nA"],
-      "answer": [0],
-      "explanation": "`Char + Int` returns a `Char`, moving forward in the character table, so `'A' + 2` is `'C'`, not the number 67. `Char` is not a number in Kotlin, and you use `.code` to get its integer code, which is 65."
+      "type": "mcq",
+      "topic": "platform types",
+      "difficulty": "Hard",
+      "question": "A Java method `String getName()` has no nullability annotations and returns null. Which statement about the two Kotlin lines is correct?",
+      "code": "val a: String = j.name   // line 1\nval b = j.name           // line 2\nprintln(b.length)",
+      "options": [
+        "Neither line throws; both `a` and `b` hold null until a member is accessed",
+        "Line 1 fails to compile, because a platform type cannot be assigned to a non-null type",
+        "Line 1 throws at the assignment; line 2 holds null and fails later at `b.length`",
+        "Both lines throw at the assignment, because Kotlin null-checks every Java return value"
+      ],
+      "answer": [
+        2
+      ],
+      "explanation": "`j.name` has the platform type `String!`, so Kotlin lets you treat it as either nullable or non-null. When you assign it to a declared non-null `String`, the compiler inserts a null check that throws immediately. With an inferred type, `b` stays `String!` and holds null, so the failure moves to the later dereference, far from the real cause."
     },
     {
       "id": "d01q09",
-      "type": "truefalse",
-      "topic": "literal typing",
-      "difficulty": "Medium",
-      "question": "`val timeoutMs: Long = 10` compiles, even though Kotlin has no implicit widening from `Int` to `Long`.",
-      "code": "val timeoutMs: Long = 10\n\nfun main() {\n    println(timeoutMs)\n}",
-      "options": ["True", "False"],
-      "answer": [0],
-      "explanation": "An integer literal has no fixed type until the compiler sees the expected type, so `10` becomes a `Long` here and no conversion happens. What fails is assigning an existing `Int` variable to a `Long`.",
-      "compiles": true
+      "type": "output",
+      "topic": "nullable plus",
+      "difficulty": "Hard",
+      "question": "What does this print?",
+      "code": "fun main() {\n    val s: String? = null\n    val t = s + \"!\"\n    println(t)\n    println(t.length)\n}",
+      "options": [
+        "null\n4",
+        "null!\n5",
+        "!\n1",
+        "!null\n5"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "The stdlib defines `operator fun String?.plus(other: Any?): String`, so `s + \"!\"` compiles without a safe call and turns the null receiver into the text \"null\". The result is the non-null string \"null!\" of length 5. It does not throw and does not drop the null."
     },
     {
       "id": "d01q10",
-      "type": "output",
-      "topic": "overflow",
-      "difficulty": "Medium",
-      "question": "What does this print?",
-      "code": "fun main() {\n    val max = Int.MAX_VALUE\n    println(max + 1)\n}",
-      "options": ["-2147483648", "2147483648", "2147483647", "Throws ArithmeticException"],
-      "answer": [0],
-      "explanation": "`Int` arithmetic silently wraps around on overflow, as it does on the JVM, so `MAX_VALUE + 1` becomes `Int.MIN_VALUE`. Kotlin doesn't throw and doesn't promote the result to `Long`."
-    },
-    {
-      "id": "d01q11",
       "type": "mcq",
-      "topic": "no implicit widening",
-      "difficulty": "Medium",
-      "question": "What happens when you compile this?",
-      "code": "fun main() {\n    val pageSize: Int = 20\n    val offset: Long = pageSize\n    println(offset)\n}",
-      "options": ["Compile error: type mismatch, an `Int` is not a `Long`", "Prints `20`, because `Int` widens to `Long` automatically", "Prints `20L`", "Compiles but throws `ClassCastException` at runtime"],
-      "answer": [0],
-      "explanation": "Unlike Java, Kotlin never widens numbers implicitly, so an `Int` variable can't be assigned where a `Long` is expected. Convert it explicitly with `pageSize.toLong()`.",
-      "compiles": false
-    },
-    {
-      "id": "d01q12",
-      "type": "output",
-      "topic": "escaping $",
-      "difficulty": "Medium",
-      "question": "What does this print?",
-      "code": "fun main() {\n    val price = 10\n    println(\"Total: ${'$'}$price\")\n    println(\"Total: \\$price\")\n}",
-      "options": ["Total: $10\nTotal: $price", "Total: $10\nTotal: 10", "Total: ${'$'}10\nTotal: $price", "Total: $10\nTotal: \\$price"],
-      "answer": [0],
-      "explanation": "`${'$'}` evaluates the char expression `'$'`, which gives a literal dollar sign, and `$price` then inserts 10. In a regular string `\\$` escapes the dollar, so `\\$price` prints the literal text `$price`."
-    },
-    {
-      "id": "d01q13",
-      "type": "multi",
-      "topic": "const val",
-      "difficulty": "Medium",
-      "question": "Which of these `const val` declarations compile? Select all that apply.",
-      "options": ["`const val TAG = \"MainActivity\"` at the top level of a file", "`const val EXTRA_USER_ID = \"extra_user_id\"` inside a `companion object`", "`const val TIMEOUT_MS = 30 * 1000L` at the top level", "`const val TABS = listOf(\"Home\", \"Search\")` at the top level", "`const val KEY = \"k\"` declared inside `onCreate()`", "`const val PAGE_SIZE = 20` as a member of a regular `class Repo`"],
-      "answer": [0, 1, 2],
-      "explanation": "`const val` must be at the top level or in an `object`/`companion object`, and its value must be a compile-time constant of a primitive type or `String`. Constant arithmetic like `30 * 1000L` is fine, but a function call like `listOf(...)` isn't, and neither local nor regular class members are allowed."
-    },
-    {
-      "id": "d01q14",
-      "type": "mcq",
-      "topic": "unit",
-      "difficulty": "Medium",
-      "question": "What is the return type of `log`, and what does `println(log(\"hi\"))` print after printing `hi`?",
-      "code": "fun log(msg: String) {\n    println(msg)\n}",
-      "options": ["`Unit`, and it prints `kotlin.Unit`", "`void`, and the call doesn't compile because there is no value", "`Nothing`, and it prints `null`", "`Any`, and it prints an empty line"],
-      "answer": [0],
-      "explanation": "A block-body function with no declared return type returns `Unit`, which is a real singleton object (Kotlin has no `void` type). Printing it shows `kotlin.Unit`. `Nothing` is for functions that never return."
-    },
-    {
-      "id": "d01q15",
-      "type": "mcq",
-      "topic": "any",
-      "difficulty": "Medium",
-      "question": "Which statement about `Any` is true?",
-      "options": ["Every non-nullable Kotlin type, including `Int` and `Boolean`, is a subtype of `Any`", "`Int` and `Boolean` are not subtypes of `Any`, because they compile to JVM primitives", "`Any` exposes all of `java.lang.Object`'s methods, including `wait()` and `notify()`", "`Any` is a supertype of nullable types such as `String?`"],
-      "answer": [0],
-      "explanation": "`Any` is the root of all non-nullable types, so `val x: Any = 42` works, with boxing when needed. It only declares `equals`, `hashCode` and `toString`. The root of nullable types is `Any?`, not `Any`."
-    },
-    {
-      "id": "d01q16",
-      "type": "truefalse",
-      "topic": "float literal",
-      "difficulty": "Medium",
-      "question": "`val alpha: Float = 0.5` compiles.",
-      "code": "val alpha: Float = 0.5\n\nfun main() {\n    println(alpha)\n}",
-      "options": ["True", "False"],
-      "answer": [1],
-      "explanation": "A decimal literal without a suffix is always a `Double`, and Kotlin won't narrow it to `Float`. You must write `0.5f`. Integer literals adapt to `Long`/`Byte`/`Short`, but floating-point literals don't.",
-      "compiles": false
-    },
-    {
-      "id": "d01q17",
-      "type": "output",
-      "topic": "conversions",
-      "difficulty": "Medium",
-      "question": "What does this print?",
-      "code": "fun main() {\n    println(3.99.toInt())\n    println((-3.99).toInt())\n    println(7 / 2 * 2.0)\n}",
-      "options": ["3\n-3\n6.0", "4\n-4\n7.0", "3\n-4\n6.0", "3\n-3\n7.0"],
-      "answer": [0],
-      "explanation": "`toInt()` truncates toward zero instead of rounding, so you get `3` and `-3`. In `7 / 2 * 2.0` the `Int` division runs first and gives `3`, and only then is the result multiplied by `2.0`, so the answer is `6.0`, not `7.0`."
-    },
-    {
-      "id": "d01q18",
-      "type": "mcq",
-      "topic": "arithmetic promotion",
+      "topic": "null assertions",
       "difficulty": "Hard",
-      "question": "What is the type of `c`?",
-      "code": "val a: Byte = 10\nval b: Byte = 20\nval c = a + b",
-      "options": ["Int", "Byte", "Short", "Long"],
-      "answer": [0],
-      "explanation": "Arithmetic on `Byte` and `Short` returns `Int`, so `c` is `Int`. That's why `val c: Byte = a + b` fails to compile and you need `(a + b).toByte()`."
-    },
-    {
-      "id": "d01q19",
-      "type": "output",
-      "topic": "overflow in long",
-      "difficulty": "Hard",
-      "question": "A cache expiry is computed like this. What does it print?",
-      "code": "fun main() {\n    val thirtyDaysMs: Long = 30 * 24 * 60 * 60 * 1000\n    println(thirtyDaysMs)\n}",
-      "options": ["-1702967296", "2592000000", "Compile error: type mismatch", "2147483647"],
-      "answer": [0],
-      "explanation": "The right-hand side is all `Int` literals, so it's computed in `Int` and overflows before it's ever stored as a `Long` (the compiler only warns). Make one operand a `Long`, e.g. `1000L`, to get `2592000000`."
-    },
-    {
-      "id": "d01q20",
-      "type": "multi",
-      "topic": "explicit conversion",
-      "difficulty": "Hard",
-      "question": "Given `val i = 1`, which of these declarations compile? Select all that apply.",
-      "options": ["`val a: Long = 1`", "`val b: Double = 1`", "`val c: Char = 65`", "`val d: Long = i.toLong()`", "`val e: Double = 1.0f`", "`val f: Long = i`"],
-      "answer": [0, 3],
-      "explanation": "An integer literal can become a `Long`, and `toLong()` is an explicit conversion, so those two compile. An integer literal never becomes a `Double` or `Char`, a `Float` isn't widened to `Double`, and an `Int` variable isn't widened to `Long`."
+      "question": "Which exceptions do `x!!`, `requireNotNull(x)` and `checkNotNull(x)` throw when `x` is null?",
+      "options": [
+        "`!!` throws IllegalStateException, while `requireNotNull` and `checkNotNull` throw NullPointerException",
+        "`!!` throws NullPointerException, `requireNotNull` IllegalStateException, `checkNotNull` IllegalArgumentException",
+        "`!!` throws NullPointerException, `requireNotNull` IllegalArgumentException, `checkNotNull` IllegalStateException",
+        "All three throw NullPointerException; the helpers only differ by attaching a lazily built message"
+      ],
+      "answer": [
+        2
+      ],
+      "explanation": "`require*` functions express a bad argument (IllegalArgumentException) and `check*` functions express bad state (IllegalStateException), matching `require()` and `check()`. `!!` throws a NullPointerException. Choosing the right one makes crash reports say whether the caller or the object's state was wrong. The two helpers also smart cast `x` to non-null afterwards."
     }
   ]
 }

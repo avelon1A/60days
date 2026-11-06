@@ -2,11 +2,10 @@ name: Deploy
 
 on:
   push:
-    branches: [main]
   workflow_dispatch:
 
 concurrency:
-  group: deploy
+  group: deploy-${{ github.ref }}
   cancel-in-progress: false
 
 env:
@@ -35,9 +34,23 @@ jobs:
           for i in $(seq 1 20); do curl -fs http://localhost:3000/api/health && break; sleep 1; done
           test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/)" = 200
           test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/api/me)" = 401
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Install kotlinc and kotlinx-coroutines
+        run: |
+          curl -fsSL -o /tmp/kotlin.zip https://github.com/JetBrains/kotlin/releases/download/v2.1.21/kotlin-compiler-2.1.21.zip
+          unzip -q /tmp/kotlin.zip -d /tmp
+          echo "/tmp/kotlinc/bin" >> "$GITHUB_PATH"
+          curl -fsSL -o /tmp/coroutines.jar https://repo1.maven.org/maven2/org/jetbrains/kotlinx/kotlinx-coroutines-core-jvm/1.10.2/kotlinx-coroutines-core-jvm-1.10.2.jar
+          echo "QUIZ_CLASSPATH=/tmp/coroutines.jar" >> "$GITHUB_ENV"
+      - name: Verify quiz
+        run: node scripts/verify-quiz.mjs
 
   deploy:
     needs: check
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

@@ -1,117 +1,116 @@
 {
   "day": 32,
-  "topic": "Flow on Android: lifecycle-safe collection & one-off events",
+  "topic": "Garbage collection on ART",
   "questions": [
     {
       "id": "d32q01",
       "type": "mcq",
-      "topic": "lifecycleScope collect",
+      "topic": "reachability",
       "difficulty": "Easy",
-      "question": "An Activity collects a location Flow with `lifecycleScope.launch { viewModel.locations.collect { render(it) } }` in `onCreate`. The user presses Home and the Activity is stopped. What happens to the collection?",
+      "question": "What makes an object eligible for garbage collection on ART?",
       "options": [
-        "It keeps running until the Activity is destroyed, so `render` runs while the UI is hidden",
-        "It is cancelled at `onStop` and restarted at `onStart`",
-        "It is paused at `onStop` and resumes from the same point at `onStart`",
-        "It is cancelled at `onPause`, because `lifecycleScope` follows the RESUMED state by default"
+        "Its reference count drops to zero",
+        "It has not been accessed for several GC cycles",
+        "The method that created it has returned",
+        "No chain of strong references from any GC root reaches it"
       ],
       "answer": [
-        0
+        3
       ],
-      "explanation": "`lifecycleScope` is only cancelled at DESTROYED, so a plain `launch { collect }` keeps collecting in the background. That wastes resources (GPS, network) and can update Views while stopped. Being tied to STARTED needs `repeatOnLifecycle` or `flowWithLifecycle`."
+      "explanation": "ART uses tracing collection: anything not reachable from roots such as thread stacks, static fields and JNI global references is garbage. It does not use reference counting, so cycles of unreachable objects are still collected, and leaving the creating method only matters if nothing else holds the object."
     },
     {
       "id": "d32q02",
-      "type": "output",
-      "topic": "replay redelivery",
-      "difficulty": "Easy",
-      "question": "A ViewModel exposes navigation events through a `MutableSharedFlow(replay = 1)`. The first collector is cancelled (rotation) and a new one subscribes. What does this print?",
-      "code": "import kotlinx.coroutines.*\nimport kotlinx.coroutines.flow.*\n\nfun main() = runBlocking {\n    val events = MutableSharedFlow<String>(replay = 1)\n    val first = launch { events.collect { println(\"A: $it\") } }\n    delay(10)\n    events.emit(\"Navigate\")\n    delay(10)\n    first.cancel()\n    val second = launch { events.collect { println(\"B: $it\") } }\n    delay(10)\n    second.cancel()\n}",
-      "options": [
-        "A: Navigate\nB: Navigate",
-        "A: Navigate",
-        "B: Navigate",
-        "A: Navigate\nB: null"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "With `replay = 1` every new subscriber immediately gets the last value, so the re-created screen sees `Navigate` again and would navigate twice. That's why a replaying SharedFlow is a poor fit for one-off events."
-    },
-    {
-      "id": "d32q03",
       "type": "truefalse",
-      "topic": "collectAsStateWithLifecycle",
+      "topic": "concurrent GC",
       "difficulty": "Easy",
-      "question": "By default, `collectAsStateWithLifecycle()` collects only while the lifecycle is at least `STARTED`.",
+      "question": "ART's default concurrent copying collector stops all app threads for the whole time a collection runs.",
       "options": [
         "True",
         "False"
       ],
       "answer": [
+        1
+      ],
+      "explanation": "Most of the work, including marking and copying, happens concurrently while app threads keep running; only short pauses are needed (for example to flip thread roots). Long stop-the-world collections were a Dalvik-era problem."
+    },
+    {
+      "id": "d32q03",
+      "type": "mcq",
+      "topic": "allocation churn",
+      "difficulty": "Easy",
+      "question": "Logcat shows GC messages several times a second while a list is scrolling. What is the most likely cause?",
+      "options": [
+        "Too many short-lived objects allocated in hot paths like `onDraw` or `onBindViewHolder`",
+        "The heap limit is set too high by `largeHeap`",
+        "RecyclerView recycling its view holders",
+        "A memory leak keeping old activities alive"
+      ],
+      "answer": [
         0
       ],
-      "explanation": "Its `minActiveState` parameter defaults to `Lifecycle.State.STARTED`. Collection stops when the lifecycle drops below that and starts again when it comes back."
+      "explanation": "Frequent collections during an interaction mean a high allocation rate: creating Paints, lists, strings or boxed values per frame or per bind. A leak shows up as a heap that keeps growing rather than as constant collections, and recycling view holders actually reduces allocations."
     },
     {
       "id": "d32q04",
       "type": "mcq",
-      "topic": "repeatOnLifecycle restart",
-      "difficulty": "Easy",
-      "question": "A Fragment collects inside `viewLifecycleOwner.lifecycleScope.launch { repeatOnLifecycle(Lifecycle.State.STARTED) { vm.uiState.collect { render(it) } } }`. The app goes to the background and then comes back. What happens to the block?",
+      "topic": "generational GC",
+      "difficulty": "Medium",
+      "question": "Why does making the collector generational make GC cheaper for a typical Android app?",
       "options": [
-        "It is cancelled below STARTED and runs again from the start on returning to STARTED",
-        "It is suspended at `onStop` and picks up mid-collection at `onStart`",
-        "It runs once. Coming back to STARTED does nothing because `repeatOnLifecycle` has already returned",
-        "It keeps collecting, and only `render` calls are skipped while stopped"
+        "Most objects die young, so frequent collections of recently allocated memory free a lot while touching little",
+        "It moves old objects to native memory where they do not count toward the heap limit",
+        "It lets the app choose which objects to collect with annotations",
+        "It never has to scan old objects again once they are promoted"
       ],
       "answer": [
         0
       ],
-      "explanation": "`repeatOnLifecycle` launches the block in a new coroutine every time the lifecycle reaches the target state and cancels it when the lifecycle falls below. So collection really stops (not just pauses) and restarts from scratch, which is why a `StateFlow` (which hands the latest value to every new collector) pairs well with it."
+      "explanation": "The generational hypothesis says most allocations are short-lived, so collecting only young objects reclaims most garbage cheaply. Old objects still need occasional full collections and references from old to young objects must be tracked; nothing is moved out of the managed heap."
     },
     {
       "id": "d32q05",
       "type": "mcq",
-      "topic": "exposing StateFlow",
-      "difficulty": "Easy",
-      "question": "Why does a ViewModel usually declare `private val _uiState = MutableStateFlow(UiState())` and `val uiState: StateFlow<UiState> = _uiState.asStateFlow()`?",
+      "topic": "read barriers",
+      "difficulty": "Medium",
+      "question": "The concurrent copying collector moves objects while app threads are running. What mechanism makes that safe?",
       "options": [
-        "So the UI gets a read-only view and only the ViewModel can change the state",
-        "Because `MutableStateFlow` cannot be collected from a Fragment",
-        "Because `asStateFlow()` makes collection lifecycle-aware",
-        "Because `asStateFlow()` copies the current value so the UI and ViewModel never share state"
+        "Objects are never moved while any thread is running, only during app idle time",
+        "A read barrier on reference loads makes threads see the moved copy of an object",
+        "The app is paused while every pointer in the heap is rewritten",
+        "Every write of a primitive field is blocked until copying finishes"
       ],
       "answer": [
-        0
+        1
       ],
-      "explanation": "`asStateFlow()` wraps the mutable flow in a read-only `StateFlow`, so the UI can't set `value` or cast it back to `MutableStateFlow`. It doesn't add lifecycle awareness or copy anything: both sides still see the same live state."
+      "explanation": "Concurrent copying uses read barriers: when a thread loads a reference, the barrier ensures it gets the to-space copy if the object has moved. This adds a small cost to reference reads but avoids a long pause to fix every pointer. Primitive writes need no special handling for moving."
     },
     {
       "id": "d32q06",
       "type": "multi",
-      "topic": "lifecycle-safe APIs",
+      "topic": "GC roots",
       "difficulty": "Medium",
-      "question": "Which of these stop collecting a Flow when the screen goes to the background (below STARTED)? Select all that apply.",
+      "question": "Which of these act as GC roots that keep objects alive? Select all that apply.",
       "options": [
-        "`lifecycleScope.launch { repeatOnLifecycle(Lifecycle.State.STARTED) { flow.collect { } } }`",
-        "`flow.flowWithLifecycle(lifecycle, Lifecycle.State.STARTED).onEach { }.launchIn(lifecycleScope)`",
-        "`val state by flow.collectAsStateWithLifecycle()` in a composable",
-        "`lifecycleScope.launch { flow.collect { } }` started in `onStart`",
-        "`lifecycleScope.launchWhenStarted { flow.collect { } }`"
+        "Local variables in frames of running threads",
+        "Keys in a `WeakHashMap` that nothing else points to",
+        "Static fields of loaded classes",
+        "Objects referenced only by a `WeakReference`",
+        "JNI global references held by native code"
       ],
       "answer": [
         0,
-        1,
-        2
+        2,
+        4
       ],
-      "explanation": "`repeatOnLifecycle`, `flowWithLifecycle` and `collectAsStateWithLifecycle` all cancel collection below STARTED. A plain `launch` lives until DESTROYED whichever callback started it (and launching it in every `onStart` stacks up duplicate collectors). The deprecated `launchWhenStarted` only suspends the coroutine, so the subscription and its upstream work stay alive."
+      "explanation": "Static fields, live stack frames and JNI global references are all roots, which is why statics and long-running threads are classic leak sources. Weak references by design do not keep their referent alive, and a `WeakHashMap` drops entries whose keys are only weakly reachable."
     },
     {
       "id": "d32q07",
       "type": "truefalse",
-      "topic": "collectAsState",
-      "difficulty": "Easy",
-      "question": "In Compose, plain `collectAsState()` stops collecting when the Activity is stopped, so it is just as lifecycle-safe as `collectAsStateWithLifecycle()`.",
+      "topic": "System.gc",
+      "difficulty": "Medium",
+      "question": "Calling `System.gc()` before a heavy screen is a good way to guarantee no GC will run during its animations.",
       "options": [
         "True",
         "False"
@@ -119,228 +118,59 @@
       "answer": [
         1
       ],
-      "explanation": "`collectAsState()` collects for as long as the composable is in the composition, and the composition stays alive while the Activity is stopped. It knows nothing about the lifecycle, which is why Android recommends `collectAsStateWithLifecycle()`."
+      "explanation": "`System.gc()` is only a request, and even a full collection does not stop new allocations from triggering another one moments later. It also costs CPU at the wrong time; the real fix is reducing allocations during the animation."
     },
     {
       "id": "d32q08",
       "type": "mcq",
-      "topic": "trySend",
-      "difficulty": "Easy",
-      "question": "Inside `callbackFlow { }`, why does a listener such as `onLocationResult(result)` call `trySend(result)` instead of `send(result)`?",
+      "topic": "GC stalls",
+      "difficulty": "Hard",
+      "question": "A Perfetto trace shows the main thread blocked in a slice like `WaitForGcToComplete` during a dropped frame, while `HeapTaskDaemon` is busy. What is the most likely cause?",
       "options": [
-        "The listener isn't a suspend function, and `send` suspends while `trySend` doesn't",
-        "`send` closes the channel after the first element",
-        "`trySend` guarantees the element is delivered even when the buffer is full, while `send` may drop it",
-        "`send` only works with `Dispatchers.IO`"
+        "The main thread is allocating faster than the concurrent GC can free, so an allocation had to wait for GC",
+        "A leaked Activity is making each GC slower",
+        "The RenderThread is holding the heap lock while uploading textures",
+        "A finalizer on the main thread threw an exception"
       ],
       "answer": [
         0
       ],
-      "explanation": "`send` is a suspend function, so it can't be called from a normal callback. `trySend` returns a `ChannelResult` right away. It can fail when the buffer is full, so it does not guarantee delivery, and you can set a buffer policy (for example `buffer(Channel.CONFLATED)`) for fast producers."
+      "explanation": "When the heap fills up during a concurrent cycle, an allocating thread must wait for the collector to free space, and the main thread shows up blocked on GC. The fix is to cut the allocation rate in that code path. Leaks raise heap occupancy but the immediate symptom here is an allocation stall, not a lock held by RenderThread."
     },
     {
       "id": "d32q09",
-      "type": "output",
-      "topic": "callbackFlow awaitClose",
-      "difficulty": "Medium",
-      "question": "A fake location manager is wrapped with `callbackFlow`. What does this print?",
-      "code": "import kotlinx.coroutines.*\nimport kotlinx.coroutines.channels.*\nimport kotlinx.coroutines.flow.*\n\nclass FakeLocationManager {\n    var listener: ((Int) -> Unit)? = null\n    fun requestUpdates(l: (Int) -> Unit) { listener = l; println(\"register\") }\n    fun removeUpdates() { listener = null; println(\"remove\") }\n}\n\nfun locations(m: FakeLocationManager) = callbackFlow {\n    m.requestUpdates { trySend(it) }\n    awaitClose { m.removeUpdates() }\n}\n\nfun main() = runBlocking {\n    val m = FakeLocationManager()\n    launch { delay(10); listOf(1, 2, 3).forEach { m.listener?.invoke(it) } }\n    locations(m).take(2).collect { println(\"loc $it\") }\n    println(\"done\")\n}",
+      "type": "multi",
+      "topic": "allocation tools",
+      "difficulty": "Hard",
+      "question": "You need to find which code allocates the most objects while a screen scrolls. Which tools help? Select all that apply.",
       "options": [
-        "register\nloc 1\nloc 2\nremove\ndone",
-        "register\nloc 1\nloc 2\ndone",
-        "register\nloc 1\nloc 2\ndone\nremove",
-        "register\nloc 1\nloc 2\nloc 3\nremove\ndone"
+        "Android Studio Memory Profiler's Java/Kotlin allocation recording",
+        "Perfetto heap profiling (heapprofd) for native allocations",
+        "JankStats frame reports",
+        "LeakCanary's heap analysis"
       ],
       "answer": [
-        0
+        0,
+        1
       ],
-      "explanation": "Once `take(2)` has its two values it cancels the producer, which runs the `awaitClose` block (`remove`) before `collect` returns, so `remove` comes before `done`. The third value was buffered but is never delivered. Without `awaitClose` the listener would never be unregistered."
+      "explanation": "Allocation recording and heapprofd capture allocation call stacks, which is what you need to find churn. LeakCanary reports objects that stay retained after they should be gone, not short-lived allocations, and JankStats tells you which frames were slow but not why."
     },
     {
       "id": "d32q10",
       "type": "mcq",
-      "topic": "flowWithLifecycle",
-      "difficulty": "Medium",
-      "question": "When is `flow.flowWithLifecycle(lifecycle, Lifecycle.State.STARTED)` a better fit than writing `repeatOnLifecycle` yourself?",
-      "options": [
-        "When you collect a single flow and want a chainable operator, e.g. before `launchIn`",
-        "When you collect several flows in parallel, because it shares one lifecycle observer between them",
-        "When you need the flow to keep collecting in the background but skip emissions while stopped",
-        "When the code runs outside any Activity or Fragment, because it doesn't need a `Lifecycle`"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`flowWithLifecycle` uses `repeatOnLifecycle` internally and only collects upstream while the lifecycle is at least the given state. It suits one flow. For several flows, use one `repeatOnLifecycle` block with a `launch` for each flow, rather than chaining the operator on each flow separately."
-    },
-    {
-      "id": "d32q11",
-      "type": "mcq",
-      "topic": "WhileSubscribed(5000)",
-      "difficulty": "Medium",
-      "question": "A ViewModel uses `stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), UiState())` and the UI collects with `collectAsStateWithLifecycle()`. What is the 5-second timeout for?",
-      "options": [
-        "Rotation resubscribes within 5 s so upstream keeps running; a longer background stay stops it",
-        "It delays the first emission by 5 s so the UI has time to subscribe",
-        "It caches the value for 5 s and then resets the StateFlow back to the initial value",
-        "It keeps upstream alive for 5 s after `viewModelScope` is cancelled, so pending results can still arrive"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`stopTimeoutMillis` waits that long after the last subscriber leaves before cancelling upstream. A config change resubscribes almost immediately, so the work isn't restarted, but a backgrounded app has no subscribers for more than 5 s and upstream stops. The value is kept by default (`replayExpirationMillis` is infinite)."
-    },
-    {
-      "id": "d32q12",
-      "type": "truefalse",
-      "topic": "WhileSubscribed pitfall",
+      "topic": "finalizers",
       "difficulty": "Hard",
-      "question": "If a ViewModel uses `SharingStarted.WhileSubscribed(5000)` but the Activity collects with a plain `lifecycleScope.launch { uiState.collect { } }`, the upstream still stops about 5 seconds after the user presses Home.",
+      "question": "A class overrides `finalize()` to free a native handle. Under load, users see crashes with a `TimeoutException` mentioning `finalize()`. What is going on?",
       "options": [
-        "True",
-        "False"
-      ],
-      "answer": [
-        1
-      ],
-      "explanation": "`WhileSubscribed` only reacts to subscribers actually leaving. A plain `lifecycleScope.launch` keeps its subscription until the Activity is destroyed, so the subscriber count never reaches zero and upstream keeps running. The saving only happens when the UI side is lifecycle-aware too."
-    },
-    {
-      "id": "d32q13",
-      "type": "mcq",
-      "topic": "SharedFlow lost events",
-      "difficulty": "Medium",
-      "question": "Navigation events go through `MutableSharedFlow<NavEvent>()` (replay = 0) and the screen collects them with `repeatOnLifecycle(STARTED)`. A network call finishes and calls `events.emit(GoToDetails)` while the app is in the background. What happens?",
-      "options": [
-        "The event is dropped: with no subscribers, nothing is stored",
-        "`emit` suspends until the screen returns to STARTED, then the event is delivered",
-        "The event is buffered and delivered when the screen resubscribes",
-        "`emit` throws `IllegalStateException` because there are no collectors"
+        "Finalizers run on a single daemon thread; a slow one exceeds the watchdog timeout and the runtime crashes the app",
+        "`finalize()` is not supported on ART, so the call threw immediately",
+        "The native handle was freed twice because ART runs each finalizer twice",
+        "Finalizers run on the main thread and triggered an ANR"
       ],
       "answer": [
         0
       ],
-      "explanation": "A SharedFlow with `replay = 0` keeps nothing for future subscribers, and with zero subscribers `emit` does nothing and returns at once. The user comes back and the navigation never happens, which is the classic lost-event bug."
-    },
-    {
-      "id": "d32q14",
-      "type": "output",
-      "topic": "receiveAsFlow",
-      "difficulty": "Hard",
-      "question": "Events are sent to a `Channel` before any screen is collecting. What does this print?",
-      "code": "import kotlinx.coroutines.*\nimport kotlinx.coroutines.channels.*\nimport kotlinx.coroutines.flow.*\n\nfun main() = runBlocking {\n    val events = Channel<String>(Channel.BUFFERED)\n    events.send(\"Navigate\")\n    events.send(\"Toast\")\n    val flow = events.receiveAsFlow()\n    flow.take(1).collect { println(\"screen1: $it\") }\n    val job = launch { flow.collect { println(\"screen2: $it\") } }\n    delay(10)\n    job.cancel()\n}",
-      "options": [
-        "screen1: Navigate\nscreen2: Toast",
-        "screen1: Navigate\nscreen2: Navigate\nscreen2: Toast",
-        "screen1: Navigate",
-        "screen1: Navigate\nscreen2: Toast\nscreen2: Navigate"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "A Channel keeps elements until someone receives them, so nothing sent before collection is lost. Each element goes to exactly one receiver, so `Navigate` is gone once screen1 takes it. Stopping a `receiveAsFlow` collector doesn't close the channel (unlike `consumeAsFlow`), so screen2 gets the remaining `Toast`."
-    },
-    {
-      "id": "d32q15",
-      "type": "multi",
-      "topic": "Channel for events",
-      "difficulty": "Medium",
-      "question": "A ViewModel exposes one-off events as `private val _events = Channel<UiEvent>(Channel.BUFFERED)` and `val events = _events.receiveAsFlow()`. Which statements are true? Select all that apply.",
-      "options": [
-        "Events sent while the screen is stopped are buffered and delivered when it collects again",
-        "If two collectors are active, each event goes to only one of them",
-        "After a rotation, the new Activity receives every past event again",
-        "Every active collector receives every event, as with a SharedFlow"
-      ],
-      "answer": [
-        0,
-        1
-      ],
-      "explanation": "A buffered Channel holds events until they're received, so the background case works. Delivery is fan-out, though: one receiver per element, so it isn't for broadcasting to several observers. Elements are removed once received, so nothing is replayed after rotation."
-    },
-    {
-      "id": "d32q16",
-      "type": "mcq",
-      "topic": "events as state",
-      "difficulty": "Medium",
-      "question": "What does the official Android architecture guidance recommend for a one-off message like \"Item saved\" shown in a Snackbar?",
-      "options": [
-        "Model it as state, e.g. `userMessage: String?` in `UiState`, cleared once the UI has shown it",
-        "Emit it on a `MutableSharedFlow(replay = 1)` so it survives rotation and is shown exactly once",
-        "Expose it as `LiveData<String>` and observe it with `observeForever`",
-        "Call the Snackbar directly from the ViewModel through a stored `View` reference"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Treating the event as part of the UI state means it survives config changes and lifecycle gaps, and the UI tells the ViewModel when it has been handled. A replaying SharedFlow would show it again on resubscribe, and holding a `View` in a ViewModel leaks the Activity. For example, the UI calls `userMessageShown()`, which sets `userMessage` back to `null`."
-    },
-    {
-      "id": "d32q17",
-      "type": "truefalse",
-      "topic": "missing awaitClose",
-      "difficulty": "Medium",
-      "question": "If a `callbackFlow { }` block registers a listener and then simply returns without calling `awaitClose`, the flow completes normally when the block returns.",
-      "options": [
-        "True",
-        "False"
-      ],
-      "answer": [
-        1
-      ],
-      "explanation": "`callbackFlow` requires `awaitClose`. If the block returns while the channel is still open, collection fails with an `IllegalStateException` saying `awaitClose` should be used. `awaitClose` keeps the producer suspended while callbacks arrive and gives you a place to unregister the listener."
-    },
-    {
-      "id": "d32q18",
-      "type": "multi",
-      "topic": "LiveData interop",
-      "difficulty": "Medium",
-      "question": "Which statements about the LiveData and Flow interop extensions are true? Select all that apply.",
-      "options": [
-        "`flow.asLiveData()` collects upstream only while the LiveData has active observers, and cancels after a timeout (5 s by default) once the last one goes away",
-        "`liveData.asFlow()` turns a LiveData into a cold Flow that emits its values while being collected",
-        "`flow.asLiveData()` starts collecting at creation and never stops until the ViewModel is cleared",
-        "`liveData.asFlow()` needs a `LifecycleOwner` parameter to observe the LiveData"
-      ],
-      "answer": [
-        0,
-        1
-      ],
-      "explanation": "`asLiveData()` starts collecting when the LiveData becomes active and stops `timeoutInMs` (default 5000) after it becomes inactive, which works much like `WhileSubscribed(5000)`. `asFlow()` observes the LiveData with `observeForever` inside the flow, so it doesn't need a `LifecycleOwner`. The collector's lifecycle-aware collection handles that part."
-    },
-    {
-      "id": "d32q19",
-      "type": "mcq",
-      "topic": "Compose background collection",
-      "difficulty": "Hard",
-      "question": "A composable reads `val state by vm.locationState.collectAsState()`, where `locationState` uses `stateIn(viewModelScope, WhileSubscribed(5000), ...)` over GPS updates. The user presses Home for 10 minutes. What happens?",
-      "options": [
-        "GPS keeps running: the composition survives `onStop`, so `collectAsState` stays subscribed",
-        "GPS stops after 5 s, because Compose disposes the composition when the Activity is stopped",
-        "GPS stops immediately, because `collectAsState` uses the Activity's lifecycle by default",
-        "Collection continues, but `stateIn` drops the GPS values because `viewModelScope` is paused"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Compose doesn't dispose the composition at `onStop`, so `collectAsState` stays subscribed and the upstream keeps working. Switching to `collectAsStateWithLifecycle()` unsubscribes below STARTED, and after 5 s `WhileSubscribed` cancels the GPS upstream."
-    },
-    {
-      "id": "d32q20",
-      "type": "mcq",
-      "topic": "Main.immediate",
-      "difficulty": "Hard",
-      "question": "Even with a `Channel`, an event sent just as the screen goes to STOPPED is occasionally lost. Why does the guidance to collect events on `Dispatchers.Main.immediate` (for example `withContext(Dispatchers.Main.immediate) { events.collect { } }` inside `repeatOnLifecycle`) help?",
-      "options": [
-        "A dispatched resume leaves a gap where cancellation drops the element; `Main.immediate` resumes with no gap",
-        "`Main.immediate` makes `repeatOnLifecycle` ignore the STOPPED state until all buffered events are handled",
-        "`Main.immediate` turns the Channel into a replaying flow, so the event is delivered again after `onStart`",
-        "`Main.immediate` runs the collector on a background thread, so it is not cancelled with the lifecycle"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Cancellable suspensions in coroutines have a prompt cancellation guarantee: if the coroutine is cancelled before it actually resumes, it throws `CancellationException` and the already-taken element is lost. When the sender and collector are both on the main thread, `Main.immediate` (also the default for `viewModelScope` and `lifecycleScope`) avoids the re-dispatch and closes that window. It doesn't change cancellation or replay behaviour."
+      "explanation": "Finalizable objects are queued and run one by one on a finalizer daemon, and a watchdog kills the process if one takes too long. They also delay memory reclamation because the object survives an extra GC. Explicit `close()` or a `Cleaner`-style approach is preferred; finalizers do not run on the main thread or twice."
     }
   ]
 }

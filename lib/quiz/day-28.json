@@ -1,174 +1,30 @@
 {
   "day": 28,
-  "topic": "Channels, Mutex & shared mutable state",
+  "topic": "Navigation internals: back stack, NavController & Compose",
   "questions": [
     {
       "id": "d28q01",
       "type": "mcq",
-      "topic": "race condition",
+      "topic": "entry as owner",
       "difficulty": "Easy",
-      "question": "100 coroutines on `Dispatchers.Default` each increment a plain `var` 1000 times. What gets printed?",
-      "code": "var count = 0\n\nfun main() = runBlocking {\n    withContext(Dispatchers.Default) {\n        repeat(100) {\n            launch { repeat(1000) { count++ } }\n        }\n    }\n    println(count)\n}",
+      "question": "Why does calling viewModel() inside a NavHost destination give a ViewModel scoped to that destination?",
       "options": [
-        "Usually less than 100000, and it varies between runs",
-        "Always exactly 100000",
-        "Always exactly 1000",
-        "It doesn't compile: a top-level `var` can't be changed from a coroutine"
+        "NavHost creates a new Activity for each destination",
+        "viewModel() reads the route string and caches by it in a global map",
+        "The ViewModel is scoped to the NavController, shared by all destinations",
+        "Each NavBackStackEntry is a ViewModelStoreOwner provided to its content"
       ],
       "answer": [
-        0
+        3
       ],
-      "explanation": "`count++` is a read, an add and a write. Coroutines on different `Default` threads interleave those steps and overwrite each other's updates, so increments get lost. Structured concurrency only guarantees all coroutines finish before the `println`, not that their updates are atomic."
+      "explanation": "Each NavBackStackEntry is a LifecycleOwner, ViewModelStoreOwner and SavedStateRegistryOwner, and NavHost provides it as the local owner for that destination's content. So ViewModels live as long as the entry is on the back stack. A single Activity hosts all destinations."
     },
     {
       "id": "d28q02",
-      "type": "output",
-      "topic": "close & for loop",
-      "difficulty": "Easy",
-      "question": "What does this print?",
-      "code": "import kotlinx.coroutines.*\nimport kotlinx.coroutines.channels.*\n\nfun main() = runBlocking {\n    val ch = Channel<Int>()\n    launch {\n        for (i in 1..3) ch.send(i * 10)\n        ch.close()\n    }\n    for (x in ch) print(\"$x \")\n    println(\"done\")\n}",
-      "options": [
-        "10 20 30 done",
-        "10 20 30",
-        "done",
-        "10 done"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "The `for` loop receives each element and ends when the channel is closed and empty, so `done` is printed. Without `ch.close()`, the loop would wait forever and the program would hang."
-    },
-    {
-      "id": "d28q03",
       "type": "truefalse",
-      "topic": "rendezvous",
+      "topic": "forward navigation",
       "difficulty": "Easy",
-      "question": "`Channel<Int>()` with no arguments creates a rendezvous channel: `send` suspends until some receiver takes the element.",
-      "options": [
-        "True",
-        "False"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "The default capacity is `Channel.RENDEZVOUS` (0). It has no buffer, so sender and receiver must meet. Use `Channel.BUFFERED`, `UNLIMITED` or a number to get a buffer."
-    },
-    {
-      "id": "d28q04",
-      "type": "multi",
-      "topic": "fixing races",
-      "difficulty": "Medium",
-      "question": "Many coroutines on `Dispatchers.Default` run `count++`. Which changes make the final count correct? Select all that apply.",
-      "options": [
-        "Wrap the increment in `mutex.withLock { count++ }` using one shared `Mutex`",
-        "Make `count` an `AtomicInteger` and call `incrementAndGet()`",
-        "Run every increment on `Dispatchers.Default.limitedParallelism(1)`",
-        "Annotate `count` with `@Volatile`",
-        "Wrap `count++` in `withContext(Dispatchers.IO)`"
-      ],
-      "answer": [
-        0,
-        1,
-        2
-      ],
-      "explanation": "A mutex, an atomic read-modify-write, and confining the state to one-at-a-time execution all stop lost updates. `@Volatile` only makes writes visible to other threads. It doesn't make `++` atomic. `Dispatchers.IO` is multi-threaded too, so it fixes nothing."
-    },
-    {
-      "id": "d28q05",
-      "type": "output",
-      "topic": "buffered capacity",
-      "difficulty": "Easy",
-      "question": "What does this print?",
-      "code": "import kotlinx.coroutines.*\nimport kotlinx.coroutines.channels.*\n\nfun main() = runBlocking {\n    val ch = Channel<Int>(2)\n    repeat(4) {\n        print(\"${ch.trySend(it).isSuccess} \")\n    }\n    println()\n}",
-      "options": [
-        "true true false false",
-        "true true true true",
-        "false false false false",
-        "true true true false"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "A capacity of 2 buffers two elements. `trySend` never suspends: when the buffer is full and nobody is receiving, it returns a failed result instead of waiting, so the 3rd and 4th calls fail."
-    },
-    {
-      "id": "d28q06",
-      "type": "mcq",
-      "topic": "mutex reentrancy",
-      "difficulty": "Medium",
-      "question": "A repository calls `save()` from a ViewModel. What happens?",
-      "code": "private val mutex = Mutex()\n\nsuspend fun save(item: Item) = mutex.withLock {\n    dao.insert(item)\n    log(\"saved\")\n}\n\nsuspend fun log(msg: String) = mutex.withLock {\n    logDao.insert(LogEntry(msg))\n}",
-      "options": [
-        "`save()` suspends forever, because `log()` waits for a lock its caller holds",
-        "It works: the same coroutine can re-enter a lock it already holds",
-        "`log()` throws `IllegalStateException` straight away, because the lock is already taken",
-        "The second `withLock` is skipped because the lock is already held"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`kotlinx.coroutines.sync.Mutex` is not reentrant. The coroutine already holds the lock in `save()`, so `log()` suspends waiting for it to be released, and that never happens: a deadlock. Unlike `synchronized`, a Mutex has no owner thread to recognise. Make the inner function lock-free or take the lock once at the outer level."
-    },
-    {
-      "id": "d28q07",
-      "type": "mcq",
-      "topic": "produce",
-      "difficulty": "Easy",
-      "question": "What does `val numbers = produce { repeat(3) { send(it) } }` give you inside a `CoroutineScope`?",
-      "options": [
-        "A `ReceiveChannel<Int>` that closes when the block finishes",
-        "A `SendChannel<Int>` that you must close yourself",
-        "A cold `Flow<Int>` that runs again for each collector",
-        "A `Job` whose result holds the three values"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`produce` launches a coroutine with a channel and returns its receiving side. When the block completes, the channel is closed (or closed with the exception if it fails), so consumers using `for (x in numbers)` end cleanly. It is hot, not a cold Flow."
-    },
-    {
-      "id": "d28q08",
-      "type": "output",
-      "topic": "rendezvous handoff",
-      "difficulty": "Hard",
-      "question": "Everything runs on the single `runBlocking` thread. What does this print?",
-      "code": "import kotlinx.coroutines.*\nimport kotlinx.coroutines.channels.*\n\nfun main() = runBlocking {\n    val ch = Channel<Int>()\n    launch {\n        repeat(2) {\n            println(\"send $it\")\n            ch.send(it)\n            println(\"sent $it\")\n        }\n        ch.close()\n    }\n    for (x in ch) println(\"recv $x\")\n}",
-      "options": [
-        "send 0\nsent 0\nsend 1\nrecv 0\nrecv 1\nsent 1",
-        "send 0\nrecv 0\nsent 0\nsend 1\nrecv 1\nsent 1",
-        "send 0\nsent 0\nsend 1\nsent 1\nrecv 0\nrecv 1",
-        "send 0\nrecv 0\nsend 1\nrecv 1\nsent 0\nsent 1"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "The receiver is already waiting, so `send(0)` hands the value over without suspending. The receiver is only scheduled to resume, so the producer prints `sent 0`, and `send(1)` then suspends because nobody is waiting. The receiver prints `recv 0`, takes 1 from the waiting sender without suspending, and prints `recv 1` before the producer gets to `sent 1`."
-    },
-    {
-      "id": "d28q09",
-      "type": "mcq",
-      "topic": "synchronized",
-      "difficulty": "Hard",
-      "question": "What happens when you compile this?",
-      "code": "import kotlinx.coroutines.*\n\nval lock = Any()\n\nfun main() = runBlocking {\n    launch {\n        synchronized(lock) {\n            delay(10)\n        }\n    }\n    Unit\n}",
-      "options": [
-        "Compile error: the `delay` suspension point is inside a critical section",
-        "It compiles and holds the monitor while the coroutine is suspended",
-        "It compiles, but throws `IllegalMonitorStateException` when the coroutine resumes",
-        "It compiles, and `synchronized` releases the monitor automatically during `delay`"
-      ],
-      "answer": [
-        0
-      ],
-      "compiles": false,
-      "explanation": "A JVM monitor belongs to a thread, but a suspended coroutine may resume on a different thread, which could never release it. The compiler rejects suspension points inside `synchronized`. Use `Mutex.withLock` when the critical section has to suspend."
-    },
-    {
-      "id": "d28q10",
-      "type": "truefalse",
-      "topic": "fan-out",
-      "difficulty": "Easy",
-      "question": "When three worker coroutines all receive from the same channel (fan-out), every element is delivered to all three workers.",
+      "question": "A ViewModel scoped to a destination's NavBackStackEntry is cleared as soon as you navigate forward to another destination.",
       "options": [
         "True",
         "False"
@@ -176,105 +32,85 @@
       "answer": [
         1
       ],
-      "explanation": "A channel element is consumed by exactly one receiver, so fan-out spreads the work between the workers. If every subscriber should see every value, use a `SharedFlow` instead."
+      "explanation": "Navigating forward keeps the previous entry on the back stack, so its ViewModelStore stays alive and the ViewModel is reused when you come back. It is cleared when the entry is popped off (and not saved with saveState)."
     },
     {
-      "id": "d28q11",
-      "type": "output",
-      "topic": "conflated",
-      "difficulty": "Medium",
-      "question": "What does this print?",
-      "code": "import kotlinx.coroutines.*\nimport kotlinx.coroutines.channels.*\n\nfun main() = runBlocking {\n    val ch = Channel<Int>(Channel.CONFLATED)\n    repeat(5) { ch.send(it) }\n    ch.close()\n    for (x in ch) print(\"$x \")\n    println(\"end\")\n}",
-      "options": [
-        "4 end",
-        "0 1 2 3 4 end",
-        "0 end",
-        "It hangs on the second `send`"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "A `CONFLATED` channel keeps only the latest element, and `send` never suspends: each new value replaces the one that hasn't been received yet. Only `4` is left when the loop starts receiving."
-    },
-    {
-      "id": "d28q12",
+      "id": "d28q03",
       "type": "mcq",
-      "topic": "atomic vs mutex",
+      "topic": "entry lifecycle",
       "difficulty": "Medium",
-      "question": "A download manager keeps `completed` and `bytesDone` that must always be updated together, from many coroutines. Why is one `AtomicInteger` per field not enough?",
+      "question": "In a Compose NavHost you navigate from A to B and the transition finishes. What is A's NavBackStackEntry lifecycle state?",
       "options": [
-        "Another coroutine can read between the two updates and see them out of step",
-        "`AtomicInteger` doesn't work from coroutines because they can switch threads",
-        "`AtomicInteger` increments are lost when the coroutine is cancelled",
-        "Two atomics on one object cause a deadlock"
+        "DESTROYED",
+        "STARTED",
+        "RESUMED",
+        "CREATED"
       ],
       "answer": [
-        0
+        3
       ],
-      "explanation": "Atomics protect a single variable. An invariant that covers several variables needs one critical section around both updates, for example `mutex.withLock { completed++; bytesDone += n }`. Atomics work fine from coroutines on any thread."
+      "explanation": "Entries that are on the back stack but not visible are moved to CREATED: still alive with their ViewModels and saved state, but not started. Only the visible top entry reaches RESUMED. DESTROYED happens when the entry is popped."
     },
     {
-      "id": "d28q13",
-      "type": "multi",
-      "topic": "close",
+      "id": "d28q04",
+      "type": "mcq",
+      "topic": "saveState",
       "difficulty": "Medium",
-      "question": "A producer calls `channel.close()` while two elements are still in the buffer. Which statements are true? Select all that apply.",
+      "question": "In bottom-navigation code, what does `popUpTo(startDestination) { saveState = true }` combined with `restoreState = true` achieve?",
       "options": [
-        "The two buffered elements are still delivered to receivers",
-        "A later `send` throws `ClosedSendChannelException`",
-        "`for (x in channel)` ends after the buffered elements are received",
-        "`close()` throws away the buffered elements immediately",
-        "`receive()` on the closed, empty channel returns `null`"
+        "Popped entries are destroyed, but their route strings are logged for analytics",
+        "Popped entries' ViewModels and saved state are kept for restoring the tab",
+        "The whole back stack is written to disk so it survives the user clearing the app",
+        "Each tab gets its own NavController, created on demand and kept in memory"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "saveState keeps the state of the entries being popped (their ViewModels and saved instance state) instead of clearing it, and restoreState brings that saved stack back on the next navigate to the tab. This is how multiple back stacks work with a single NavController."
+    },
+    {
+      "id": "d28q05",
+      "type": "multi",
+      "topic": "type-safe routes",
+      "difficulty": "Medium",
+      "question": "Which statements about type-safe navigation in Navigation 2.8+ are true? Select all that apply.",
+      "options": [
+        "Routes are defined as @Serializable classes or objects",
+        "Arguments can be read with toRoute<T>() on a NavBackStackEntry or SavedStateHandle",
+        "Route classes must implement Parcelable to be used with navigate()",
+        "Custom argument types need a NavType supplied through typeMap",
+        "Arguments are held only in memory and are lost on process death"
       ],
       "answer": [
         0,
         1,
-        2
+        3
       ],
-      "explanation": "`close()` is a 'no more elements' signal: what is already buffered is still received, and then iteration ends. Discarding buffered elements is what `cancel()` does. `receive()` on a closed, empty channel throws `ClosedReceiveChannelException`. Use `receiveCatching()` for a non-throwing result."
+      "explanation": "Navigation 2.8 uses kotlinx.serialization to turn route objects into destinations and arguments; toRoute rebuilds the object. Primitive-like types work out of the box, custom types need a NavType. Arguments are stored in the entry's saved state, so they survive process death, and Parcelable isn't required."
     },
     {
-      "id": "d28q14",
-      "type": "output",
-      "topic": "receiveCatching",
-      "difficulty": "Medium",
-      "question": "What does this print?",
-      "code": "import kotlinx.coroutines.*\nimport kotlinx.coroutines.channels.*\n\nfun main() = runBlocking<Unit> {\n    val ch = Channel<Int>(1)\n    ch.send(7)\n    ch.close()\n    println(ch.receiveCatching().getOrNull())\n    println(ch.receiveCatching().getOrNull())\n    try {\n        ch.receive()\n    } catch (e: ClosedReceiveChannelException) {\n        println(\"closed\")\n    }\n}",
-      "options": [
-        "7\nnull\nclosed",
-        "null\nnull\nclosed",
-        "7\n7\nclosed",
-        "7\nnull\nnull"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Closing keeps the buffered `7`, so the first `receiveCatching()` succeeds. The second one finds the channel closed and empty and returns a closed `ChannelResult`, whose `getOrNull()` is `null`. Plain `receive()` throws `ClosedReceiveChannelException` instead."
-    },
-    {
-      "id": "d28q15",
+      "id": "d28q06",
       "type": "mcq",
-      "topic": "trySend",
-      "difficulty": "Easy",
-      "question": "Inside a non-suspending `View.OnClickListener` you want to put a `ClickEvent` into a `Channel(Channel.BUFFERED)`. Which call fits?",
-      "code": "button.setOnClickListener {\n    // events: Channel<ClickEvent>\n    ???\n}",
+      "topic": "process death",
+      "difficulty": "Hard",
+      "question": "The app is killed in the background while three destinations are on the back stack. When the user returns, what does Navigation restore?",
       "options": [
-        "`events.trySend(ClickEvent)`",
-        "`events.send(ClickEvent)`",
-        "`runBlocking { events.send(ClickEvent) }`",
-        "`events.close(ClickEvent)`"
+        "Nothing; the NavHost restarts at the start destination",
+        "The back stack, arguments and SavedStateHandle data, with new ViewModels",
+        "Only the top destination, without the entries below it",
+        "The back stack, along with the original ViewModel instances from before"
       ],
       "answer": [
-        0
+        1
       ],
-      "explanation": "`trySend` is the non-suspending version: it adds the element if there is room and returns a `ChannelResult` saying whether it worked. `send` is a suspend function and won't compile in a plain listener, and `runBlocking` would block the main thread."
+      "explanation": "NavController saves its back stack into the host's saved state, including each entry's arguments and saved state. On restore it rebuilds the entries, and ViewModels are recreated fresh but can read their SavedStateHandle. In-memory ViewModel instances can't survive the process dying."
     },
     {
-      "id": "d28q16",
+      "id": "d28q07",
       "type": "truefalse",
-      "topic": "buffer overflow",
+      "topic": "Navigation 3",
       "difficulty": "Medium",
-      "question": "With `Channel<Int>(2, BufferOverflow.DROP_OLDEST)`, `send` never suspends: when the buffer is full, the oldest buffered element is dropped to make room.",
+      "question": "In Navigation 3, the back stack is a list of keys that your code owns and changes directly (for example adding and removing entries), rather than state hidden inside a NavController.",
       "options": [
         "True",
         "False"
@@ -282,80 +118,61 @@
       "answer": [
         0
       ],
-      "explanation": "With `DROP_OLDEST` or `DROP_LATEST`, a full buffer drops an element instead of making the sender wait. Only the default `BufferOverflow.SUSPEND` makes `send` suspend. `CONFLATED` is the same idea with a buffer of 1."
+      "explanation": "Navigation 3 hands the back stack to you as observable state, typically a snapshot state list of keys, and a display composable renders it. Navigating is just adding or removing items. This is a major break from Navigation 2's NavController-owned back stack."
     },
     {
-      "id": "d28q17",
+      "id": "d28q08",
       "type": "mcq",
-      "topic": "consumeEach",
-      "difficulty": "Medium",
-      "question": "Why do the coroutines docs use `for (x in channel)` rather than `channel.consumeEach { }` for fan-out workers that share one channel?",
-      "options": [
-        "`consumeEach` cancels the channel when it exits, which stops the other workers too",
-        "`consumeEach` gives every element to every worker",
-        "`consumeEach` can only be called from `Dispatchers.Main`",
-        "`for (x in channel)` receives elements in batches, so each worker makes fewer suspending calls"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`consumeEach` assumes it is the only consumer: when it exits, normally or with an exception, it cancels the channel. That's handy for a single consumer but wrong when several workers share the channel. A `for` loop only stops the worker that is running it."
-    },
-    {
-      "id": "d28q18",
-      "type": "output",
-      "topic": "confinement",
+      "topic": "graph-scoped ViewModel",
       "difficulty": "Hard",
-      "question": "All 100 coroutines run on the single `runBlocking` thread. What does this print?",
-      "code": "import kotlinx.coroutines.*\n\nvar count = 0\n\nfun main() = runBlocking {\n    val jobs = List(100) {\n        launch {\n            val v = count\n            delay(10)\n            count = v + 1\n        }\n    }\n    jobs.joinAll()\n    println(count)\n}",
+      "question": "Screens in a nested checkout graph share a ViewModel from `viewModel(navController.getBackStackEntry<CheckoutGraph>())`. When is it cleared?",
       "options": [
-        "1",
-        "100",
-        "0",
-        "99"
+        "When the user leaves the first screen of the graph",
+        "When the Activity goes to the background",
+        "When the nested graph's own entry is popped",
+        "Never; graph-scoped ViewModels live for the whole lifetime of the process"
       ],
       "answer": [
-        0
+        2
       ],
-      "explanation": "Confining state to one thread makes each step atomic, but not a read-then-write that suspends in between. All 100 coroutines read `0` before any of them resumes from `delay`, so each one writes `1`. Keep the read and the write in the same non-suspending step, or hold a `Mutex` across the whole sequence."
+      "explanation": "A nested graph has its own NavBackStackEntry below its destinations, and that entry is the ViewModelStoreOwner here. The ViewModel stays while any part of the graph is on the back stack and is cleared once the graph entry is popped. Backgrounding the app doesn't clear ViewModelStores."
     },
     {
-      "id": "d28q19",
-      "type": "mcq",
-      "topic": "one-off ui events",
-      "difficulty": "Medium",
-      "question": "A ViewModel sends navigation events. Why is `Channel(Channel.BUFFERED)` exposed with `receiveAsFlow()` often chosen over `MutableSharedFlow<UiEvent>()` here?",
-      "code": "private val _events = Channel<UiEvent>(Channel.BUFFERED)\nval events = _events.receiveAsFlow()\n\nfun onSaved() {\n    viewModelScope.launch { _events.send(UiEvent.NavigateBack) }\n}",
-      "options": [
-        "Events sent while nothing is collecting wait in the buffer instead of being dropped",
-        "Every collector receives every event, so two screens observing the ViewModel can both react to it",
-        "A channel replays the last event to new collectors, like `StateFlow`",
-        "Channels are cold, so the event is only created when the UI collects"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`MutableSharedFlow()` with no replay drops emissions when there are no subscribers, so a navigation event sent during a configuration change can be lost. A buffered channel holds it until the new collector arrives. The trade-off is that each event goes to only one collector."
-    },
-    {
-      "id": "d28q20",
+      "id": "d28q09",
       "type": "multi",
-      "topic": "channel vs flow",
+      "topic": "entry lifecycle rules",
       "difficulty": "Hard",
-      "question": "Which statements correctly contrast channels with cold flows? Select all that apply.",
+      "question": "Which statements about NavBackStackEntry lifecycles are true? Select all that apply.",
       "options": [
-        "A `produce` coroutine starts running as soon as it's launched, whether or not anyone receives yet",
-        "A `flow { }` block runs again from the start for each collector",
-        "A channel signals 'no more elements' with `close()`, while a flow completes when its block returns",
-        "A new receiver of a channel first gets the most recent element again, like `StateFlow`",
-        "A cold flow can be collected only once"
+        "An entry's lifecycle never goes above its host's: if the Activity stops, the visible entry stops too",
+        "Every entry on the back stack is RESUMED so it can keep updating",
+        "A popped entry isn't DESTROYED until its exit transition has finished",
+        "Popping an entry without saveState clears its ViewModelStore",
+        "An entry's ViewModels are cleared as soon as it drops to CREATED"
       ],
       "answer": [
         0,
-        1,
-        2
+        2,
+        3
       ],
-      "explanation": "Channels are hot communication primitives: the producer runs on its own, and completion is signalled by closing. A cold flow does nothing until it is collected and restarts for every collector, so it can be collected many times. Channels don't replay anything: each element is received once."
+      "explanation": "Entry lifecycles are capped by the host lifecycle, and Compose Navigation keeps a popped entry alive until its exit animation completes, then destroys it and clears its ViewModels. Hidden entries sit at CREATED with ViewModels intact, and only the visible entry is RESUMED."
+    },
+    {
+      "id": "d28q10",
+      "type": "mcq",
+      "topic": "launchSingleTop",
+      "difficulty": "Easy",
+      "question": "What does `launchSingleTop = true` do when you navigate to the destination that is already at the top of the back stack?",
+      "options": [
+        "It reuses the top entry instead of pushing a duplicate",
+        "It pops the whole back stack and starts the destination again",
+        "It throws, because the destination is already displayed",
+        "It pushes a copy and then removes the original entry"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Without it, navigating to the current destination pushes a second copy, so the user has to press back twice. With launchSingleTop the existing entry stays on top. It doesn't clear other entries; that's what popUpTo is for."
     }
   ]
 }

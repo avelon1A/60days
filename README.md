@@ -10,7 +10,7 @@ A small web app for a study group working through **180 LeetCode problems in 60 
 - **LeetCode auto-tick:** link your LeetCode username and problems you get *Accepted* on LeetCode tick here by themselves. The server checks every 10 minutes, and **↻ Sync** checks right away. Only submissions made after a day unlocks count.
 - **Leaderboard and streaks:** total solved, 🔥 day streak and rank. People with equal totals share a rank.
 - **Hints, solutions and discussion:** hints stay hidden until you ask. Kotlin solutions (approach, complexity, code, gotcha) are posted the morning after each day. Discussion opens once you've solved a problem, so no spoilers.
-- **Daily Kotlin quiz:** 20 questions a day on Kotlin, coroutines/Flow, Android & Jetpack and mobile system design, on a 🟣 Kotlin quiz tab next to the problems. One attempt per day, answers and explanations after you submit, a quiz leaderboard with an on-time streak, and a roadmap of every day's topic. Missed days can still be taken and count as *Late*.
+- **Daily mobile quiz:** 10 questions a day, on a 🟣 Mobile quiz tab next to the problems. It runs from Kotlin, coroutines/Flow and Compose through Compose runtime internals, Android platform internals (memory, GC, rendering, Choreographer, jank), library and runtime internals (OkHttp, Retrofit, Coil, ExoPlayer, SQLite, JVM, ART), build-your-own frameworks and mobile system design patterns for Android and iOS. One attempt per day, answers and explanations after you submit, a quiz leaderboard with an on-time streak, and a roadmap of every day's topic. Missed days can still be taken and count as *Late*.
 - **Next-day preview:** see tomorrow's problem names ahead of time (no hints or solutions).
 - **Simple accounts:** sign up with a name and a 4-digit PIN. PINs are bcrypt-hashed, and there's a 15-minute lockout after 5 wrong tries.
 - **Light and dark theme:** follows your device until you pick one.
@@ -45,7 +45,7 @@ dev.js — Node HTTP server: serves public/, routes /api/* to api/index.js,
 | `public/bank.json` | The 60-day problem bank |
 | `public/solutions.json` | Daily solutions, keyed by day |
 | `public/quiz-syllabus.json` | Quiz topic for each day and the roadmap's week labels |
-| `lib/quiz/day-NN.json` | The quiz questions and answers, 20 per day (server-side only) |
+| `lib/quiz/day-NN.json` | The quiz questions and answers, 10 per day (server-side only) |
 | `lib/quiz.js` | Quiz loading, per-user option shuffle, grading, late cutoff |
 | `scripts/verify-quiz.mjs` | Checks the quiz files and runs their code through `kotlinc` |
 | `api/index.js` | All API routes |
@@ -80,7 +80,7 @@ All optional. Set them as environment variables.
 | `LEETCODE_POLL=off` | Turn off the 10-minute LeetCode poller |
 | `ADMIN_NAME`, `ADMIN_PIN` | Create a first admin account when the database is empty |
 
-## Kotlin quiz
+## Mobile quiz
 
 The questions live in `lib/quiz/day-NN.json`, outside `public/`, so the answers are never sent to the browser. `GET /api/quiz/:day` returns a day's questions without answers. `POST` grades the answers and stores one attempt per user per day in `quiz_attempts`. Each day file's `topic` must match `public/quiz-syllabus.json`.
 
@@ -90,7 +90,7 @@ After editing any day file, run:
 node scripts/verify-quiz.mjs [day ...]
 ```
 
-It checks the format, runs every "what does this print" snippet through `kotlinc` three times (to catch non-deterministic output) and checks every `"compiles"` claim. It needs `kotlinc` and `kotlin` on PATH. kotlinx-coroutines is taken from `~/.gradle`, or you can set `QUIZ_CLASSPATH`.
+It checks the format, runs every "what does this print" snippet through `kotlinc` three times (to catch non-deterministic output) and checks every `"compiles"` claim. It needs `kotlinc` and `kotlin` on PATH. kotlinx-coroutines is taken from `~/.gradle`, or you can set `QUIZ_CLASSPATH`. Without kotlinc, `QUIZ_SCHEMA_ONLY=1` checks the format only; CI runs the full check on every push.
 
 ## Deployment
 

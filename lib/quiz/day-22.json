@@ -1,48 +1,115 @@
 {
   "day": 22,
-  "topic": "Coroutine basics: suspend, launch, async & runBlocking",
+  "topic": "Compose runtime: Composer & the composition",
   "questions": [
     {
       "id": "d22q01",
-      "type": "output",
-      "topic": "launch order",
+      "type": "mcq",
+      "topic": "Composer role",
       "difficulty": "Easy",
-      "question": "What does this print?",
-      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking {\n    launch { println(\"A\") }\n    println(\"B\")\n}",
+      "question": "What is the Composer in the Compose runtime?",
       "options": [
-        "B\nA",
-        "A\nB",
-        "B",
-        "A"
+        "A View subclass that hosts composables inside an Activity",
+        "The scheduler that decides on which thread each composable should run on",
+        "A Gradle task that turns composable functions into XML layouts",
+        "The object passed through composable calls that records the composition"
       ],
       "answer": [
-        0
+        3
       ],
-      "explanation": "`launch` only schedules the new coroutine. `runBlocking` runs on a single thread, so the body carries on and prints `B` first. The child runs once the body finishes, and `runBlocking` waits for it, so `A` is still printed."
+      "explanation": "The compiler adds a Composer parameter to every composable, and the runtime uses it to record groups, remembered values and node changes while the function runs. ComposeView is the View host, and scheduling recomposition is the Recomposer's job, not the Composer's."
     },
     {
       "id": "d22q02",
-      "type": "mcq",
-      "topic": "launch vs async",
+      "type": "truefalse",
+      "topic": "calling context",
       "difficulty": "Easy",
-      "question": "In a ViewModel you want to send an analytics event and you don't need any result back. Which coroutine builder fits best?",
+      "question": "A @Composable function can be called from an ordinary, non-composable Kotlin function as long as it runs on the main thread.",
       "options": [
-        "`launch`",
-        "`async`",
-        "`runBlocking`",
-        "`coroutineScope`"
+        "True",
+        "False"
       ],
       "answer": [
-        0
+        1
       ],
-      "explanation": "`launch` is fire-and-forget. It returns a `Job`, not a value. `async` is for when you need a result through `await()`. `runBlocking` would block the main thread."
+      "explanation": "Composable calls need the Composer that only flows through other composable functions, so calling one from a normal function is a compile error regardless of thread. The main thread is irrelevant; the restriction comes from the calling context."
     },
     {
       "id": "d22q03",
+      "type": "mcq",
+      "topic": "applying changes",
+      "difficulty": "Medium",
+      "question": "During recomposition, how do changes reach the actual UI node tree?",
+      "options": [
+        "Each emit call mutates the LayoutNode tree immediately as code runs",
+        "The runtime diffs a fresh copy of the whole tree against the old one",
+        "Changes are recorded, then applied to the tree via the Applier",
+        "Nodes are rebuilt from scratch on every frame and swapped in atomically"
+      ],
+      "answer": [
+        2
+      ],
+      "explanation": "Composition records a list of node operations (insert, remove, move, update) and, once composition succeeds, they are applied to the tree through the Applier. This keeps the tree from being seen half-updated and lets a failed or cancelled composition be thrown away. There is no full-tree virtual DOM diff."
+    },
+    {
+      "id": "d22q04",
+      "type": "mcq",
+      "topic": "ComposeView lifetime",
+      "difficulty": "Medium",
+      "question": "With the default ViewCompositionStrategy, when is a ComposeView's Composition disposed?",
+      "options": [
+        "When the host Activity's onDestroy is called, and not before that",
+        "When the view is detached from its window, unless it is pooled",
+        "When the hosting Fragment's onDestroyView runs, in every case",
+        "Never automatically; you must call disposeComposition() yourself"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "The default strategy disposes the composition when the view leaves the window, but defers it when the view is inside a pooling container like RecyclerView, until it is released from the pool. In Fragments, DisposeOnViewTreeLifecycleDestroyed is often a better fit, but it is not the default."
+    },
+    {
+      "id": "d22q05",
+      "type": "multi",
+      "topic": "side effects",
+      "difficulty": "Medium",
+      "question": "Why should side effects go in effect APIs (SideEffect, LaunchedEffect, DisposableEffect) rather than directly in a composable's body? Select all that apply.",
+      "options": [
+        "A composition can be discarded before it is applied, so the effect would run for UI that never appears",
+        "The Composer throws an exception if a composable body writes to any variable",
+        "A composable body may run many times, for example on every animation frame",
+        "Effect APIs run their work only after the composition has been applied successfully"
+      ],
+      "answer": [
+        0,
+        2,
+        3
+      ],
+      "explanation": "Composable bodies can re-run often and their results may be thrown away, so effects in the body can fire too often or for UI that never shows. Effect APIs are tied to the composition being applied and to the call leaving the composition. The runtime does not ban writes in the body; it just can't make them safe."
+    },
+    {
+      "id": "d22q06",
+      "type": "mcq",
+      "topic": "CompositionLocal",
+      "difficulty": "Hard",
+      "question": "A value provided with staticCompositionLocalOf changes. What gets recomposed?",
+      "options": [
+        "Only the composables that actually read the local's current value",
+        "Nothing, since static locals cannot change after first composition",
+        "Only the direct child of the CompositionLocalProvider call",
+        "The provider's whole content, whether or not it reads the local"
+      ],
+      "answer": [
+        3
+      ],
+      "explanation": "Static locals don't track who reads them, so a change invalidates everything inside the provider's content. compositionLocalOf tracks reads and recomposes only the readers, at the cost of that bookkeeping. Static is the right choice for values that almost never change, such as a context or theme object."
+    },
+    {
+      "id": "d22q07",
       "type": "truefalse",
-      "topic": "suspension",
-      "difficulty": "Easy",
-      "question": "When a coroutine suspends at `delay(1000)`, the thread it was running on is free to run other work during that second.",
+      "topic": "tree agnostic",
+      "difficulty": "Medium",
+      "question": "The Compose runtime is not tied to Android UI: with a different Applier, the same runtime can manage other node trees, such as vector graphics or non-UI trees.",
       "options": [
         "True",
         "False"
@@ -50,309 +117,60 @@
       "answer": [
         0
       ],
-      "explanation": "Suspending saves the coroutine's state and hands the thread back, so other coroutines can run on it. That's the key difference from `Thread.sleep`, which keeps the thread occupied."
-    },
-    {
-      "id": "d22q04",
-      "type": "multi",
-      "topic": "launch vs async",
-      "difficulty": "Medium",
-      "question": "Which statements about `launch` and `async` are true?",
-      "options": [
-        "`launch` returns a `Job`",
-        "`async` returns a `Deferred<T>`, which is also a `Job`",
-        "`await()` suspends until the result is ready",
-        "`job.join()` returns the value computed by the `launch` block",
-        "`await()` blocks the calling thread until the result is ready"
-      ],
-      "answer": [
-        0,
-        1,
-        2
-      ],
-      "explanation": "`Deferred<T>` extends `Job` and adds `await()`, which suspends the caller and doesn't block the thread. `join()` returns `Unit`: it only waits for completion, because `launch` has no result."
-    },
-    {
-      "id": "d22q05",
-      "type": "mcq",
-      "topic": "calling suspend",
-      "difficulty": "Easy",
-      "question": "What happens when you compile this?",
-      "code": "suspend fun load(): String = \"x\"\n\nfun onClick() {\n    println(load())\n}\n\nfun main() = onClick()",
-      "options": [
-        "Compile error: `load()` is a suspend function called from a regular function",
-        "It compiles and prints `x`",
-        "It compiles but throws `IllegalStateException` at runtime",
-        "It compiles, and `load()` runs on a background thread because it is marked `suspend`"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "A suspend function needs a `Continuation`, which only a coroutine or another suspend function can supply. `onClick` is a regular function, so the compiler rejects the call. It never gets as far as running.",
-      "compiles": false
-    },
-    {
-      "id": "d22q06",
-      "type": "multi",
-      "topic": "delay vs sleep",
-      "difficulty": "Medium",
-      "question": "Which statements about `delay` and `Thread.sleep` are true?",
-      "options": [
-        "`delay` suspends the coroutine without blocking the thread",
-        "`Thread.sleep` inside a coroutine blocks the thread, so other coroutines on that thread can't run",
-        "`delay` can be called from any regular function",
-        "`delay` puts the thread to sleep exactly like `Thread.sleep`, just with a nicer API"
-      ],
-      "answer": [
-        0,
-        1
-      ],
-      "explanation": "`delay` is a suspend function. It schedules the coroutine to resume later and frees the thread, which is why it can only be called from suspend code. `Thread.sleep` holds the thread for the whole time."
-    },
-    {
-      "id": "d22q07",
-      "type": "output",
-      "topic": "delay order",
-      "difficulty": "Easy",
-      "question": "What does this print?",
-      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking {\n    launch { delay(100); println(\"1\") }\n    launch { delay(50); println(\"2\") }\n    println(\"3\")\n}",
-      "options": [
-        "3\n2\n1",
-        "3\n1\n2",
-        "1\n2\n3",
-        "2\n1\n3"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Both `launch` calls return straight away, so `3` prints first. Then the child with the shorter `delay(50)` resumes before the one with `delay(100)`. Launch order doesn't decide the output; the delays do."
+      "explanation": "The runtime only knows about groups, slots and abstract nodes; the Applier decides what those nodes are. Compose UI uses LayoutNode, vector painters run their own composition over vector nodes, and libraries use the runtime for trees that have nothing to do with Android Views."
     },
     {
       "id": "d22q08",
       "type": "mcq",
-      "topic": "concurrent async",
-      "difficulty": "Medium",
-      "question": "Roughly how long does this block take to print `3`?",
-      "code": "import kotlinx.coroutines.*\n\nsuspend fun one(): Int { delay(1000); return 1 }\nsuspend fun two(): Int { delay(1000); return 2 }\n\nrunBlocking {\n    val a = async { one() }\n    val b = async { two() }\n    println(a.await() + b.await())\n}",
+      "topic": "subcomposition",
+      "difficulty": "Hard",
+      "question": "LazyColumn composes its items during the measure pass, in separate compositions. Why do CompositionLocals provided above the LazyColumn still reach item content?",
       "options": [
-        "About 1 second",
-        "About 2 seconds",
-        "Almost 0 ms",
-        "About 3 seconds"
+        "Item compositions are created with the parent's CompositionContext",
+        "Locals are global singletons, so every composition in the process sees the same values",
+        "LazyColumn copies each local's value into the item's parameters at compile time",
+        "Item content is composed inside the parent composition, so no separate composition exists"
       ],
       "answer": [
         0
       ],
-      "explanation": "Both `async` calls start before either `await`, so the two delays overlap and the total is about 1 s. Writing `async { one() }.await()` followed by `async { two() }.await()` would run them one after the other and take about 2 s."
+      "explanation": "Subcompositions are created with a parent CompositionContext (the same mechanism rememberCompositionContext exposes), which links them to the parent for CompositionLocals and invalidations. Locals are scoped to the tree, not global, and items really are separate compositions built at measure time."
     },
     {
       "id": "d22q09",
-      "type": "truefalse",
-      "topic": "runBlocking on main",
-      "difficulty": "Easy",
-      "question": "Calling `runBlocking { api.fetchUser() }` from an Activity's `onCreate` is fine as long as the request is usually fast.",
+      "type": "multi",
+      "topic": "Composition",
+      "difficulty": "Hard",
+      "question": "Which statements about a Composition are correct? Select all that apply.",
       "options": [
-        "True",
-        "False"
+        "Every composable function call creates its own new Composition",
+        "Disposing it calls onDispose for its DisposableEffects and forgets its remembered values",
+        "It holds the slot table that stores the groups and state for its content",
+        "setContent on Android creates one whose parent context is a Recomposer"
       ],
       "answer": [
-        1
+        1,
+        2,
+        3
       ],
-      "explanation": "`runBlocking` blocks the main thread until the request finishes, so the UI freezes and a slow network can trigger an ANR. Use it only in `main` functions and tests. On Android, launch from `lifecycleScope` or `viewModelScope` instead."
+      "explanation": "A Composition owns a slot table and is created by entry points like setContent, with a Recomposer as its parent context that schedules recomposition. Disposing it removes everything, firing onDispose and forgetting remembered objects. A normal composable call adds groups to the current composition; it doesn't make a new one."
     },
     {
       "id": "d22q10",
-      "type": "output",
-      "topic": "coroutineScope",
-      "difficulty": "Medium",
-      "question": "What does this print?",
-      "code": "import kotlinx.coroutines.*\n\nsuspend fun work() = coroutineScope {\n    launch { delay(100); println(\"child\") }\n    println(\"body\")\n}\n\nfun main() = runBlocking {\n    work()\n    println(\"after\")\n}",
-      "options": [
-        "body\nchild\nafter",
-        "body\nafter\nchild",
-        "child\nbody\nafter",
-        "after\nbody\nchild"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`coroutineScope` doesn't return until all of its children have finished. Its body prints `body`, then it waits for the launched child to print `child`, and only after that does `work()` return so `after` can print."
-    },
-    {
-      "id": "d22q11",
       "type": "mcq",
-      "topic": "retrofit suspend",
-      "difficulty": "Medium",
-      "question": "`viewModelScope` uses the main thread. What happens when `load()` is called?",
-      "code": "interface Api {\n    @GET(\"user\")\n    suspend fun user(): User\n}\n\nclass ProfileViewModel(private val api: Api) : ViewModel() {\n    val user = MutableStateFlow<User?>(null)\n    fun load() = viewModelScope.launch {\n        user.value = api.user()\n    }\n}",
+      "topic": "emitting nodes",
+      "difficulty": "Easy",
+      "question": "A composable like Text returns Unit. How does it put something on screen?",
       "options": [
-        "It works: Retrofit runs the request off the main thread while the coroutine suspends",
-        "It throws `NetworkOnMainThreadException` because the coroutine runs on the main thread",
-        "It doesn't compile: a suspend API call must be wrapped in `async { }.await()`",
-        "The result is lost unless the call is wrapped in `runBlocking`"
+        "It returns a View that the parent adds to its hierarchy",
+        "It draws pixels straight onto the window's Canvas while the function is running",
+        "It ends up calling a node-emitting function that records a layout node",
+        "It registers a callback that the Activity calls during onDraw"
       ],
       "answer": [
-        0
-      ],
-      "explanation": "Retrofit's `suspend` functions are main-safe. They hand the HTTP call to OkHttp's background threads and suspend the caller until the call completes. The coroutine resumes on the main thread with the result, and the main thread is never blocked."
-    },
-    {
-      "id": "d22q12",
-      "type": "output",
-      "topic": "join",
-      "difficulty": "Medium",
-      "question": "What does this print?",
-      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking {\n    val job = launch {\n        println(\"A\")\n        delay(100)\n        println(\"B\")\n    }\n    println(\"C\")\n    job.join()\n    println(\"D\")\n}",
-      "options": [
-        "C\nA\nB\nD",
-        "A\nB\nC\nD",
-        "A\nC\nB\nD",
-        "C\nD\nA\nB"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "The launched child doesn't start until the body suspends, so `C` prints first. `join()` suspends the body, the child prints `A`, then waits in `delay` and prints `B`. When the child completes, `join` returns and `D` prints."
-    },
-    {
-      "id": "d22q13",
-      "type": "multi",
-      "topic": "suspend call sites",
-      "difficulty": "Medium",
-      "question": "`fetchUser()` is a `suspend fun`. Where can you call it directly?",
-      "options": [
-        "Inside a `launch { }` block",
-        "Inside another `suspend fun`",
-        "Inside a `runBlocking { }` block",
-        "Inside a regular `fun onClick(v: View)`",
-        "Inside a `Thread { }` lambda started from a suspend function"
-      ],
-      "answer": [
-        0,
-        1,
         2
       ],
-      "explanation": "The lambdas of `launch` and `runBlocking` are suspend lambdas, and a suspend function can call other suspend functions. A plain function can't, and a `Thread { }` lambda is a regular `Runnable` even when you create it inside suspend code."
-    },
-    {
-      "id": "d22q14",
-      "type": "mcq",
-      "topic": "GlobalScope",
-      "difficulty": "Medium",
-      "question": "Why is `GlobalScope.launch { }` discouraged in app code?",
-      "options": [
-        "Its coroutines aren't tied to any lifecycle, so nothing cancels them when the screen is gone",
-        "It always runs on the main thread, so any work launched in it freezes the UI",
-        "It was removed in kotlinx.coroutines 1.6 and now only compiles with an old library version",
-        "It can run only one coroutine at a time"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`GlobalScope` has no `Job`, so it breaks structured concurrency. Its coroutines can leak work, hold onto memory and deliver results to a destroyed screen. It still exists, but it is marked `@DelicateCoroutinesApi` and was never removed."
-    },
-    {
-      "id": "d22q15",
-      "type": "output",
-      "topic": "lazy start",
-      "difficulty": "Hard",
-      "question": "What does this print?",
-      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking {\n    val a = async(start = CoroutineStart.LAZY) { println(\"A\"); 1 }\n    val b = async { println(\"B\"); 2 }\n    println(\"start\")\n    println(a.await() + b.await())\n}",
-      "options": [
-        "start\nB\nA\n3",
-        "start\nA\nB\n3",
-        "A\nB\nstart\n3",
-        "B\nstart\nA\n3"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`b` is eager, so it's queued right away. `a` is `LAZY`, so it's only queued when `a.await()` starts it, which puts it behind `b`. On the single `runBlocking` thread, `start` prints first, then `B`, then `A`. `await` on a lazy `Deferred` starts it, but other queued work can still run first."
-    },
-    {
-      "id": "d22q16",
-      "type": "mcq",
-      "topic": "continuation",
-      "difficulty": "Medium",
-      "question": "How does the Kotlin compiler implement `suspend fun getUser(id: Int): User` on the JVM?",
-      "options": [
-        "It adds a `Continuation` parameter and changes the return type to `Any?`",
-        "It runs the body on a new thread from a shared pool and blocks the caller until it ends",
-        "It wraps the body in a `Future` and blocks on `get()`",
-        "It compiles to an ordinary method: `suspend` is only checked by the IDE"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "This is continuation-passing style. The compiler appends a `Continuation<User>` parameter and turns the body into a state machine, which returns `COROUTINE_SUSPENDED` when it pauses. No threads are involved, so `suspend` doesn't mean 'background'."
-    },
-    {
-      "id": "d22q17",
-      "type": "truefalse",
-      "topic": "lightweight",
-      "difficulty": "Easy",
-      "question": "Launching 100,000 coroutines that each call `delay(1000)` is practical, while 100,000 threads that each call `Thread.sleep(1000)` would probably run out of memory.",
-      "options": [
-        "True",
-        "False"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "A suspended coroutine is just a small object on the heap, and a few threads can run all of them. Each platform thread reserves its own stack, often around 1 MB, so 100k of them exhausts memory or OS limits."
-    },
-    {
-      "id": "d22q18",
-      "type": "output",
-      "topic": "sequential async",
-      "difficulty": "Hard",
-      "question": "What does this print?",
-      "code": "import kotlinx.coroutines.*\n\nsuspend fun task(name: String, ms: Long): String {\n    println(\"start $name\")\n    delay(ms)\n    println(\"end $name\")\n    return name\n}\n\nfun main() = runBlocking {\n    val x = async { task(\"x\", 200) }.await()\n    val y = async { task(\"y\", 100) }\n    println(x + y.await())\n}",
-      "options": [
-        "start x\nend x\nstart y\nend y\nxy",
-        "start x\nstart y\nend y\nend x\nxy",
-        "start x\nstart y\nend x\nend y\nxy",
-        "start y\nend y\nstart x\nend x\nxy"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`async { ... }.await()` on a single line waits for `x` to finish before the next line runs, so `y` doesn't start until `x` has ended. The shorter delay for `y` doesn't change anything. To run them concurrently, start both `async` calls before awaiting either one."
-    },
-    {
-      "id": "d22q19",
-      "type": "mcq",
-      "topic": "suspend is not async",
-      "difficulty": "Hard",
-      "question": "`viewModelScope` runs on the main thread. What happens when this coroutine runs?",
-      "code": "suspend fun sumAll(): Long {\n    var s = 0L\n    for (i in 1..2_000_000_000) s += i\n    return s\n}\n\n// inside a ViewModel\nfun refresh() = viewModelScope.launch {\n    total.value = sumAll()\n}",
-      "options": [
-        "The UI freezes until the loop finishes, because nothing in it ever suspends",
-        "It runs smoothly, because suspend functions run on a background thread automatically",
-        "The compiler rejects it because a suspend function must call another suspend function",
-        "It throws `IllegalStateException` because CPU work isn't allowed in a suspend function"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "The `suspend` modifier only lets a function suspend. It doesn't pick a thread. This loop has no suspension point and runs on the caller's thread, which here is the main thread. It compiles fine (the IDE only flags the suspend modifier as redundant)."
-    },
-    {
-      "id": "d22q20",
-      "type": "mcq",
-      "topic": "runBlocking in suspend",
-      "difficulty": "Hard",
-      "question": "Inside `suspend fun refresh()`, a developer writes `runBlocking { delay(1000) }`. What is the problem?",
-      "options": [
-        "It blocks the thread running `refresh()` for a full second instead of suspending",
-        "It suspends `refresh()` and frees the thread, the same as calling `delay(1000)` directly",
-        "It doesn't compile: `runBlocking` can't be called from a suspend function",
-        "It starts a new thread, so nothing is blocked but a thread is wasted"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`runBlocking` always blocks the current thread until its block completes, even inside a coroutine. That throws away the benefit of suspension, and on a single-threaded dispatcher it can deadlock. It compiles, so the mistake is easy to miss. Call `delay` directly instead."
+      "explanation": "Composables describe UI by emitting nodes: deep down, Layout calls a node-emitting function such as ComposeNode, which records a LayoutNode insert or update through the Composer and Applier. Drawing happens later in the draw phase, not while the composable runs, and no Views are returned."
     }
   ]
 }

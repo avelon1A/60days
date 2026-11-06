@@ -1,116 +1,101 @@
 {
   "day": 9,
-  "topic": "Scope functions II: run, with, takeIf & choosing one",
+  "topic": "Structured concurrency, Job & cancellation",
   "questions": [
     {
       "id": "d09q01",
       "type": "output",
-      "topic": "run extension",
+      "topic": "coroutineScope waits",
       "difficulty": "Easy",
       "question": "What does this print?",
-      "code": "fun main() {\n    val s = \"kotlin\"\n    val r = s.run { length + 1 }\n    println(r)\n}",
+      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking {\n    coroutineScope {\n        launch { delay(50); println(\"child\") }\n        println(\"body\")\n    }\n    println(\"after\")\n}",
       "options": [
-        "7",
-        "kotlin",
-        "6",
-        "kotlin1"
+        "child\nbody\nafter",
+        "body\nchild\nafter",
+        "after\nbody\nchild",
+        "body\nafter\nchild"
       ],
       "answer": [
-        0
+        1
       ],
-      "explanation": "`s.run { ... }` makes `s` the receiver (`this`) and returns the lambda's last expression. `length + 1` is `6 + 1`, so `r` is `7`, not the string itself."
+      "explanation": "`coroutineScope` does not return until all coroutines started inside it have finished. Its body prints \"body\" first, then it waits for the child to print \"child\", and only then does \"after\" run. This waiting is the core rule of structured concurrency."
     },
     {
       "id": "d09q02",
-      "type": "mcq",
-      "topic": "with",
-      "difficulty": "Easy",
-      "question": "Which statement about `with(obj) { ... }` is true?",
+      "type": "output",
+      "topic": "cancelAndJoin",
+      "difficulty": "Medium",
+      "question": "What does this print?",
+      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking {\n    val job = launch {\n        repeat(5) { i ->\n            println(\"tick $i\")\n            delay(200)\n        }\n    }\n    delay(500)\n    job.cancelAndJoin()\n    println(\"cancelled\")\n}",
       "options": [
-        "It is a plain function that takes `obj` as an argument, exposes it as `this` and returns the lambda result",
-        "It is an extension function on `obj` that exposes it as `it` and returns the lambda result",
-        "It is a plain function that takes `obj` as an argument, exposes it as `this` and returns the receiver `obj`",
-        "It is an extension function on `obj` that exposes it as `this` and returns `obj` itself"
+        "tick 0\ntick 1\ncancelled",
+        "tick 0\ntick 1\ntick 2\ncancelled",
+        "cancelled",
+        "tick 0\ntick 1\ntick 2\ntick 3\ntick 4\ncancelled"
       ],
       "answer": [
-        0
+        1
       ],
-      "explanation": "`with` is declared as `fun <T, R> with(receiver: T, block: T.() -> R): R`. The object is passed as an argument (not a receiver of `with`), is `this` inside the block, and the block's result is returned. Returning the object itself is what `apply` does."
+      "explanation": "The job prints at about 0, 200 and 400 ms and is suspended in `delay` when it is cancelled at 500 ms. `delay` checks for cancellation and throws CancellationException, so no more ticks print. `cancelAndJoin` waits for the job to fully finish before \"cancelled\" prints."
     },
     {
       "id": "d09q03",
       "type": "output",
-      "topic": "takeIf",
-      "difficulty": "Easy",
+      "topic": "suspending in finally",
+      "difficulty": "Hard",
       "question": "What does this print?",
-      "code": "fun main() {\n    val a = 7.takeIf { it % 2 == 0 }\n    val b = 8.takeIf { it % 2 == 0 }\n    println(\"$a $b\")\n}",
+      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking {\n    val job = launch {\n        try {\n            delay(1000)\n        } finally {\n            println(\"cleanup start\")\n            delay(10)\n            println(\"cleanup end\")\n        }\n    }\n    delay(50)\n    job.cancelAndJoin()\n    println(\"done\")\n}",
       "options": [
-        "null 8",
-        "7 8",
-        "false true",
-        "null null"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`takeIf` returns the receiver when the predicate is true and `null` otherwise. `7` is odd, so `a` is `null`; `8` passes, so `b` is `8`. It never returns the Boolean itself."
-    },
-    {
-      "id": "d09q04",
-      "type": "truefalse",
-      "topic": "with and nullables",
-      "difficulty": "Easy",
-      "question": "Given `val user: User?`, you can write `user?.with { name }` so the block runs only when `user` is non-null.",
-      "options": [
-        "True",
-        "False"
+        "cleanup start\ncleanup end\ndone",
+        "cleanup start\ndone",
+        "done\ncleanup start",
+        "done"
       ],
       "answer": [
         1
       ],
-      "explanation": "`with` is not an extension function, so there is nothing to call with `?.`; this doesn't compile. Use `user?.run { name }`, which is an extension and gives the same `this`-receiver, result-returning behaviour."
+      "explanation": "The `finally` block runs on cancellation, so \"cleanup start\" prints. But the coroutine is already cancelled, so the `delay(10)` inside `finally` throws CancellationException at once and \"cleanup end\" is skipped. Suspending cleanup must be wrapped in `withContext(NonCancellable) { }`."
+    },
+    {
+      "id": "d09q04",
+      "type": "mcq",
+      "topic": "structured concurrency",
+      "difficulty": "Easy",
+      "question": "What does structured concurrency guarantee?",
+      "options": [
+        "Child coroutines always run on the same thread as their parent, in the order they were launched",
+        "A parent doesn't complete until its children do, and cancelling a parent cancels its children",
+        "A child that fails is restarted automatically, so the parent never sees the failure",
+        "Each coroutine runs in its own isolated scope, so cancelling one never affects any other"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "Every coroutine has a parent Job in a tree. A parent waits for its children, cancellation flows down to children, and a failure in a regular child flows up and cancels the parent. Threads and order are decided by dispatchers, and nothing is restarted automatically."
     },
     {
       "id": "d09q05",
-      "type": "output",
-      "topic": "with",
+      "type": "mcq",
+      "topic": "GlobalScope",
       "difficulty": "Easy",
-      "question": "What does this print?",
-      "code": "fun main() {\n    val sb = StringBuilder()\n    val result = with(sb) {\n        append(\"Hi\")\n        append(\"!\")\n        length\n    }\n    println(\"$result $sb\")\n}",
+      "question": "Why is `GlobalScope.launch { }` discouraged in Android code?",
       "options": [
-        "3 Hi!",
-        "Hi! Hi!",
-        "3 3",
-        "2 Hi!"
+        "It always runs its coroutines on the main thread, so any long-running work started there freezes the UI",
+        "It cancels every other coroutine in the app when one of its coroutines fails",
+        "Its coroutines aren't tied to any lifecycle, so they can keep running after the screen is gone",
+        "Its coroutines cannot call suspend functions; only those from `CoroutineScope.launch` can"
       ],
       "answer": [
-        0
+        2
       ],
-      "explanation": "Inside `with(sb)`, `append` and `length` are called on `sb`. `with` returns the last expression, `length`, which is `3` after appending `\"Hi\"` and `\"!\"`. The builder itself still holds `Hi!`."
+      "explanation": "GlobalScope has no Job, so its coroutines have no parent and are never cancelled by a screen or ViewModel going away. That leaks work and anything it captures, such as views. It uses Dispatchers.Default, not the main thread. Use `viewModelScope`, `lifecycleScope` or an injected scope instead."
     },
     {
       "id": "d09q06",
-      "type": "mcq",
-      "topic": "nullable receiver",
-      "difficulty": "Easy",
-      "question": "Given `val user: User?`, which call runs the block only when `user` is non-null, with the non-null `user` as `this`?",
-      "options": [
-        "`user?.run { greet(name) }`",
-        "`with(user) { greet(name) }`",
-        "`user.run { greet(name) }`",
-        "`run { greet(user.name) }`"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`?.run` skips the call entirely when `user` is null, and inside the block `this` is a non-null `User`. `with(user)` and `user.run` always run the block with a nullable `this`, so `name` would need `?.`, and the plain `run` block has no receiver at all."
-    },
-    {
-      "id": "d09q07",
       "type": "truefalse",
-      "topic": "run block",
-      "difficulty": "Easy",
-      "question": "`run { ... }` called without a receiver is a non-extension function that simply executes the block and returns its result, which makes it handy for computing a value from a few temporary local variables.",
+      "topic": "catching cancellation",
+      "difficulty": "Medium",
+      "question": "Wrapping a suspend call in `try { } catch (e: Exception) { }` inside a coroutine can break cancellation, because it also catches CancellationException.",
       "options": [
         "True",
         "False"
@@ -118,239 +103,79 @@
       "answer": [
         0
       ],
-      "explanation": "There are two `run`s: the extension `T.run { }` and the top-level `run { }`. The top-level one has no receiver; it just runs the block and returns its last expression, keeping helper variables scoped to the block."
+      "explanation": "CancellationException is a subclass of Exception, so a broad catch swallows it and the code continues as if nothing happened. In a loop, that can keep the coroutine busy even after its scope is cancelled. Rethrow CancellationException, or catch only the exception types you expect."
+    },
+    {
+      "id": "d09q07",
+      "type": "multi",
+      "topic": "cooperative cancellation",
+      "difficulty": "Medium",
+      "question": "A coroutine runs a long CPU loop with no suspend calls. Which changes let it respond to cancellation? Select all that apply.",
+      "options": [
+        "Wrap the loop in `try { } catch (e: Exception) { }`",
+        "Call `yield()` in each iteration",
+        "Call `ensureActive()` in each iteration",
+        "Check `isActive` in the loop condition",
+        "Call `Thread.sleep(1)` in each iteration"
+      ],
+      "answer": [
+        1,
+        2,
+        3
+      ],
+      "explanation": "Cancellation is cooperative: code only stops at points that check for it. `ensureActive()` throws if cancelled, `yield()` is a suspension point that checks, and `isActive` lets you exit the loop yourself. `Thread.sleep` does not check coroutine cancellation, and a broad catch would swallow the CancellationException."
     },
     {
       "id": "d09q08",
       "type": "output",
-      "topic": "run block",
+      "topic": "cancelling a parent",
       "difficulty": "Medium",
       "question": "What does this print?",
-      "code": "fun main() {\n    val x = 10\n    val y = run {\n        val x = 3\n        x * 2\n    }\n    println(\"$x $y\")\n}",
+      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking {\n    val parent = launch {\n        launch { delay(1000); println(\"child A\") }\n        launch { delay(1000); println(\"child B\") }\n    }\n    delay(100)\n    parent.cancel()\n    parent.join()\n    println(\"${parent.isCancelled} ${parent.isCompleted}\")\n}",
       "options": [
-        "10 6",
-        "3 6",
-        "10 20",
-        "6 6"
+        "true true",
+        "false true",
+        "true false",
+        "child A\nchild B\ntrue true"
       ],
       "answer": [
         0
       ],
-      "explanation": "The `x` declared inside the `run` block shadows the outer one only inside the block, so the block returns `3 * 2 = 6`. The outer `x` is untouched and still `10`."
+      "explanation": "Cancelling the parent cancels both children while they are in `delay`, so neither prints. `join()` waits until the parent and its children are done. A cancelled job ends in the Cancelled state, which counts as completed, so both flags are true."
     },
     {
       "id": "d09q09",
       "type": "mcq",
-      "topic": "decision table",
-      "difficulty": "Medium",
-      "question": "You need a scope function that exposes the object as `this`, returns the lambda result, and can be chained with `?.` on a nullable value. Which one fits?",
+      "topic": "withTimeout",
+      "difficulty": "Hard",
+      "question": "A `launch { withTimeout(1000) { fetch() } }` times out. There is no try/catch and no crash. Why?",
       "options": [
-        "`run`",
-        "`with`",
-        "`apply`",
-        "`let`"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`run` is the extension counterpart of `with`: `this` receiver, returns the lambda result, and as an extension it works with `?.`. `with` can't be used with `?.`, `apply` returns the receiver, and `let` exposes the object as `it`."
-    },
-    {
-      "id": "d09q10",
-      "type": "multi",
-      "topic": "decision table",
-      "difficulty": "Medium",
-      "question": "Which scope functions expose the context object as `this` (not `it`) inside the lambda?",
-      "options": [
-        "`run`",
-        "`with`",
-        "`apply`",
-        "`let`",
-        "`also`"
-      ],
-      "answer": [
-        0,
-        1,
-        2
-      ],
-      "explanation": "`run`, `with` and `apply` take a lambda with receiver (`T.() -> R`), so the object is `this`. `let` and `also` take a regular lambda (`(T) -> R`), so the object is the parameter `it`."
-    },
-    {
-      "id": "d09q11",
-      "type": "output",
-      "topic": "takeUnless",
-      "difficulty": "Medium",
-      "question": "What does this print?",
-      "code": "fun main() {\n    val input = \"  \"\n    val name = input.takeUnless { it.isBlank() } ?: \"Guest\"\n    println(\"[$name]\")\n}",
-      "options": [
-        "[Guest]",
-        "[  ]",
-        "[]",
-        "[null]"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`takeUnless` returns the receiver only when the predicate is false. The input is blank, so the predicate is true and the result is `null`, which the elvis replaces with `\"Guest\"`."
-    },
-    {
-      "id": "d09q12",
-      "type": "mcq",
-      "topic": "recyclerview binding",
-      "difficulty": "Medium",
-      "question": "In `onBindViewHolder(holder: ItemViewHolder, position: Int)`, `holder.binding` is a non-null view binding and you need to set `title`, `subtitle` and `avatar` from `item`. You don't need a return value. Which option is the idiomatic choice?",
-      "options": [
-        "`with(holder.binding) { title.text = item.name; subtitle.text = item.email; avatar.load(item.photo) }`",
-        "`holder.binding.takeIf { it != null }!!.run { title.text = item.name; subtitle.text = item.email; avatar.load(item.photo) }`",
-        "`run { holder.binding.title.text = item.name; holder.binding.subtitle.text = item.email; holder.binding.avatar.load(item.photo) }`",
-        "`holder.binding.let { it }.apply { title.text = item.name }.also { it.subtitle.text = item.email }.run { avatar.load(item.photo) }`"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`with` reads as \"with this binding, do the following\": it groups calls on a non-null object whose result you don't need. The `takeIf`/`!!` null check is pointless on a non-null value, the receiver-less `run` still repeats `holder.binding` everywhere, and chaining four scope functions only adds noise."
-    },
-    {
-      "id": "d09q13",
-      "type": "truefalse",
-      "topic": "return in lambda",
-      "difficulty": "Medium",
-      "question": "A bare `return` inside `user.run { ... }` (in a regular function) leaves only the lambda, and execution continues with the next statement after `run`.",
-      "options": [
-        "True",
-        "False"
+        "`withTimeout` returns null on timeout, so the launch body ends normally with no exception",
+        "TimeoutCancellationException is a CancellationException, so it counts as cancellation, not failure",
+        "The timeout cancels the parent scope first, so by the time it throws the exception has nowhere to go",
+        "`launch` catches every exception thrown inside its block and only logs it at debug level in logcat"
       ],
       "answer": [
         1
       ],
-      "explanation": "Because `run` is inline, a bare `return` inside its lambda is a non-local return: it returns from the enclosing function. To leave only the lambda, use a labelled return such as `return@run value`."
+      "explanation": "TimeoutCancellationException extends CancellationException, and cancellation is never sent to exception handlers or treated as a failure of the parent. So the coroutine just stops. `withTimeoutOrNull` is the version that returns null; with plain `withTimeout` you should catch the exception if you need to react to the timeout."
     },
     {
-      "id": "d09q14",
+      "id": "d09q10",
       "type": "mcq",
-      "topic": "choosing one",
-      "difficulty": "Medium",
-      "question": "`val isValid = binding.run { email.text.isNotBlank() && password.text.length >= 8 }` makes `isValid` a `Boolean`. Which replacement keeps `isValid` a `Boolean` with the same body?",
-      "options": [
-        "`with(binding) { email.text.isNotBlank() && password.text.length >= 8 }`",
-        "`binding.apply { email.text.isNotBlank() && password.text.length >= 8 }`",
-        "`binding.takeIf { email.text.isNotBlank() && password.text.length >= 8 }`",
-        "`binding.also { email.text.isNotBlank() && password.text.length >= 8 }`"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`with(binding)` has the same `this` receiver and also returns the lambda result. `apply` and `also` return the binding itself, and `takeIf` returns the binding or `null` (its lambda also gets `it`, not `this`, so the body wouldn't even resolve `email`)."
-    },
-    {
-      "id": "d09q15",
-      "type": "multi",
-      "topic": "takeIf",
-      "difficulty": "Medium",
-      "question": "Which statements about `takeIf` and `takeUnless` are true?",
-      "options": [
-        "`x.takeIf(p)` returns `x` when `p(x)` is true, otherwise `null`",
-        "The return type is nullable (`T?`) even when `x` is non-null",
-        "`x.takeUnless { cond(it) }` gives the same result as `x.takeIf { !cond(it) }`",
-        "They are lazy: the predicate runs only if the result is later used",
-        "On a `List`, `takeIf` keeps only the elements that match, like `filter`"
-      ],
-      "answer": [
-        0,
-        1,
-        2
-      ],
-      "explanation": "Both return the receiver or `null`, so the type is always `T?`, and `takeUnless` is just the negated form. The predicate is evaluated immediately on every call, and on a `List` the predicate receives the whole list, not each element."
-    },
-    {
-      "id": "d09q16",
-      "type": "mcq",
-      "topic": "nesting",
-      "difficulty": "Medium",
-      "question": "What is the main problem with this code?",
-      "code": "user?.let { u ->\n    u.address?.run {\n        city?.also { c ->\n            with(view) {\n                cityText.text = c\n                postalText.text = zip\n            }\n        }\n    }\n}",
-      "options": [
-        "Each level rebinds `this` and `it`, so it's unclear whether `zip` is the address's or the view's",
-        "It doesn't compile, because `with` can't be nested inside another lambda with receiver",
-        "It is slow, because each of the four scope functions allocates a new lambda object on every call",
-        "`also` can't be called on a `String`, so the `city?.also` line fails to compile"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Nesting scope functions stacks implicit receivers: inside `with(view)`, an unqualified `zip` resolves to `view.zip` if it exists, otherwise to `address.zip`, and readers can't tell which. The code does compile, `also` works on any type, and these inline functions don't allocate lambdas. Flatten it with early returns and named `val`s."
-    },
-    {
-      "id": "d09q17",
-      "type": "output",
-      "topic": "labelled return",
+      "topic": "passing a Job",
       "difficulty": "Hard",
-      "question": "What does this print?",
-      "code": "fun check(s: String?): String {\n    val r = s?.run {\n        if (isEmpty()) return@run \"blank\"\n        if (length > 3) return \"long\"\n        uppercase()\n    } ?: \"none\"\n    return \"r=$r\"\n}\n\nfun main() {\n    println(listOf(\"\", \"ok\", \"kotlin\", null).joinToString(\" \") { check(it) })\n}",
+      "question": "Inside a ViewModel, someone writes `viewModelScope.launch(Job()) { refresh() }`. What is the effect?",
       "options": [
-        "r=blank r=OK long r=none",
-        "r=blank r=OK r=long r=none",
-        "blank r=OK long r=none",
-        "r=blank r=OK r=KOTLIN r=none"
+        "The `Job()` becomes the parent, so the coroutine leaves viewModelScope and isn't cancelled in `onCleared()`",
+        "It makes the coroutine start lazily, so `refresh()` only runs when the Job is started",
+        "It has no effect, because a scope always uses its own Job as the parent and ignores the one passed in",
+        "It makes the coroutine a supervisor child, so a failure in `refresh()` no longer cancels sibling coroutines"
       ],
       "answer": [
         0
       ],
-      "explanation": "`return@run \"blank\"` only leaves the lambda, so `r` becomes `blank`. The bare `return \"long\"` is a non-local return from `check` itself, so `r=` is never prepended. For `null`, `?.run` is skipped and the elvis gives `none`."
-    },
-    {
-      "id": "d09q18",
-      "type": "mcq",
-      "topic": "with vs apply",
-      "difficulty": "Hard",
-      "question": "What happens with this code in a Fragment factory?",
-      "code": "fun newInstance(id: String): DetailFragment {\n    val args = with(Bundle()) {\n        putString(\"id\", id)\n        putInt(\"page\", 1)\n    }\n    return DetailFragment().also { it.arguments = args }\n}",
-      "options": [
-        "Compile error: `with` returns the lambda result, `Unit` here, not a `Bundle`",
-        "It works: `with` returns the `Bundle` after running the block",
-        "It compiles, but `arguments` ends up as an empty `Bundle`",
-        "It compiles, but throws a `NullPointerException` when the fragment reads its arguments"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`with` returns the last expression, and `putInt` returns `Unit`, so `args` is `Unit` and assigning it to `arguments` is a type mismatch. Use `Bundle().apply { ... }` to get the configured `Bundle` back."
-    },
-    {
-      "id": "d09q19",
-      "type": "output",
-      "topic": "mixing this",
-      "difficulty": "Hard",
-      "question": "What does this print?",
-      "code": "class Node(val name: String, val child: Node?)\n\nfun main() {\n    val root = Node(\"root\", Node(\"kid\", null))\n    val r = with(root) {\n        child?.run { name + \"<\" + this@with.name } ?: name\n    }\n    println(r)\n}",
-      "options": [
-        "kid<root",
-        "root<root",
-        "root<kid",
-        "kid<kid"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Inside `child?.run`, the nearest receiver is the child, so `name` is `kid`. `this@with.name` explicitly reaches the outer receiver, `root`. Needing labels like this is a sign the nesting is hurting readability."
-    },
-    {
-      "id": "d09q20",
-      "type": "output",
-      "topic": "takeIf on nullable",
-      "difficulty": "Hard",
-      "question": "What does this print?",
-      "code": "fun main() {\n    val log = mutableListOf<String>()\n    val s: String? = null\n    val a = s?.takeIf { log += \"a\"; true }\n    val b = s.takeIf { log += \"b\"; it == null }\n    println(\"$a $b $log\")\n}",
-      "options": [
-        "null null [b]",
-        "null null [a, b]",
-        "null null []",
-        "null true [b]"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`s?.takeIf` is skipped because `s` is null, so its predicate never runs. `s.takeIf` is called on `String?` directly, so its predicate always runs (logging `b`); it is true, and `takeIf` returns the receiver, which is `null`."
+      "explanation": "The context passed to `launch` is added on top of the scope's context, so the explicit `Job()` replaces viewModelScope's Job as the parent. The coroutine is detached from the scope, and clearing the ViewModel will not cancel it. Passing a `Job()` or `SupervisorJob()` directly to a builder is almost always a mistake."
     }
   ]
 }

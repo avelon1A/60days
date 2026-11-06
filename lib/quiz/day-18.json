@@ -1,51 +1,30 @@
 {
   "day": 18,
-  "topic": "Interfaces, abstract classes, open/final & visibility",
+  "topic": "MVI: intents, reducers & single immutable state",
   "questions": [
     {
       "id": "d18q01",
       "type": "mcq",
-      "topic": "final by default",
+      "topic": "reducer",
       "difficulty": "Easy",
-      "question": "What happens when you compile this?",
-      "code": "class Base\nclass Child : Base()\n\nfun main() {}",
+      "question": "In MVI, what does a reducer do?",
       "options": [
-        "Compile error: `Base` is final and cannot be inherited from",
-        "It compiles, because classes are open by default",
-        "It compiles with a warning suggesting `open`",
-        "It compiles but fails at runtime with `VerifyError` when `Child` is loaded"
+        "Takes current state and an intent or result, returns a new state, with no side effects",
+        "Collects the repository's flows and caches their latest values for the rest of the screen",
+        "Renders the current state into composables and sends the user's clicks to the ViewModel",
+        "Routes each incoming intent to whichever of several ViewModels is able to handle it"
       ],
       "answer": [
         0
       ],
-      "compiles": false,
-      "explanation": "Kotlin classes are `final` by default, unlike Java. You have to mark `Base` as `open` (or `abstract`) before anything can extend it, and the compiler rejects this outright rather than warning."
+      "explanation": "A reducer is a pure function `(State, Intent or Result) -> State`. Because it only computes a new state from its inputs, it is deterministic and easy to unit test. Data loading and rendering live elsewhere: in the ViewModel's effect handling and in the UI."
     },
     {
       "id": "d18q02",
-      "type": "output",
-      "topic": "open & override",
-      "difficulty": "Easy",
-      "question": "What does this print?",
-      "code": "open class View {\n    open fun draw() = \"View\"\n}\nclass Button : View() {\n    override fun draw() = \"Button\"\n}\n\nfun main() {\n    val views: List<View> = listOf(View(), Button())\n    println(views.joinToString { it.draw() })\n}",
-      "options": [
-        "View, Button",
-        "View, View",
-        "Button, Button",
-        "ViewButton"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Member functions are dispatched virtually on the runtime type, so the `Button` element uses its override even though the list is typed `List<View>`. `joinToString` uses \", \" as the default separator."
-    },
-    {
-      "id": "d18q03",
       "type": "truefalse",
-      "topic": "override is open",
+      "topic": "immutable state",
       "difficulty": "Easy",
-      "question": "This code compiles, because a member marked `override` is itself open unless it is also marked `final`.",
-      "code": "open class A { open fun f() = 1 }\nopen class B : A() { override fun f() = 2 }\nclass C : B() { override fun f() = 3 }\n\nfun main() {}",
+      "question": "In MVI the UI state is typically an immutable data class, and changes are made by creating a new instance with `copy()` instead of mutating fields.",
       "options": [
         "True",
         "False"
@@ -53,317 +32,147 @@
       "answer": [
         0
       ],
-      "compiles": true,
-      "explanation": "An `override` member stays open, so `C` can override `B.f()` again without `B` writing `open`. To stop further overriding, `B` would have to declare `final override fun f()`. The class `B` itself still has to be `open`."
+      "explanation": "Immutable state means every change produces a new value that can be compared, logged or replayed, and the UI can never see a half-modified object. It also plays well with StateFlow, which only emits when the new value is not equal to the old one."
+    },
+    {
+      "id": "d18q03",
+      "type": "multi",
+      "topic": "single state",
+      "difficulty": "Easy",
+      "question": "Compared with exposing `isLoading`, `items` and `error` as three separate StateFlows, what does one `StateFlow<UiState>` give you? Select all that apply.",
+      "options": [
+        "All fields change together, so the UI never renders a half-updated mix",
+        "A single place to see and log exactly what the screen is showing",
+        "Automatic restore of the screen after the process has been killed",
+        "Fewer recompositions in every case, whatever the UI reads"
+      ],
+      "answer": [
+        0,
+        1
+      ],
+      "explanation": "With one state object, an update such as loading false plus items set is a single emission, so there is no moment where both a spinner and the error show. It also gives a single source of truth to debug or snapshot in tests. It does not persist anything, and reading one large object at the top of the UI can even cause more recomposition, not less."
     },
     {
       "id": "d18q04",
       "type": "mcq",
-      "topic": "abstract class vs interface",
-      "difficulty": "Easy",
-      "question": "You want a shared `BaseFragment` that stores `private var _binding: ViewBinding?` and nulls it in `onDestroyView()` for every screen. Why does this have to be an abstract class and not an interface?",
-      "code": "abstract class BaseFragment<VB : ViewBinding> : Fragment() {\n    private var _binding: VB? = null\n    protected val binding get() = _binding!!\n\n    override fun onDestroyView() {\n        super.onDestroyView()\n        _binding = null\n    }\n}",
+      "topic": "pure reducers",
+      "difficulty": "Medium",
+      "question": "What is wrong with this reducer?",
+      "code": "fun reduce(state: UiState, intent: Intent): UiState = when (intent) {\n    is Intent.Refresh -> {\n        repository.refresh()\n        state.copy(isLoading = true)\n    }\n    is Intent.Select -> state.copy(selectedId = intent.id)\n}",
       "options": [
-        "Interfaces can't hold state: `_binding` has no backing field to live in",
-        "Interfaces can't contain function bodies, so `onDestroyView()` couldn't null it",
-        "Interfaces can't declare properties at all, only abstract functions",
-        "Interface methods can't be overridden by a `Fragment`"
+        "It performs a side effect, so the reducer is no longer pure or safely repeatable",
+        "copy() inside a when branch creates a new state object that the StateFlow never emits",
+        "A reducer has to be a suspend function, so the call to refresh() needs to be awaited",
+        "isLoading should be updated only once the refresh has finished, not before calling it"
       ],
       "answer": [
         0
       ],
-      "explanation": "Interfaces can declare properties and give methods default bodies, but they have no backing fields, so they can't store `_binding`. Abstract classes can hold state, have constructors, and extend another class like `Fragment`."
+      "explanation": "Starting the refresh inside the reducer makes it impure: testing or replaying it triggers network calls. In MVI the reducer only returns the new state, and the ViewModel or an effect handler starts the work and later reports the outcome as another intent or result. Setting `isLoading = true` up front is correct."
     },
     {
       "id": "d18q05",
-      "type": "output",
-      "topic": "super<T> call",
+      "type": "mcq",
+      "topic": "sealed intents",
       "difficulty": "Medium",
-      "question": "What does this print?",
-      "code": "interface Clickable { fun show() = \"Clickable\" }\ninterface Focusable { fun show() = \"Focusable\" }\n\nclass Btn : Clickable, Focusable {\n    override fun show() =\n        super<Focusable>.show() + \"+\" + super<Clickable>.show()\n}\n\nfun main() {\n    println(Btn().show())\n}",
+      "question": "Why model intents as a `sealed interface` and handle them in a `when` with no `else` branch?",
       "options": [
-        "Focusable+Clickable",
-        "Clickable+Focusable",
-        "Clickable+Clickable",
-        "Focusable+Focusable"
+        "Adding a new intent makes that when a compile error until the new case is handled",
+        "Sealed types dispatch faster at runtime than open classes or plain interfaces do",
+        "Sealed intents can be serialized automatically, so they can be logged or replayed",
+        "It lets other modules add their own intents without changing the screen's code"
       ],
       "answer": [
         0
       ],
-      "explanation": "`super<Focusable>.show()` calls that interface's default body, and `super<Clickable>.show()` calls the other one. They are concatenated in the order written. The order of the interfaces in the class header doesn't matter."
+      "explanation": "A `when` over a sealed type must be exhaustive, so the compiler points to every place that needs to handle a newly added intent. An `else` branch would hide that. Sealed hierarchies are closed to other modules by design, and they bring no runtime speed-up or serialization of their own."
     },
     {
       "id": "d18q06",
-      "type": "mcq",
-      "topic": "conflicting defaults",
-      "difficulty": "Medium",
-      "question": "Both interfaces provide a default `hi()`. What happens?",
-      "code": "interface A { fun hi() = \"A\" }\ninterface B { fun hi() = \"B\" }\nclass C : A, B\n\nfun main() {\n    println(C().hi())\n}",
-      "options": [
-        "Compile error: `C` must override `hi`, since it inherits two implementations",
-        "Prints A, because the first interface in the supertype list always takes priority",
-        "Prints B, because the last interface wins",
-        "Throws `IllegalStateException` at runtime because the call is ambiguous"
-      ],
-      "answer": [
-        0
-      ],
-      "compiles": false,
-      "explanation": "Kotlin never picks one default for you based on declaration order. When a class inherits several implementations of the same member, it must override it, and can then delegate with `super<A>.hi()` or `super<B>.hi()`."
-    },
-    {
-      "id": "d18q07",
-      "type": "output",
-      "topic": "fun interface",
-      "difficulty": "Easy",
-      "question": "What does this print?",
-      "code": "fun interface Validator {\n    fun validate(input: String): Boolean\n}\n\nfun main() {\n    val notBlank = Validator { it.isNotBlank() }\n    println(notBlank.validate(\"  \"))\n    println(notBlank.validate(\"ok\"))\n}",
-      "options": [
-        "false\ntrue",
-        "true\ntrue",
-        "true\nfalse",
-        "false\nfalse"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "A `fun interface` has exactly one abstract method, so a lambda can implement it through SAM conversion. `\"  \"` contains only whitespace, so `isNotBlank()` is false for it and true for `\"ok\"`."
-    },
-    {
-      "id": "d18q08",
       "type": "multi",
-      "topic": "interface members",
+      "topic": "MVI trade-offs",
       "difficulty": "Medium",
-      "question": "Which of these can a Kotlin interface declare? Select all that apply.",
+      "question": "Which are real costs or risks of MVI? Select all that apply.",
       "options": [
-        "An abstract property like `val id: String`",
-        "A property with a custom getter like `val tag: String get() = \"Repo\"`",
-        "A function with a default implementation",
-        "A property with an initializer like `val retries: Int = 3`",
-        "A primary constructor"
+        "More boilerplate: intent, state and effect types for every screen",
+        "Passing one large state through the UI can widen recomposition",
+        "Each change allocates a new state object (usually negligible)",
+        "It cannot be combined with Jetpack Compose at all",
+        "It forbids using coroutines inside the ViewModel"
       ],
       "answer": [
         0,
         1,
         2
       ],
-      "explanation": "Interfaces can have abstract properties, properties computed by a getter, and default method bodies. They have no backing fields, so property initializers are not allowed, and they have no constructors. Use an abstract class when you need either."
+      "explanation": "MVI's costs are ceremony and some care with how the big state is passed down: reading the whole object high in the tree and passing it to every child makes more of the tree depend on each change. Copying data classes allocates, but that is rarely measurable. Compose and coroutines are a natural fit for MVI, not a conflict."
     },
     {
-      "id": "d18q09",
-      "type": "output",
-      "topic": "template method",
-      "difficulty": "Medium",
-      "question": "This is the BaseActivity-style template method pattern in plain Kotlin. What does it print?",
-      "code": "abstract class BaseScreen {\n    private val log = mutableListOf<String>()\n    fun start(): String {\n        log += \"setup\"\n        log += render()\n        onStarted(log)\n        return log.joinToString(\" > \")\n    }\n    protected abstract fun render(): String\n    protected open fun onStarted(log: MutableList<String>) { log += \"done\" }\n}\nclass Home : BaseScreen() { override fun render() = \"home\" }\nclass Profile : BaseScreen() {\n    override fun render() = \"profile\"\n    override fun onStarted(log: MutableList<String>) {}\n}\n\nfun main() {\n    println(Home().start())\n    println(Profile().start())\n}",
+      "id": "d18q07",
+      "type": "mcq",
+      "topic": "intent processing",
+      "difficulty": "Hard",
+      "question": "Intents are consumed by a single coroutine like this, and `handle` makes suspending network calls. What is the consequence?",
+      "code": "private val intents = Channel<Intent>(Channel.UNLIMITED)\n\ninit {\n    viewModelScope.launch {\n        for (intent in intents) handle(intent)\n    }\n}",
       "options": [
-        "setup > home > done\nsetup > profile",
-        "setup > home > done\nsetup > profile > done",
-        "setup > home\nsetup > profile",
-        "home > setup > done\nprofile > setup"
+        "A slow call delays every later intent, including a Cancel tap, until it has finished",
+        "Intents are processed in parallel, so several updates to the state can race each other",
+        "An UNLIMITED channel starts dropping intents once a large number of them is queued",
+        "The channel conflates intents sent close together, so only the latest one is handled"
       ],
       "answer": [
         0
       ],
-      "explanation": "The final `start()` fixes the order: setup, then the subclass's `render()`, then the `onStarted` hook. `Home` keeps the default hook, which adds \"done\". `Profile` overrides it with an empty body, so nothing is added and no implicit `super` call happens."
+      "explanation": "A single consumer processes intents strictly in order, which avoids races but means a long `handle` call blocks the queue. Long-running work should be launched separately, with its outcome fed back as a result, so new intents keep flowing. An UNLIMITED channel never drops or conflates elements."
+    },
+    {
+      "id": "d18q08",
+      "type": "mcq",
+      "topic": "intents vs results",
+      "difficulty": "Hard",
+      "question": "Many MVI setups separate Intent (what the user did) from Result or Mutation (what happened). Why?",
+      "options": [
+        "One intent's async work can yield several results over time; the reducer stays pure",
+        "Results can be serialized for logging, while intents can't be serialized by Kotlin at all",
+        "Reducers may only accept sealed classes that were declared in the data layer of the app",
+        "Compose needs the extra type in order to skip recomposition of screens that haven't changed"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "One intent such as Refresh can lead to Loading, then Success or Failure, arriving at different times from asynchronous work. Turning each outcome into a result lets the reducer remain a simple, synchronous `(State, Result) -> State`. The split is about modeling and testability, not serialization or Compose."
+    },
+    {
+      "id": "d18q09",
+      "type": "truefalse",
+      "topic": "testing reducers",
+      "difficulty": "Medium",
+      "question": "A pure MVI reducer can be unit-tested with plain JUnit calls, without a coroutine test dispatcher, fakes for the repository, or Android dependencies.",
+      "options": [
+        "True",
+        "False"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A pure reducer is just a function from (state, intent or result) to a new state, so a test calls it with inputs and asserts on the returned state. Coroutines, repositories and dispatchers only come in when testing the effect-handling part of the ViewModel. This cheap testability is one of the main arguments for keeping reducers free of side effects."
     },
     {
       "id": "d18q10",
       "type": "mcq",
-      "topic": "interface state",
-      "difficulty": "Medium",
-      "question": "What happens when you compile this?",
-      "code": "interface Named {\n    val name: String = \"unknown\"\n}\n\nfun main() {}",
-      "options": [
-        "Compile error: property initializers are not allowed in interfaces",
-        "It compiles, and every implementer inherits \"unknown\" as the default value",
-        "It compiles, but `name` must still be overridden",
-        "It compiles only if `name` is changed to `var`"
-      ],
-      "answer": [
-        0
-      ],
-      "compiles": false,
-      "explanation": "An initializer needs a backing field, and interfaces can't have one. To give a default you write a getter instead: `val name: String get() = \"unknown\"`."
-    },
-    {
-      "id": "d18q11",
-      "type": "truefalse",
-      "topic": "var overridden by val",
-      "difficulty": "Medium",
-      "question": "This compiles.",
-      "code": "open class A { open var x = 1 }\nclass B : A() { override val x = 2 }\n\nfun main() {}",
-      "options": [
-        "True",
-        "False"
-      ],
-      "answer": [
-        1
-      ],
-      "compiles": false,
-      "explanation": "A `var` promises a setter, and a `val` override would take that setter away, so overriding `var` with `val` is rejected. The reverse is allowed: a `val` only promises a getter, so a `var` override just adds a setter."
-    },
-    {
-      "id": "d18q12",
-      "type": "output",
-      "topic": "val overridden by var",
+      "topic": "MVI & process death",
       "difficulty": "Hard",
-      "question": "What does this print?",
-      "code": "open class Config { open val retries: Int = 1 }\nclass DebugConfig : Config() {\n    override var retries: Int = 3\n}\n\nfun main() {\n    val d = DebugConfig()\n    d.retries = 5\n    val c: Config = d\n    println(c.retries)\n}",
+      "question": "An MVI screen keeps its whole UiState in a StateFlow. How should it handle process death?",
       "options": [
-        "5",
-        "1",
-        "3",
-        "Compile error"
+        "Save minimal inputs like query or selected id in SavedStateHandle and reload the rest",
+        "Make the whole UiState Parcelable and write all of it into the saved state after every change",
+        "Nothing is needed: StateFlow keeps its latest value around after the process has been killed",
+        "Store the latest UiState in a companion object so that it can be read back after a restart"
       ],
       "answer": [
         0
       ],
-      "explanation": "Overriding a `val` with a `var` is legal. Property access is virtual, so reading `retries` through the `Config` reference calls `DebugConfig`'s getter and returns the assigned 5. The base class's own field, which still holds 1, is never read."
-    },
-    {
-      "id": "d18q13",
-      "type": "mcq",
-      "topic": "protected",
-      "difficulty": "Easy",
-      "question": "`BaseActivity` declares `protected fun showLoading()`. In Kotlin, where can `showLoading()` be called from?",
-      "options": [
-        "Only inside `BaseActivity` and its subclasses",
-        "Inside `BaseActivity`, its subclasses, and any class in the same package",
-        "Anywhere in the same Gradle module",
-        "Only inside `BaseActivity` itself"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Kotlin's `protected` means the declaring class plus its subclasses. Unlike Java, Kotlin has no package-level visibility, so a helper class in the same package can't call it."
-    },
-    {
-      "id": "d18q14",
-      "type": "mcq",
-      "topic": "internal & modules",
-      "difficulty": "Medium",
-      "question": "In a multi-module Android project, `:core:data` declares `internal class UserMapper`. The `:app` module depends on `:core:data`. What happens when a class in `:app` uses `UserMapper`?",
-      "options": [
-        "Compile error: `internal` is visible only inside its own module",
-        "It works, because `:app` depends on `:core:data`",
-        "It works if the class in `:app` is in the same package as `UserMapper`",
-        "It compiles but crashes at runtime with `IllegalAccessError`"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`internal` means visible within one module, which in Android is a Gradle module compiled together. A dependency doesn't open it up, and package names don't matter. This is how a module keeps implementation details hidden behind its public API."
-    },
-    {
-      "id": "d18q15",
-      "type": "output",
-      "topic": "private constructor",
-      "difficulty": "Easy",
-      "question": "What does this print?",
-      "code": "class Token private constructor(val value: String) {\n    companion object {\n        fun of(raw: String) = Token(raw.trim().lowercase())\n    }\n}\n\nfun main() {\n    val t = Token.of(\"  AbC \")\n    println(\"[${t.value}]\")\n}",
-      "options": [
-        "[abc]",
-        "[  AbC ]",
-        "[AbC]",
-        "[ abc ]"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "The constructor is private, but the companion object is inside the class, so it can call it. That makes `of` the only way to create a `Token`, and it trims and lowercases the input first."
-    },
-    {
-      "id": "d18q16",
-      "type": "mcq",
-      "topic": "final override",
-      "difficulty": "Medium",
-      "question": "What happens when you compile this?",
-      "code": "open class A { open fun f() = 1 }\nopen class B : A() { final override fun f() = 2 }\nclass C : B() { override fun f() = 3 }\n\nfun main() {}",
-      "options": [
-        "Compile error: `f` in `B` is final and cannot be overridden",
-        "It compiles, because `B` is `open`",
-        "It compiles, because `A.f()` is `open`",
-        "Compile error: `final` and `override` modifiers can't be combined on one member"
-      ],
-      "answer": [
-        0
-      ],
-      "compiles": false,
-      "explanation": "`final override` overrides `A.f()` and closes it for further subclasses. `B` being `open` only lets you extend the class, not override its final members, and `A.f()` being open doesn't matter once `B` has sealed it."
-    },
-    {
-      "id": "d18q17",
-      "type": "truefalse",
-      "topic": "repository fake",
-      "difficulty": "Medium",
-      "question": "This fake for unit tests compiles, because its `getUser` signature matches the interface.",
-      "code": "interface UserRepository {\n    suspend fun getUser(id: String): User\n}\n\nclass FakeUserRepository : UserRepository {\n    suspend fun getUser(id: String): User = User(id, \"Test\")\n}",
-      "options": [
-        "True",
-        "False"
-      ],
-      "answer": [
-        1
-      ],
-      "explanation": "Kotlin requires the explicit `override` modifier. A matching signature isn't enough, so this is an error: the member hides the inherited one, and the class also doesn't implement the abstract `getUser`. Write `override suspend fun getUser(...)`."
-    },
-    {
-      "id": "d18q18",
-      "type": "output",
-      "topic": "super dispatch",
-      "difficulty": "Hard",
-      "question": "What does this print?",
-      "code": "open class A {\n    open fun greet() = \"A.greet>\" + name()\n    open fun name() = \"A\"\n}\nclass B : A() {\n    override fun name() = \"B\"\n    override fun greet() = \"B.greet>\" + super.greet()\n}\n\nfun main() {\n    println(B().greet())\n}",
-      "options": [
-        "B.greet>A.greet>B",
-        "B.greet>A.greet>A",
-        "A.greet>B",
-        "B.greet>B"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`super.greet()` runs `A`'s body, but inside it `name()` is still a virtual call on the same `B` object, so it resolves to `B.name()`. `super` only changes which `greet` body runs, not how calls inside it dispatch."
-    },
-    {
-      "id": "d18q19",
-      "type": "mcq",
-      "topic": "protected on other instance",
-      "difficulty": "Hard",
-      "question": "Which function fails to compile?",
-      "code": "open class Base { protected val secret = 1 }\n\nclass Derived : Base() {\n    fun peekBase(other: Base) = other.secret\n    fun peekDerived(other: Derived) = other.secret\n}\n\nfun main() {}",
-      "options": [
-        "Only `peekBase`",
-        "Only `peekDerived`",
-        "Both of them",
-        "Neither of them"
-      ],
-      "answer": [
-        0
-      ],
-      "compiles": false,
-      "explanation": "From inside `Derived`, a protected member can be accessed only through a receiver of type `Derived` (or a subtype). Through a plain `Base` reference it's rejected, because that object might be a different subclass entirely. Accessing `other.secret` on another `Derived` is fine."
-    },
-    {
-      "id": "d18q20",
-      "type": "multi",
-      "topic": "visibility rules",
-      "difficulty": "Hard",
-      "question": "Which statements about Kotlin visibility are correct? Select all that apply.",
-      "options": [
-        "A `private` top-level function is visible only inside the file that declares it",
-        "A declaration with no visibility modifier is `public`",
-        "`internal` means visible inside the same package",
-        "An outer class can access `private` members of its nested class",
-        "A `private constructor` can still be called from the class's own companion object"
-      ],
-      "answer": [
-        0,
-        1,
-        4
-      ],
-      "explanation": "Top-level `private` is file-scoped, the default is `public`, and the companion object counts as inside the class, so it can call a private constructor. `internal` is about modules, not packages. Unlike Java, a Kotlin outer class can't see `private` members of a nested class."
+      "explanation": "Saved instance state goes through a Bundle with a tight size limit; saving a whole state with lists can cause `TransactionTooLargeException` and slows every save. Persist only what cannot be re-derived (user input, ids, selected tab) and rebuild the rest from the repository. In-memory objects, including companion objects, are gone with the process."
     }
   ]
 }

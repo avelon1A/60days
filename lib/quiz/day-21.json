@@ -1,244 +1,30 @@
 {
   "day": 21,
-  "topic": "Generics: in/out variance, star projection & where",
+  "topic": "Android interview: lifecycle, config changes & process death",
   "questions": [
     {
       "id": "d21q01",
       "type": "mcq",
-      "topic": "invariance",
+      "topic": "rotation",
       "difficulty": "Easy",
-      "question": "What happens when you compile this code?",
-      "code": "fun main() {\n    val strings: MutableList<String> = mutableListOf(\"a\")\n    val anys: MutableList<Any> = strings\n    anys.add(1)\n}",
+      "question": "The user rotates the device. The Activity does not declare android:configChanges. What happens by default?",
       "options": [
-        "Compile error: `MutableList` is invariant, so `MutableList<String>` isn't a `MutableList<Any>`",
-        "It compiles, but `anys.add(1)` throws `ClassCastException` because the list only holds `String`s",
-        "It compiles and runs, leaving `strings` as `[a, 1]`",
-        "Compile error only on `anys.add(1)`, because `1` is not a `String`"
+        "The Activity is only paused and resumed; onCreate is not called again",
+        "The Activity and all its ViewModels are rebuilt from scratch",
+        "The Activity is destroyed and recreated, while its ViewModels are kept",
+        "Only the window is redrawn with the new resources, nothing is recreated"
       ],
       "answer": [
-        0
+        2
       ],
-      "compiles": false,
-      "explanation": "Generic types are invariant by default, and `MutableList<E>` both reads and writes `E`, so the assignment itself is rejected. If it were allowed, `anys.add(1)` would sneak an `Int` into a list of strings, which is exactly what invariance prevents."
+      "explanation": "A configuration change destroys and recreates the Activity so new resources are loaded, but the ViewModelStore is retained across the change, so ViewModels survive. Saying ViewModels are rebuilt confuses a config change with the Activity finishing."
     },
     {
       "id": "d21q02",
-      "type": "output",
-      "topic": "generic class",
-      "difficulty": "Easy",
-      "question": "What does this print?",
-      "code": "class Box<T>(val value: T) {\n    fun <R> map(f: (T) -> R): Box<R> = Box(f(value))\n}\n\nfun main() {\n    val b = Box(21).map { it * 2 }.map { \"v=$it\" }\n    println(b.value)\n}",
-      "options": [
-        "v=42",
-        "v=21",
-        "42",
-        "Box(v=42)"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`map` is a generic function with its own type parameter `R`: the first call produces a `Box<Int>` holding 42, and the second a `Box<String>` holding \"v=42\". `b.value` is that string, not the box itself."
-    },
-    {
-      "id": "d21q03",
       "type": "truefalse",
-      "topic": "declaration-site out",
+      "topic": "ViewModel scope",
       "difficulty": "Easy",
-      "question": "A `List<String>` can be passed where a `List<Any>` is expected, because Kotlin's read-only `List` is declared as `List<out E>`.",
-      "options": [
-        "True",
-        "False"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`out E` makes `List` covariant: it only produces `E` values, so a list of strings is safely a list of `Any`. `MutableList<E>` has no `out`, which is why the same assignment fails for it."
-    },
-    {
-      "id": "d21q04",
-      "type": "mcq",
-      "topic": "in keyword",
-      "difficulty": "Easy",
-      "question": "In `interface Comparable<in T>`, what does the `in` modifier tell the compiler?",
-      "options": [
-        "`T` is only consumed, so a `Comparable<Number>` can be used as a `Comparable<Int>`",
-        "`T` is only produced (returned), so a `Comparable<Int>` can be used as a `Comparable<Number>`",
-        "`T` is reified and available at runtime",
-        "`T` must be a non-null type"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`in` marks a type parameter as contravariant: it appears only in input positions like `compareTo(other: T)`. Something that can compare any `Number` can certainly compare `Int`s, so the subtyping is reversed. Producing values is what `out` is for."
-    },
-    {
-      "id": "d21q05",
-      "type": "output",
-      "topic": "upper bound",
-      "difficulty": "Easy",
-      "question": "What does this print?",
-      "code": "fun <T : Comparable<T>> biggest(a: T, b: T): T = if (a > b) a else b\n\nfun main() {\n    println(biggest(\"apple\", \"banana\"))\n    println(biggest(3, 7))\n}",
-      "options": [
-        "banana\n7",
-        "apple\n7",
-        "banana\n3",
-        "apple\n3"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "The upper bound `T : Comparable<T>` is what lets the body use `>`. Strings compare lexicographically, so \"banana\" beats \"apple\", and 7 > 3."
-    },
-    {
-      "id": "d21q06",
-      "type": "truefalse",
-      "topic": "non-null bound",
-      "difficulty": "Easy",
-      "question": "Declaring `fun <T : Any> put(value: T)` stops callers from passing `null`, whereas a plain `fun <T> put(value: T)` would accept `null`.",
-      "options": [
-        "True",
-        "False"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "A type parameter with no bound has the implicit upper bound `Any?`, so `T` can be inferred as a nullable type. Bounding it with `T : Any` restricts it to non-null types."
-    },
-    {
-      "id": "d21q07",
-      "type": "mcq",
-      "topic": "listadapter",
-      "difficulty": "Easy",
-      "question": "`ListAdapter` is declared as `abstract class ListAdapter<T, VH : RecyclerView.ViewHolder>`. What does the `VH : RecyclerView.ViewHolder` part guarantee?",
-      "code": "class UserAdapter : ListAdapter<User, UserAdapter.UserVH>(UserDiff) {\n    class UserVH(val binding: ItemUserBinding) :\n        RecyclerView.ViewHolder(binding.root)\n    // onCreateViewHolder / onBindViewHolder ...\n}",
-      "options": [
-        "The type argument for `VH` must be `RecyclerView.ViewHolder` or a subclass of it",
-        "`VH` is covariant, so a `UserAdapter` is also a `ListAdapter<User, RecyclerView.ViewHolder>`",
-        "`VH` is erased to `Any?` and can be any class",
-        "The ViewHolder class is created automatically by reflection"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`VH : RecyclerView.ViewHolder` is an upper bound: the compiler rejects any type argument that isn't a `ViewHolder` subtype, and inside the adapter `VH` can be used as a `ViewHolder`. A bound says nothing about variance; `VH` is still invariant."
-    },
-    {
-      "id": "d21q08",
-      "type": "output",
-      "topic": "covariant producer",
-      "difficulty": "Medium",
-      "question": "What does this print?",
-      "code": "open class Animal(val name: String)\nclass Cat(name: String) : Animal(name)\n\nclass Producer<out T>(private val item: T) {\n    fun get(): T = item\n}\n\nfun nameOf(p: Producer<Animal>) = p.get().name\n\nfun main() {\n    val cats: Producer<Cat> = Producer(Cat(\"Tom\"))\n    println(nameOf(cats))\n}",
-      "options": [
-        "Tom",
-        "Animal",
-        "Compile error: type mismatch",
-        "Cat"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Because `T` is declared `out` and only appears as a return type, `Producer<Cat>` is a subtype of `Producer<Animal>`, so the call compiles. Without `out` it would be a type mismatch, since generic classes are invariant by default."
-    },
-    {
-      "id": "d21q09",
-      "type": "mcq",
-      "topic": "out position rules",
-      "difficulty": "Medium",
-      "question": "Why does this class fail to compile?",
-      "code": "class Box<out T>(var value: T)",
-      "options": [
-        "A `var` also has a setter taking `T`, putting an `out` type parameter in an input position",
-        "Type parameters can't be used in constructor parameters of a class that declares them `out`",
-        "`out` type parameters must have an explicit upper bound",
-        "`out` can only be used on interfaces, not classes"
-      ],
-      "answer": [
-        0
-      ],
-      "compiles": false,
-      "explanation": "A `val value: T` would be fine, because a getter only produces `T`. A `var` also generates `setValue(T)`, which consumes `T`, so the compiler reports that `T` is declared `out` but occurs in an invariant position."
-    },
-    {
-      "id": "d21q10",
-      "type": "output",
-      "topic": "contravariant comparator",
-      "difficulty": "Medium",
-      "question": "What does this print?",
-      "code": "open class Animal(val name: String)\nclass Dog(name: String) : Animal(name)\n\nfun main() {\n    val byName: Comparator<Animal> = compareBy { it.name }\n    val dogs = listOf(Dog(\"Rex\"), Dog(\"Ace\"), Dog(\"Max\"))\n    println(dogs.sortedWith(byName).map { it.name })\n}",
-      "options": [
-        "[Ace, Max, Rex]",
-        "[Rex, Ace, Max]",
-        "[Rex, Max, Ace]",
-        "Compile error: expected Comparator<Dog>"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`sortedWith` takes a `Comparator<in T>`, so a comparator of any supertype of `Dog` is accepted. The list is then sorted by name in ascending order."
-    },
-    {
-      "id": "d21q11",
-      "type": "multi",
-      "topic": "star projection",
-      "difficulty": "Medium",
-      "question": "Given `fun process(items: MutableList<*>)`, which of these lines compile inside the function? Select all that apply.",
-      "options": [
-        "`val n = items.size`",
-        "`val first: Any? = items[0]`",
-        "`items.clear()`",
-        "`items.add(\"c\")`",
-        "`val s: String = items[0]`"
-      ],
-      "answer": [
-        0,
-        1,
-        2
-      ],
-      "explanation": "`MutableList<*>` means a list of some unknown type. Reads come back as `Any?`, and members that don't mention `E`, like `size` and `clear()`, work. You can't `add` anything, because the compiler can't prove the value fits the unknown element type, and a read is not a `String` without a cast."
-    },
-    {
-      "id": "d21q12",
-      "type": "output",
-      "topic": "star projection read",
-      "difficulty": "Medium",
-      "question": "What does this print?",
-      "code": "fun describe(list: List<*>): String =\n    list.joinToString { it?.let { v -> v::class.simpleName } ?: \"null\" }\n\nfun main() {\n    println(describe(listOf(1, \"a\", null, 2.0)))\n}",
-      "options": [
-        "Int, String, null, Double",
-        "Any, Any, null, Any",
-        "Int, String, Nothing, Double",
-        "Int, String, Any?, Double"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Elements of a `List<*>` are statically typed `Any?`, but `v::class` gives each value's actual runtime class. Only the static type is `Any?`; the objects keep their real types."
-    },
-    {
-      "id": "d21q13",
-      "type": "mcq",
-      "topic": "where clause",
-      "difficulty": "Medium",
-      "question": "Which call does NOT compile?",
-      "code": "fun <T> longest(items: List<T>): T?\n        where T : CharSequence, T : Comparable<T> =\n    items.maxByOrNull { it.length }",
-      "options": [
-        "`longest(listOf(1, 22, 333))`",
-        "`longest(listOf(\"a\", \"bb\"))`",
-        "`longest(emptyList<String>())`",
-        "`longest(listOf(\"x\"))`"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "With `where`, `T` must satisfy every bound at once. `Int` is `Comparable<Int>` but not a `CharSequence`, so it fails. `String` satisfies both, and an empty `List<String>` is still fine, because bounds are checked on the type, not the contents."
-    },
-    {
-      "id": "d21q14",
-      "type": "truefalse",
-      "topic": "java wildcards",
-      "difficulty": "Medium",
-      "question": "Java's `List<? super Integer>` corresponds to Kotlin's `MutableList<out Int>`.",
+      "question": "A ViewModel's in-memory fields survive when the system kills the app process in the background and the user later returns to it.",
       "options": [
         "True",
         "False"
@@ -246,117 +32,147 @@
       "answer": [
         1
       ],
-      "explanation": "`? super T` is a consumer wildcard and maps to Kotlin's `in T`, so the right equivalent is `MutableList<in Int>`. `? extends T` is the producer wildcard and maps to `out T`. That's PECS: Producer Extends, Consumer Super."
+      "explanation": "A ViewModel lives in process memory, so system-initiated process death wipes it. Only state written into saved instance state (for example via SavedStateHandle) is handed back to the new process; the ViewModel itself is constructed fresh."
     },
     {
-      "id": "d21q15",
-      "type": "output",
-      "topic": "use-site variance",
-      "difficulty": "Medium",
-      "question": "What does this print?",
-      "code": "fun copy(from: Array<out Any>, to: Array<Any>) {\n    for (i in from.indices) to[i] = from[i]\n}\n\nfun main() {\n    val ints: Array<Int> = arrayOf(1, 2, 3)\n    val target = Array<Any>(3) { \"-\" }\n    copy(ints, target)\n    println(target.joinToString())\n}",
-      "options": [
-        "1, 2, 3",
-        "-, -, -",
-        "[1, 2, 3]",
-        "1, -, -"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`Array<T>` is invariant, but the use-site projection `Array<out Any>` lets an `Array<Int>` be passed in as long as the function only reads from it. All three elements are copied, and `joinToString()` uses \", \" with no brackets."
-    },
-    {
-      "id": "d21q16",
+      "id": "d21q03",
       "type": "mcq",
-      "topic": "bounded base viewmodel",
+      "topic": "callback order",
       "difficulty": "Medium",
-      "question": "`LoginState` is a data class that does NOT implement `UiState`. What happens with `LoginViewModel`?",
-      "code": "interface UiState\n\nabstract class BaseViewModel<S : UiState>(initial: S) : ViewModel() {\n    protected val _state = MutableStateFlow(initial)\n    val state: StateFlow<S> = _state.asStateFlow()\n}\n\nclass LoginViewModel : BaseViewModel<LoginState>(LoginState())",
+      "question": "Activity A starts Activity B, which fully covers it. In what order do the lifecycle callbacks run?",
       "options": [
-        "Compile error: `LoginState` is not within the upper bound `UiState`",
-        "It compiles, and `S` silently falls back to `UiState`",
-        "It compiles but throws `ClassCastException` when `state` is first collected",
-        "It compiles with only an unchecked-cast warning"
+        "A.onPause, B.onCreate, B.onStart, B.onResume, A.onStop",
+        "A.onPause, A.onStop, B.onCreate, B.onStart, B.onResume",
+        "B.onCreate, B.onStart, B.onResume, A.onPause, A.onStop",
+        "A.onStop, A.onPause, B.onCreate, B.onStart, B.onResume"
       ],
       "answer": [
         0
       ],
-      "explanation": "Upper bounds are checked at compile time on every type argument, so `BaseViewModel<LoginState>` is rejected until `LoginState` implements `UiState`. That's the point of the bound: the base class can rely on `S` being a `UiState`."
+      "explanation": "A is paused first, then B goes all the way to resumed, and only once B is visible does A get onStop. This is why heavy work in onPause delays the next screen, and why you should not assume A is stopped before B starts."
     },
     {
-      "id": "d21q17",
-      "type": "mcq",
-      "topic": "out with nothing",
-      "difficulty": "Hard",
-      "question": "Why can a single `object Loading` be returned from a function whose return type is `Result<User>`?",
-      "code": "sealed class Result<out T> {\n    data class Success<out T>(val data: T) : Result<T>()\n    data class Error(val e: Throwable) : Result<Nothing>()\n    object Loading : Result<Nothing>()\n}\n\nfun load(): Result<User> = Result.Loading",
-      "options": [
-        "`Nothing` is a subtype of every type, and `out T` makes `Result<Nothing>` a subtype of `Result<User>`",
-        "`Nothing` is erased to `Any` at runtime, so the compiler accepts any `Result` as a return value",
-        "Sealed classes skip type-argument checks for their own subclasses, since all of them are known at compile time",
-        "`object` declarations are generic over every `T` automatically"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`Nothing` is the bottom type, and with `out T`, `Result<Nothing>` becomes a subtype of `Result<X>` for every `X`. Without `out`, `Result` would be invariant, and you'd need `Loading` to be a class created separately for each `T`."
-    },
-    {
-      "id": "d21q18",
-      "type": "output",
-      "topic": "unsafevariance",
-      "difficulty": "Hard",
-      "question": "What does this print?",
-      "code": "class Holder<out T>(private val items: List<T>) {\n    fun has(x: @UnsafeVariance T): Boolean = x in items\n}\n\nfun main() {\n    val h: Holder<Any> = Holder(listOf(\"a\", \"b\"))\n    println(h.has(\"a\"))\n    println(h.has(1))\n}",
-      "options": [
-        "true\nfalse",
-        "true\ntrue",
-        "Compile error: T is declared out but occurs in in position",
-        "true\nClassCastException"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`@UnsafeVariance` turns off the variance check for that parameter, which is how the stdlib's `List.contains` takes an `E` despite `out E`. `contains` only compares values with `equals`, so passing an `Int` to what is really a list of strings just returns `false`. Nothing gets cast."
-    },
-    {
-      "id": "d21q19",
+      "id": "d21q04",
       "type": "multi",
-      "topic": "consumer projection",
-      "difficulty": "Hard",
-      "question": "Given `fun fill(dest: MutableList<in Int>)`, which statements are true? Select all that apply.",
+      "topic": "process death",
+      "difficulty": "Medium",
+      "question": "The system kills your process while it is in the background, then the user returns via Recents. Which of these are restored? Select all that apply.",
       "options": [
-        "A `MutableList<Number>` can be passed as `dest`",
-        "`dest.add(42)` compiles inside `fill`",
-        "`val y: Any? = dest[0]` compiles inside `fill`",
-        "`val x: Int = dest[0]` compiles inside `fill`",
-        "A `MutableList<Long>` can be passed as `dest`"
+        "Values written to a ViewModel's SavedStateHandle",
+        "A Kotlin object singleton's cached user profile",
+        "The task's stack of Activities, recreated as needed",
+        "Data put into the onSaveInstanceState Bundle",
+        "Fields held directly in a ViewModel instance"
       ],
       "answer": [
         0,
-        1,
-        2
+        2,
+        3
       ],
-      "explanation": "`in Int` accepts any list whose element type is a supertype of `Int`, so you can safely add `Int`s. What you read back could be any such supertype, so it's only `Any?`, not `Int`. `Long` is not a supertype of `Int`, so a `MutableList<Long>` is rejected."
+      "explanation": "The system keeps the task's activity records and their saved Bundles (SavedStateHandle data is stored in that Bundle), and recreates Activities from them. Anything that only lived in process memory, such as singletons and ViewModel fields, starts over from its initial value."
     },
     {
-      "id": "d21q20",
-      "type": "output",
-      "topic": "contravariant bound",
-      "difficulty": "Hard",
-      "question": "`Square` implements `Comparable<Shape>`, not `Comparable<Square>`. What does this print?",
-      "code": "open class Shape(val area: Int) : Comparable<Shape> {\n    override fun compareTo(other: Shape) = area.compareTo(other.area)\n}\nclass Square(side: Int) : Shape(side * side)\n\nfun <T : Comparable<T>> maxOfAll(items: List<T>): T =\n    items.reduce { a, b -> if (a >= b) a else b }\n\nfun main() {\n    println(maxOfAll(listOf(Square(2), Square(3))).area)\n}",
+      "id": "d21q05",
+      "type": "mcq",
+      "topic": "onSaveInstanceState",
+      "difficulty": "Medium",
+      "question": "For apps targeting API 28 and above, when is onSaveInstanceState called relative to the other callbacks as an Activity goes to the background?",
       "options": [
-        "9",
-        "4",
-        "Compile error: Square is not Comparable<Square>",
-        "3"
+        "Before onPause, so state is captured while the UI is still interactive",
+        "After onStop, once the Activity is no longer visible",
+        "Between onPause and onStop, always in that exact slot",
+        "Only in onDestroy, and only if the process is about to be killed"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "Since API 28, onSaveInstanceState runs after onStop. Before that it ran before onStop with no guarantee relative to onPause. It is not tied to onDestroy: it runs whenever the Activity may later need recreating, whether or not the process actually dies."
+    },
+    {
+      "id": "d21q06",
+      "type": "mcq",
+      "topic": "testing process death",
+      "difficulty": "Hard",
+      "question": "Why is the 'Don't keep activities' developer option not a faithful simulation of process death?",
+      "options": [
+        "It never triggers onSaveInstanceState, so nothing is restored",
+        "It also clears the saved Bundle, so it is stricter than real death",
+        "It keeps ViewModels alive, hiding bugs in SavedStateHandle usage",
+        "The process stays alive, so singletons and statics keep their values"
+      ],
+      "answer": [
+        3
+      ],
+      "explanation": "'Don't keep activities' destroys each Activity as you leave it, but the process lives on, so in-memory singletons, caches and static fields survive and can mask bugs. ViewModels are cleared in that mode because the destroy isn't a config change. To truly test, background the app and run `adb shell am kill <package>`."
+    },
+    {
+      "id": "d21q07",
+      "type": "truefalse",
+      "topic": "user dismissal",
+      "difficulty": "Medium",
+      "question": "If the user explicitly swipes the task away from the Recents screen, the saved instance state is discarded and the next launch starts fresh.",
+      "options": [
+        "True",
+        "False"
       ],
       "answer": [
         0
       ],
-      "explanation": "`Comparable` is declared `Comparable<in T>`, so `Comparable<Shape>` is a subtype of `Comparable<Square>`, and `T = Square` meets the bound. In Java you'd need `T extends Comparable<? super T>` for this. The squares have areas 4 and 9, and the larger is returned."
+      "explanation": "Saved instance state is meant for system-initiated destruction. When the user deliberately dismisses the task, Android treats it as the user being done with it, so the saved Bundles go away. Data that must survive this belongs in persistent storage such as DataStore or a database."
+    },
+    {
+      "id": "d21q08",
+      "type": "mcq",
+      "topic": "Bundle size",
+      "difficulty": "Hard",
+      "question": "On Android 7+ an app puts a ~2 MB list into onSaveInstanceState. What happens when the Activity is stopped?",
+      "options": [
+        "The excess is silently truncated and the list restores partially",
+        "The Bundle is written to disk because it exceeds the binder limit",
+        "A TransactionTooLargeException crashes the app",
+        "Only a warning is logged and the state is dropped without a crash"
+      ],
+      "answer": [
+        2
+      ],
+      "explanation": "The saved Bundle travels to system_server over Binder, whose transaction buffer is about 1 MB shared by the process. Since API 24 going over it throws TransactionTooLargeException instead of failing quietly. Keep saved state small: IDs and user input, not loaded data."
+    },
+    {
+      "id": "d21q09",
+      "type": "multi",
+      "topic": "config changes",
+      "difficulty": "Hard",
+      "question": "Without any android:configChanges declared, which of these recreate a running Activity? Select all that apply.",
+      "options": [
+        "The user switches the system to dark theme",
+        "The device connects to a different Wi-Fi network",
+        "The user changes the system language",
+        "A notification arrives in the status bar",
+        "The app window is resized in multi-window mode"
+      ],
+      "answer": [
+        0,
+        2,
+        4
+      ],
+      "explanation": "uiMode (dark theme), locale and screen size changes are configuration changes, so the Activity is recreated to reload resources. Connectivity changes and notifications don't alter the Configuration, so they don't recreate anything. Forgetting that dark mode and multi-window recreate the Activity is a common source of lost state."
+    },
+    {
+      "id": "d21q10",
+      "type": "mcq",
+      "topic": "configChanges",
+      "difficulty": "Easy",
+      "question": "An Activity declares android:configChanges=\"orientation|screenSize\". What happens on rotation?",
+      "options": [
+        "It is not recreated; onConfigurationChanged gets the new Configuration",
+        "It is recreated as usual, but onCreate receives a null Bundle",
+        "Rotation is blocked and the screen stays in its current orientation",
+        "It is recreated, but its Views are kept and re-attached automatically"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Declaring the change means the Activity handles it itself: it stays alive and onConfigurationChanged is called. Resources are not reloaded for you, so you must update anything orientation-dependent. It does not lock orientation; that is screenOrientation."
     }
   ]
 }

@@ -1,352 +1,178 @@
 {
   "day": 51,
-  "topic": "Offline-first: caching, sync & single source of truth",
+  "topic": "Offline-first: caching, sync & conflict resolution",
   "questions": [
     {
       "id": "d51q01",
       "type": "mcq",
       "topic": "single source of truth",
       "difficulty": "Easy",
-      "question": "In an offline-first notes app built around a single source of truth, which data flow is correct?",
+      "question": "An offline-first notes app shows a list that must work on a plane and update when the network returns. What should the list screen observe?",
       "options": [
-        "The UI observes a Room `Flow`; the repository writes network results into Room, which re-emits",
-        "The UI shows the network response directly and writes it to Room only as a backup for when the app is offline",
-        "The UI observes both the Retrofit response and the Room query and shows whichever arrives first",
-        "The ViewModel keeps the latest network response in memory as the truth and reads Room only after process death"
+        "A query on the local database (Room / Core Data or SwiftData) that the sync layer writes network results into",
+        "Whichever of the network call or the database read completes first, then ignore the other",
+        "An in-memory cache held by the ViewModel that is refilled from the API on every screen open",
+        "The latest network response, falling back to a database read only when the request fails"
       ],
       "answer": [
         0
       ],
-      "explanation": "With a single source of truth the local DB is the only thing the UI reads; the network's job is just to update the DB. Showing network and DB data side by side gives you two truths that can disagree, so the UI flickers or shows stale data after a local write."
+      "explanation": "With a single source of truth the UI only observes the local store, and the network layer's job is to update that store; the screen then re-renders automatically from the DB query. Falling back to the DB only on failure gives two competing sources, so data can flicker or disagree between screens. An in-memory cache disappears on process death and does not work offline after a restart."
     },
     {
       "id": "d51q02",
       "type": "truefalse",
-      "topic": "connectivity",
+      "topic": "cache-then-network",
       "difficulty": "Easy",
-      "question": "Once a `ConnectivityManager` network callback reports an available network, the app can assume its next API request will succeed and skip handling network failures.",
+      "question": "With cache-then-network, a screen can render twice (cached data first, fresh data second), so the UI must tolerate content changing under the user, for example by keeping scroll position and not resetting inputs.",
       "options": [
         "True",
         "False"
       ],
       "answer": [
-        1
+        0
       ],
-      "explanation": "Being connected doesn't mean the internet works: captive portals, dead Wi-Fi uplinks, DNS problems or a down backend all look \"connected\". Use connectivity only as a hint for when to try, and treat the actual request result as the truth."
+      "explanation": "Cache-then-network shows stored data instantly and then replaces it when the refresh lands, so the same screen renders at least twice. If the list resets its scroll or a text field is rebuilt on the second render, users see a jump. Stable item keys and a diffing list keep the update smooth."
     },
     {
       "id": "d51q03",
       "type": "mcq",
-      "topic": "stale-while-revalidate",
+      "topic": "outbox",
       "difficulty": "Easy",
-      "question": "A news feed must open instantly even on a slow network. Fresh stories are nice to have but a few minutes of staleness is harmless. Which read strategy fits best?",
+      "question": "A user taps 'Like' on a post while offline. Which design keeps the like and still delivers it later?",
       "options": [
-        "Stale-while-revalidate: show the cached feed at once and refresh it in the background",
-        "Network-first: show a spinner until the API responds, then fall back to the cache on error",
-        "Network-only: never cache the feed so users always see fresh stories",
-        "Cache-only: refresh the feed only when the user reinstalls or clears data"
+        "Keep the pending like in the ViewModel and resend it from onResume / sceneWillEnterForeground when the app returns",
+        "Disable the Like button while offline and show a snackbar asking the user to retry once they reconnect",
+        "Write the like to the local DB plus a pending-operations (outbox) table, show it at once, and drain the outbox from WorkManager / BGTaskScheduler when online",
+        "Send the request straight away with an OkHttp / URLSession retry policy that keeps retrying until it succeeds"
       ],
       "answer": [
-        0
+        2
       ],
-      "explanation": "Feeds are latency-sensitive and tolerate staleness, so you show cached content immediately and revalidate. Network-first makes every launch wait on the slowest part of the system for no real correctness gain."
+      "explanation": "An outbox stored on disk survives process death and app restarts, and a scheduled job with a network constraint delivers it when connectivity returns. Holding it in the ViewModel loses it as soon as the process is killed. An in-flight HTTP retry also dies with the process and does nothing for a user who is offline for hours."
     },
     {
       "id": "d51q04",
-      "type": "multi",
-      "topic": "offline indicators",
-      "difficulty": "Easy",
-      "question": "The device is offline and the app is showing cached data. Which UI choices are good practice? Select all that apply.",
+      "type": "mcq",
+      "topic": "idempotency keys",
+      "difficulty": "Medium",
+      "question": "Your outbox retries 'place order' after a socket timeout, and support sees duplicate orders. The first request had actually reached the server. What is the right fix?",
       "options": [
-        "Keep the cached content visible with a small \"Offline\" banner",
-        "Show when the data was last refreshed, e.g. \"Updated 2 h ago\"",
-        "Mark items created offline as pending (e.g. \"Sending…\") until the server confirms them",
-        "Replace the whole screen with a full-screen error until the connection returns",
-        "Show the cached data with no indication, so users aren't worried"
+        "Add exponential backoff with jitter so the retry reaches the server only after the first request has finished",
+        "Generate a fresh request ID on each retry so the server can log every attempt and drop the extra orders later",
+        "Stop retrying on timeouts and only retry on 5xx responses, since a timeout usually means the order went through",
+        "Generate a UUID idempotency key when the operation is created, store it with the outbox row, send it on every retry, and let the server dedupe on it"
       ],
       "answer": [
-        0,
-        1,
-        2
+        3
       ],
-      "explanation": "Offline-first means the content stays usable and the user is told honestly how fresh it is and what hasn't synced yet. A full-screen error throws away useful cached data, and hiding staleness makes users trust numbers that may be outdated."
+      "explanation": "A timeout is ambiguous: the client cannot know whether the server processed the request, so the only safe retry is one the server can recognise as a repeat. The key must be created once per logical operation and persisted, otherwise a retry after process death gets a new key. Backoff changes timing but not the duplicate, and skipping retries on timeouts just loses orders instead."
     },
     {
       "id": "d51q05",
-      "type": "mcq",
-      "topic": "network-first",
+      "type": "multi",
+      "topic": "optimistic UI",
       "difficulty": "Medium",
-      "question": "A banking app shows the account balance on the screen where users start a transfer. Which read strategy is most appropriate?",
+      "question": "You show a sent comment immediately (optimistic UI) before the server confirms it. Which pieces do you need for this to be robust? Select all that apply.",
       "options": [
-        "Network-first, falling back to the last known balance labelled with its timestamp",
-        "Cache-first: always show the cached balance and refresh it once a day in a background job",
-        "Stale-while-revalidate with no indicator, so the screen opens instantly like a news feed",
-        "Cache-only: download the balance once at login and reuse it for the rest of the session"
+        "A per-row sync state (pending / sent / failed) so the UI can show 'sending' and offer retry",
+        "Deleting the local row before the request is sent so a server echo of the comment cannot appear twice",
+        "Disabling pull-to-refresh until every pending write is confirmed so a refresh cannot overwrite them",
+        "Mapping the client's temporary ID to the server-assigned ID when the ack arrives, without duplicating the row",
+        "A way to roll back or mark the row failed when the server rejects the write (e.g. validation or 403)"
       ],
       "answer": [
-        0
+        0,
+        3,
+        4
       ],
-      "explanation": "Here stale data leads to wrong decisions (overdrafts, failed transfers), so freshness beats latency. The cached value is still worth showing, but only clearly marked as old, with actions that depend on the exact amount blocked. Silently serving a cached balance trades correctness for speed in the one place you can't."
+      "explanation": "Optimistic UI is a promise you may have to take back, so the row needs a visible state, a failure path and a clean reconciliation with the server's ID. Blocking refresh is not needed if the merge keeps pending rows when applying server data. Deleting the local row first defeats the whole point of showing it instantly."
     },
     {
       "id": "d51q06",
-      "type": "truefalse",
-      "topic": "cache-first",
-      "difficulty": "Easy",
-      "question": "For user settings such as theme and notification toggles, which are mostly changed on this device, it's sensible to read the local copy first and sync changes to the server in the background.",
+      "type": "mcq",
+      "topic": "last-write-wins",
+      "difficulty": "Medium",
+      "question": "Two phones edit the same note offline. On sync you resolve with last-write-wins using each device's local timestamp. What is the main risk?",
       "options": [
-        "True",
-        "False"
+        "Last-write-wins needs vector clocks to work at all, so device timestamps would make every sync fail outright",
+        "Clock skew can make the older edit 'win', and the losing edit is dropped silently with no trace for the user",
+        "The server rejects both writes as conflicting and the note is left at its version from before either edit",
+        "Both edits are merged character by character, which can leave the note with text from both devices in it"
       ],
       "answer": [
-        0
+        1
       ],
-      "explanation": "Settings are small, mostly written by this user on this device, and harmless if briefly out of date, so cache-first (local-first) is the right call. Blocking the settings screen on a network round trip would add latency for no benefit."
+      "explanation": "LWW throws away one side of a conflict by design, and with device clocks the 'later' write may simply be the phone with the fast clock. That is acceptable for things like a profile photo but bad for user-authored text. LWW never merges; merging needs a field-level or CRDT-style strategy, or a 'conflict copy' shown to the user."
     },
     {
       "id": "d51q07",
-      "type": "mcq",
-      "topic": "http caching",
+      "type": "truefalse",
+      "topic": "conditional writes",
       "difficulty": "Medium",
-      "question": "A response arrived with `Cache-Control: max-age=60` and `ETag: \"v42\"` and was stored in OkHttp's disk cache. Five minutes later the app requests the same URL, and the resource hasn't changed. What happens?",
+      "question": "If a client sends `If-Match` with the ETag it last saw, and the server's current ETag for that resource is different, the server should apply the write anyway and return the newer ETag.",
       "options": [
-        "It revalidates with `If-None-Match: \"v42\"`, gets `304 Not Modified`, and returns the cached body",
-        "OkHttp serves the cached body without contacting the server, because an ETag makes the entry valid forever",
-        "The server replies `200 OK` with the full body again, because the cache entry has expired",
-        "The server replies `412 Precondition Failed` because the ETag still matches"
+        "True",
+        "False"
       ],
       "answer": [
-        0
+        1
       ],
-      "explanation": "`max-age` sets how long the entry is fresh (served with no network at all). After that it's stale and gets revalidated with the ETag, and a `304` saves the body download. `412` is the response to a failed `If-Match` on writes, not to a matching `If-None-Match`."
+      "explanation": "`If-Match` makes the write conditional: if the resource changed since the client read it, the server should refuse with 412 Precondition Failed. The client then fetches the latest version and rebases or asks the user. Applying it anyway is exactly the silent overwrite that optimistic concurrency control exists to prevent."
     },
     {
       "id": "d51q08",
-      "type": "multi",
-      "topic": "sensitive data",
-      "difficulty": "Easy",
-      "question": "A health app caches patients' records for offline use. Which practices are appropriate? Select all that apply.",
+      "type": "mcq",
+      "topic": "vector clocks",
+      "difficulty": "Hard",
+      "question": "Your sync engine attaches a version vector (one counter per device) to each record. When two versions arrive, what does comparing the vectors tell you?",
       "options": [
-        "Encrypt the local database with a key protected by the Android Keystore",
-        "Delete the cached records when the user logs out",
-        "Cap the cache size and evict least-recently-used synced records, but never evict unsynced pending changes",
-        "Hardcode the database encryption key in `BuildConfig` so it survives reinstalls",
-        "Store the database on shared external storage so it isn't lost if the app is uninstalled"
+        "A total order across all devices, so the record with the larger vector sum is always the correct winner",
+        "Whether one version causally follows the other or they are concurrent, but not which concurrent edit should win",
+        "The same thing as last-write-wins, except that it uses logical counters instead of wall-clock timestamps",
+        "That the server is no longer needed, because devices can now agree on the winner without any merge logic"
       ],
       "answer": [
-        0,
-        1,
-        2
+        1
       ],
-      "explanation": "Sensitive offline data needs encryption at rest with a Keystore-protected key, a clean wipe on logout, and bounded storage that never throws away unsynced user work. A key in `BuildConfig` can be pulled from the APK, and shared storage exposes the data to other apps."
+      "explanation": "If every counter in A is ≤ B's, A happened before B and B can replace it; if each has a counter the other lacks, the edits are concurrent and you must merge or surface a conflict. Version vectors detect conflicts; they do not decide them. Summing the counters invents an order that does not exist and quietly turns into LWW."
     },
     {
       "id": "d51q09",
-      "type": "mcq",
-      "topic": "http vs app cache",
-      "difficulty": "Medium",
-      "question": "Why is OkHttp's HTTP cache, on its own, not enough to be the single source of truth for an offline-first app?",
+      "type": "multi",
+      "topic": "CRDT-lite",
+      "difficulty": "Hard",
+      "question": "A shared shopping list is edited offline by several family members. Which techniques help concurrent edits converge without losing data? Select all that apply.",
       "options": [
-        "It stores opaque responses keyed by URL that you can't query, observe or edit locally",
-        "It keeps responses only in memory, so everything is lost when the process dies",
-        "It only caches `POST` responses, and most reads are `GET`s",
-        "Android clears every app's HTTP cache whenever the device goes offline, to free up storage"
+        "Hard-delete rows on the device immediately, because the next full download will remove them everywhere",
+        "Model quantity changes as per-device increments that are summed, so concurrent '+1's add up instead of overwriting",
+        "Resolve per field (title, checked, quantity) rather than per row, so edits to different fields both survive",
+        "Keep deleted items as tombstones (e.g. a deleted flag plus version) so a delete is synced instead of looking like a missing row",
+        "Store the whole list as one JSON blob resolved with last-write-wins, so the newest full copy always replaces the rest"
       ],
       "answer": [
-        0
+        1,
+        2,
+        3
       ],
-      "explanation": "The HTTP cache is a disk cache of whole responses. It's great for saving bandwidth but you can't run `SELECT ... WHERE`, get a reactive stream, or apply an optimistic local change to it. That's why apps use Room as the truth, often with HTTP caching layered underneath."
+      "explanation": "Tombstones, field-level registers and counter CRDTs are the practical 'CRDT-lite' tools most apps use. One blob with LWW drops every concurrent change except one. Hard-deleting locally without a tombstone means another device's copy can resurrect the item, and the delete is never propagated."
     },
     {
       "id": "d51q10",
-      "type": "multi",
-      "topic": "optimistic updates",
-      "difficulty": "Medium",
-      "question": "Tapping \"Like\" should feel instant even on a poor network. Which are part of a correct optimistic-update design? Select all that apply.",
-      "options": [
-        "Update the local DB right away so the UI shows the like immediately",
-        "Record the pending operation durably so it survives process death and gets sent later",
-        "If the server permanently rejects the change, roll back the local state and tell the user",
-        "Disable the button and wait for the server to confirm before changing the UI",
-        "Retry a request the server rejected with `400 Bad Request` forever until it succeeds"
-      ],
-      "answer": [
-        0,
-        1,
-        2
-      ],
-      "explanation": "Optimistic means apply locally first, persist the intent, and reconcile with the server, including rolling back on a definitive rejection. Waiting for confirmation is the pessimistic approach this replaces, and retrying a client error forever never succeeds and blocks the queue."
-    },
-    {
-      "id": "d51q11",
-      "type": "mcq",
-      "topic": "outbox",
-      "difficulty": "Medium",
-      "question": "Users create notes offline, and the app may be killed before connectivity returns. Which design guarantees the notes are eventually uploaded?",
-      "options": [
-        "Save the note plus an outbox row in one transaction; drain it with network-constrained WorkManager",
-        "Keep pending notes in a list in the ViewModel and upload them in `onCleared()`",
-        "Register a manifest `BroadcastReceiver` for `CONNECTIVITY_ACTION` and upload from `onReceive()`",
-        "Start a foreground service that loops, checking connectivity every few seconds until it can upload"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "A durable outbox written in the same transaction as the data, drained by unique WorkManager work with a `NetworkType.CONNECTED` constraint, survives process death and reboots and runs when the network constraint is met. ViewModel state dies with the process, manifest-declared `CONNECTIVITY_ACTION` receivers aren't delivered to apps targeting Android 7.0 or higher, and a polling foreground service wastes battery."
-    },
-    {
-      "id": "d51q12",
-      "type": "truefalse",
-      "topic": "outbox ordering",
-      "difficulty": "Medium",
-      "question": "The outbox holds \"create note 5\" followed by \"edit note 5\". To speed up sync, the worker can safely send both requests in parallel.",
-      "options": [
-        "True",
-        "False"
-      ],
-      "answer": [
-        1
-      ],
-      "explanation": "Operations on the same entity depend on each other: if the edit arrives first, the server has nothing to edit yet. Replay operations for the same entity in order (or merge them into one create), and parallelise only across independent entities."
-    },
-    {
-      "id": "d51q13",
-      "type": "mcq",
-      "topic": "optimistic concurrency",
-      "difficulty": "Medium",
-      "question": "Each note carries a `version`. A client that last saw version 7 sends an update, but the server's copy is already at version 8. What should the server do?",
-      "code": "PUT /notes/5\nIf-Match: \"7\"\n\n{ \"title\": \"Groceries\", \"body\": \"milk, eggs\" }",
-      "options": [
-        "Reject with a conflict status (`409`/`412`) and return the current version",
-        "Apply the update and set the version to 9, since the latest request should win",
-        "Return `200 OK` but silently drop the update",
-        "Return `500 Internal Server Error` so the client retries with backoff"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Optimistic concurrency turns a silent overwrite into a detected conflict: the write succeeds only if the client's base version matches, and returning the current version lets the client merge or ask the user. Accepting it anyway throws away whatever produced version 8, and a `500` misreports a client-resolvable conflict as a server fault, so retrying just fails again."
-    },
-    {
-      "id": "d51q14",
-      "type": "multi",
-      "topic": "cache invalidation",
-      "difficulty": "Easy",
-      "question": "Which are sensible triggers for refreshing or invalidating cached data? Select all that apply.",
-      "options": [
-        "A TTL on a cached product catalogue expires, so the next read triggers a refresh",
-        "An FCM data message tells the app that a specific resource changed on the server",
-        "The user's own write succeeds, so the affected entity is updated from the server response",
-        "Clearing the entire database on every app launch to be safe",
-        "Deleting the cache whenever `ConnectivityManager` reports the network was lost"
-      ],
-      "answer": [
-        0,
-        1,
-        2
-      ],
-      "explanation": "Time-based TTLs, server-pushed change hints and your own confirmed writes are all real signals that data may have changed. Wiping everything on launch, or the moment the network drops, destroys exactly the data offline-first exists to keep."
-    },
-    {
-      "id": "d51q15",
       "type": "mcq",
       "topic": "delta sync",
-      "difficulty": "Medium",
-      "question": "An app keeps 50,000 contacts in sync. Which approach fetches changes most efficiently and reliably?",
-      "options": [
-        "Fetch changes since a server sync token, saved atomically with the applied changes",
-        "Download all 50,000 contacts on every launch and replace the table",
-        "Page through the full list with `offset`/`limit` on every sync and compare each record locally",
-        "Send `?since=` with the device's `System.currentTimeMillis()` from the last sync"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "A server-issued cursor such as `updated_since` or a sync token returns only what changed, using the server's clock. Saving it atomically with the data means a crash can't skip changes. A device timestamp breaks under clock skew, and full or offset-based scans waste battery and data."
-    },
-    {
-      "id": "d51q16",
-      "type": "truefalse",
-      "topic": "tombstones",
-      "difficulty": "Medium",
-      "question": "With delta sync via `updated_since`, if the server hard-deletes a row, clients find out about the deletion because the row simply stops appearing in sync responses.",
-      "options": [
-        "True",
-        "False"
-      ],
-      "answer": [
-        1
-      ],
-      "explanation": "In a delta response, an absent row means \"unchanged\", not \"deleted\", so the client would keep it forever. The server must record deletions as tombstones (e.g. `deleted: true` with an updated timestamp) that show up in the delta."
-    },
-    {
-      "id": "d51q17",
-      "type": "mcq",
-      "topic": "last-write-wins",
       "difficulty": "Hard",
-      "question": "Sync uses last-write-wins on device timestamps. Phone B's clock runs 10 minutes fast. B edits a note offline at real time 11:55 (stamped 12:05). Phone A edits the same note at real time 12:00 (stamped 12:00). Both sync at 12:10. What happens?",
+      "question": "A field-service app holds 50k records and needs fast incremental sync that also handles deletes. Which design is the most reliable?",
       "options": [
-        "B's older edit wins and A's newer edit is silently lost",
-        "A's edit wins, because the server compares the times the requests arrived",
-        "The server detects the conflict and asks the user to choose",
-        "Both edits are merged field by field"
+        "The client asks for rows where `updated_at > lastSyncTime`, using the device clock time of the previous successful sync",
+        "The client downloads the full dataset every night via a periodic job and replaces the local tables in a single swap",
+        "The server exposes a change feed keyed by an opaque sync token; the client applies upserts and tombstones and saves the new token in the same DB transaction",
+        "The server pushes every changed record inside FCM / APNs payloads, and the client writes each payload into its DB"
       ],
       "answer": [
-        0
+        2
       ],
-      "explanation": "LWW trusts the timestamps it's given, and client clocks drift or get changed by users, so the edit made earlier \"wins\" and the other is dropped with no error. Prefer server-assigned versions or timestamps, or real conflict detection, for data users care about."
-    },
-    {
-      "id": "d51q18",
-      "type": "multi",
-      "topic": "multi-device conflicts",
-      "difficulty": "Hard",
-      "question": "While both devices are offline, a user changes a note's title on their phone and its body on their tablet. Which strategies keep both edits without asking the user to resolve anything? Select all that apply.",
-      "options": [
-        "Field-level merge: track which fields changed against the base version and combine non-overlapping changes",
-        "Model the note as a CRDT so concurrent edits merge deterministically",
-        "Last-write-wins on the whole note",
-        "Server-authoritative: reject the second device's sync and overwrite its local copy with the server's"
-      ],
-      "answer": [
-        0,
-        1
-      ],
-      "explanation": "The edits touch different fields, so a per-field merge or a CRDT combines them cleanly. Whole-record LWW and \"server copy wins\" both throw away one device's change, which is acceptable only when losing that data doesn't matter."
-    },
-    {
-      "id": "d51q19",
-      "type": "mcq",
-      "topic": "full resync",
-      "difficulty": "Hard",
-      "question": "The server keeps tombstones for 30 days. A user opens the app after 45 days and sends their old sync token. What is the correct behaviour?",
-      "options": [
-        "The server reports the token expired; the client fully resyncs but keeps and replays its outbox",
-        "The server applies the delta from the old token as usual, since 15 days of missed deletions is a minor inconsistency",
-        "The client deletes the local database, outbox included, and downloads everything again",
-        "The server returns an empty delta and the client keeps its current data"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Once tombstones have been purged, a delta can no longer tell the client about some deletions, so the only correct recovery is a full resync. The resync must not drop the outbox, because that holds user work that never reached the server."
-    },
-    {
-      "id": "d51q20",
-      "type": "mcq",
-      "topic": "schema migrations",
-      "difficulty": "Hard",
-      "question": "An app update adds a `color` column to the Room `notes` table. Some users have offline edits waiting in the outbox. What's the right way to handle the schema change?",
-      "options": [
-        "Write a Room `Migration` or auto-migration and test it with `MigrationTestHelper`",
-        "Use `fallbackToDestructiveMigration()`, because the data can always be re-downloaded from the server",
-        "Bump the database version without a migration, since Room adds new columns automatically",
-        "Ask users to sync and clear app data before installing the update"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "In an offline-first app the local DB holds data that exists nowhere else, namely unsynced edits, so a destructive migration silently deletes user work. Bumping the version without a migration makes Room throw at startup, so you need a real, tested migration (e.g. `ALTER TABLE notes ADD COLUMN color ... DEFAULT ...`)."
+      "explanation": "A server-issued token avoids clock skew, tombstones carry deletes, and committing the token with the data means a crash can never mark changes as synced that were not stored. `updated_at` against the device clock misses rows when clocks disagree and never sees deleted rows at all. Push payloads are size-limited and not guaranteed, so they work as a 'sync now' hint, not as the data channel."
     }
   ]
 }

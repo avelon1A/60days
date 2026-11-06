@@ -1,48 +1,30 @@
 {
   "day": 27,
-  "topic": "viewModelScope, lifecycleScope & repeatOnLifecycle",
+  "topic": "Stability, skippability & strong skipping",
   "questions": [
     {
       "id": "d27q01",
       "type": "mcq",
-      "topic": "viewmodelscope dispatcher",
+      "topic": "stable inference",
       "difficulty": "Easy",
-      "question": "Which dispatcher does `viewModelScope.launch { }` use when you don't pass one?",
+      "question": "Which class does the Compose compiler infer as stable (assuming it is compiled with the Compose compiler)?",
       "options": [
-        "`Dispatchers.Main.immediate`",
-        "`Dispatchers.IO`",
-        "`Dispatchers.Default`",
-        "`Dispatchers.Unconfined`"
+        "data class A(var count: Int)",
+        "data class B(val items: List<String>)",
+        "data class C(val name: String, val age: Int)",
+        "class D(val list: ArrayList<Int>) // plain class"
       ],
       "answer": [
-        0
+        2
       ],
-      "explanation": "`viewModelScope` is built from `SupervisorJob() + Dispatchers.Main.immediate`, so code runs on the main thread, and runs right away if you're already on it. Blocking IO has to be moved off with `withContext(Dispatchers.IO)` or a main-safe suspend API such as Room or Retrofit."
+      "explanation": "All properties of C are vals of stable types, so it is stable. A `var` makes A unstable because it can change without notifying Compose. List is an interface that might be mutable underneath, so B is unstable, and ArrayList is plainly mutable."
     },
     {
       "id": "d27q02",
-      "type": "output",
-      "topic": "scope cancel",
-      "difficulty": "Easy",
-      "question": "`scope.cancel()` plays the role of `onCleared()` here. What does this print?",
-      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking {\n    val scope = CoroutineScope(SupervisorJob())\n    val job = scope.launch {\n        try { delay(1000); println(\"loaded\") }\n        finally { println(\"cleanup\") }\n    }\n    delay(50)\n    scope.cancel()\n    job.join()\n    scope.launch { println(\"late\") }\n    delay(50)\n    println(\"cancelled=${job.isCancelled}\")\n}",
-      "options": [
-        "cleanup\ncancelled=true",
-        "cleanup\nlate\ncancelled=true",
-        "loaded\ncleanup\ncancelled=false",
-        "cancelled=true"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Cancelling the scope cancels its running child, so `delay` throws `CancellationException` and only the `finally` block runs. A cancelled scope's job stays cancelled, so a later `launch` in it never runs. That is why you can't reuse `viewModelScope` after `onCleared()`."
-    },
-    {
-      "id": "d27q03",
       "type": "truefalse",
-      "topic": "lifecyclescope",
+      "topic": "strong skipping default",
       "difficulty": "Easy",
-      "question": "An Activity's `lifecycleScope` is cancelled when the lifecycle reaches DESTROYED, not when the Activity is merely stopped.",
+      "question": "Strong skipping mode is enabled by default for projects that use the Compose compiler from Kotlin 2.0.20 onwards.",
       "options": [
         "True",
         "False"
@@ -50,305 +32,146 @@
       "answer": [
         0
       ],
-      "explanation": "`lifecycleScope` is tied to the whole lifecycle and is cancelled only at DESTROYED. Coroutines launched in it keep running while the app is in the background, which is why flow collection needs `repeatOnLifecycle` on top of it."
+      "explanation": "Strong skipping became the default in Kotlin 2.0.20. It makes composables with unstable parameters skippable and memoizes lambdas with unstable captures. It can still be turned off in the composeCompiler Gradle configuration, but that is rarely needed."
+    },
+    {
+      "id": "d27q03",
+      "type": "mcq",
+      "topic": "comparison rules",
+      "difficulty": "Medium",
+      "question": "Under strong skipping, how are parameters compared to decide whether to skip?",
+      "options": [
+        "Stable ones with equals(), unstable ones by instance (===)",
+        "All parameters with equals(), whatever their stability",
+        "All parameters by instance (===), whatever their stability",
+        "Unstable ones with equals(), stable ones by hashCode()"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "Strong skipping keeps equals() for stable types and uses referential equality for unstable ones, since an unstable object's equals might change over time. So passing the same unstable instance skips, but an equal-but-new unstable instance recomposes."
     },
     {
       "id": "d27q04",
       "type": "mcq",
-      "topic": "configuration change",
-      "difficulty": "Easy",
-      "question": "A ViewModel starts a network call in `viewModelScope` and exposes the result as a `StateFlow`. The user rotates the screen while it's loading. What happens?",
+      "topic": "List stability",
+      "difficulty": "Medium",
+      "question": "Why does the compiler treat a parameter of type List<T> as unstable?",
       "options": [
-        "The call keeps running and the new Activity gets the result from the same `StateFlow`",
-        "The call is cancelled and started again when the new Activity is created",
-        "The call keeps running, but its result is lost because the old Activity was destroyed",
-        "The app crashes because the coroutine still references the destroyed Activity"
+        "List has no equals implementation the compiler can call",
+        "It may be backed by a mutable list that changes in place",
+        "Generic types are always unstable regardless of the argument",
+        "List is defined in Java, and all Java types are unstable"
       ],
       "answer": [
-        0
+        1
       ],
-      "explanation": "A ViewModel survives configuration changes, so `viewModelScope` isn't cancelled. `onCleared()` only runs when the owner goes away for good. The new Activity gets the same ViewModel and collects the latest state."
+      "explanation": "Kotlin's List is a read-only view, not a guarantee of immutability: a MutableList can be passed as a List and changed underneath. The compiler can't prove it won't change, so it's unstable. Options are kotlinx immutable collections, a stability config entry, or a wrapper marked @Immutable."
     },
     {
       "id": "d27q05",
       "type": "multi",
-      "topic": "viewmodelscope",
-      "difficulty": "Easy",
-      "question": "Which statements about `viewModelScope` are true?",
+      "topic": "@Stable contract",
+      "difficulty": "Medium",
+      "question": "What does annotating a type with @Stable promise to the compiler? Select all that apply.",
       "options": [
-        "It is cancelled when the ViewModel's `onCleared()` runs",
-        "It uses a `SupervisorJob`, so one failing child doesn't cancel its siblings",
-        "It survives configuration changes such as rotation",
-        "It is cancelled whenever the hosting Activity goes to the background",
-        "You must cancel it yourself in `onDestroy()` to avoid leaks"
+        "equals() for two given instances always returns the same result",
+        "The compiler verifies at build time that all properties are immutable",
+        "If a public property changes, composition is notified (e.g. it's backed by State)",
+        "All public properties are themselves of stable types",
+        "Instances of the type are safe to share between threads"
       ],
       "answer": [
         0,
-        1,
-        2
+        2,
+        3
       ],
-      "explanation": "`viewModelScope` lives exactly as long as the ViewModel and is cancelled automatically when it is cleared, so you never cancel it yourself. Going to the background (STOP) doesn't clear a ViewModel."
+      "explanation": "@Stable is a promise you make: equals is consistent, changes to public properties are observable by Compose, and public properties are stable. The compiler trusts it and does not check it, so a false annotation causes missed updates. It says nothing about thread-safety."
     },
     {
       "id": "d27q06",
-      "type": "output",
-      "topic": "supervisorjob",
-      "difficulty": "Medium",
-      "question": "This scope is built like `viewModelScope` (a `SupervisorJob` plus a handler). What does it print?",
-      "code": "import kotlinx.coroutines.*\n\nfun main() = runBlocking {\n    val handler = CoroutineExceptionHandler { _, e ->\n        println(\"caught ${e.message}\")\n    }\n    val scope = CoroutineScope(SupervisorJob() + handler)\n    val a = scope.launch { delay(10); error(\"boom\") }\n    val b = scope.launch { delay(100); println(\"b done\") }\n    joinAll(a, b)\n    println(\"active=${scope.isActive}\")\n}",
+      "type": "mcq",
+      "topic": "stability config",
+      "difficulty": "Hard",
+      "question": "A domain module without the Compose compiler defines `data class User(val id: String, val name: String)`. You want composables taking User to compare it with equals() rather than by instance. What is the cleanest fix?",
       "options": [
-        "caught boom\nb done\nactive=true",
-        "caught boom\nactive=false",
-        "caught boom\nb done\nactive=false",
-        "b done\ncaught boom\nactive=true"
+        "Make User a value class so the compiler can inline it everywhere",
+        "Override hashCode() in User so equality is cached",
+        "Annotate User with @Serializable so its fields are known",
+        "List User in the Compose stability configuration file"
       ],
       "answer": [
-        0
+        3
       ],
-      "explanation": "With a `SupervisorJob`, a failing child doesn't cancel its siblings or the scope, so `b` still finishes and the scope stays active. With a plain `Job`, the failure would cancel `b` and the scope, which would be fatal for a ViewModel running several independent loads."
+      "explanation": "Classes from modules not built with the Compose compiler are treated as unstable because their stability isn't known. The stability configuration file (stabilityConfigurationFiles in composeCompiler) lets the UI module declare them stable without touching the domain module. Serialization and hashCode don't affect stability."
     },
     {
       "id": "d27q07",
-      "type": "mcq",
-      "topic": "launchwhenstarted",
+      "type": "truefalse",
+      "topic": "same instance",
       "difficulty": "Medium",
-      "question": "Why was `lifecycleScope.launchWhenStarted { locationFlow.collect { ... } }` deprecated in favour of `repeatOnLifecycle`?",
+      "question": "Under strong skipping, a composable with an unstable parameter still recomposes every time its parent recomposes, even if exactly the same instance is passed.",
       "options": [
-        "Below STARTED it only suspends the collector, so the upstream keeps running",
-        "It cancels the collector at STOP and never restarts it on START",
-        "It runs its block on a background thread, so updating views from it crashes",
-        "It is cancelled on rotation, unlike `repeatOnLifecycle`"
+        "True",
+        "False"
       ],
       "answer": [
-        0
+        1
       ],
-      "explanation": "`launchWhenStarted` pauses the coroutine instead of cancelling it, so producers like `callbackFlow` stay registered and keep emitting into a buffer while the app is in the background. `repeatOnLifecycle(STARTED)` cancels the collection on STOP, which also stops the upstream."
+      "explanation": "That was the behaviour before strong skipping. Now every restartable composable is skippable, and unstable parameters are compared with ===, so the same instance means it skips. Only a new instance (even an equal one) causes it to recompose."
     },
     {
       "id": "d27q08",
-      "type": "truefalse",
-      "topic": "globalscope",
-      "difficulty": "Easy",
-      "question": "For work that must keep going after the user leaves a screen, `GlobalScope.launch` is the recommended approach on Android.",
+      "type": "mcq",
+      "topic": "copy and sharing",
+      "difficulty": "Hard",
+      "question": "With strong skipping on, the ViewModel emits `state.copy(title = \"New\")`. What happens when Screen recomposes?",
+      "code": "data class UiState(val items: List<Item>, val title: String)\n\n@Composable\nfun Screen(state: UiState) {\n    Header(state.title)\n    ItemList(state.items)\n}",
       "options": [
-        "True",
-        "False"
+        "Both Header and ItemList recompose, since UiState is a new instance",
+        "Header recomposes; ItemList skips because the same list instance is passed",
+        "Neither recomposes, since UiState is a data class with equals",
+        "ItemList recomposes because List is unstable and always compares as changed"
       ],
       "answer": [
         1
       ],
-      "explanation": "`GlobalScope` has no owner, so nothing can cancel it or replace its dispatcher in tests. The recommended options are an app-wide `CoroutineScope` injected via DI, or WorkManager when the work must be guaranteed to finish even if the process dies."
+      "explanation": "copy() shares unchanged property references, so `state.items` is the same list instance and the === check lets ItemList skip. The title String changed, so Header reruns. Unstable doesn't mean 'always changed' under strong skipping; it means 'compared by instance'."
     },
     {
       "id": "d27q09",
-      "type": "mcq",
-      "topic": "collectasstatewithlifecycle",
-      "difficulty": "Easy",
-      "question": "In Compose, what does `viewModel.uiState.collectAsStateWithLifecycle()` do that `collectAsState()` doesn't?",
+      "type": "multi",
+      "topic": "recomposition pitfalls",
+      "difficulty": "Hard",
+      "question": "With strong skipping on, which of these still cause extra recompositions? Select all that apply.",
       "options": [
-        "It stops collecting below STARTED and resumes when the lifecycle is STARTED again",
-        "It keeps the collected value across process death",
-        "It collects on `Dispatchers.IO` instead of the main thread, so slow emissions don't cause jank",
-        "It caches the latest value in the ViewModel's `SavedStateHandle`"
+        "Passing `items.filter { it.visible }`, computed in the composable body, to a child",
+        "Passing a stable data class that is re-created with equal values",
+        "Reading a fast-changing state such as scroll offset in a top-level composable body",
+        "Passing a lambda that captures only the same ViewModel instance"
       ],
       "answer": [
-        0
+        0,
+        2
       ],
-      "explanation": "`collectAsStateWithLifecycle` uses `repeatOnLifecycle` internally with `minActiveState = STARTED` by default. `collectAsState` keeps collecting as long as the composable is in the composition, including while the app is in the background."
+      "explanation": "filter returns a new List every time and List is unstable, so the child's === check fails on every recomposition; remember the result keyed on items instead. Reading fast-changing state high up re-runs that whole scope. Equal stable objects pass the equals check, and lambdas with the same captures are memoized."
     },
     {
       "id": "d27q10",
-      "type": "multi",
-      "topic": "stop cancellation",
-      "difficulty": "Medium",
-      "question": "The app goes to the background (Activity reaches STOPPED). Which of these collections are cancelled, rather than suspended or left running?",
-      "options": [
-        "`lifecycleScope.launch { repeatOnLifecycle(Lifecycle.State.STARTED) { flow.collect { ... } } }`",
-        "`lifecycleScope.launch { flow.flowWithLifecycle(lifecycle, Lifecycle.State.STARTED).collect { ... } }`",
-        "`val state by flow.collectAsStateWithLifecycle()` in a composable",
-        "`lifecycleScope.launchWhenStarted { flow.collect { ... } }`",
-        "`lifecycleScope.launch { flow.collect { ... } }`"
-      ],
-      "answer": [
-        0,
-        1,
-        2
-      ],
-      "explanation": "`repeatOnLifecycle`, `flowWithLifecycle` and `collectAsStateWithLifecycle` all cancel the collection below STARTED and restart it on START. `launchWhenStarted` only suspends, and a plain `lifecycleScope.launch` keeps collecting until DESTROYED."
-    },
-    {
-      "id": "d27q11",
-      "type": "output",
-      "topic": "collect never returns",
-      "difficulty": "Medium",
-      "question": "The timeout stands in for the lifecycle stopping. What does this print?",
-      "code": "import kotlinx.coroutines.*\nimport kotlinx.coroutines.flow.*\n\nfun main() = runBlocking {\n    val names = MutableStateFlow(\"Ann\")\n    val count = MutableStateFlow(1)\n    withTimeoutOrNull(100) {\n        names.collect { println(\"name=$it\") }\n        count.collect { println(\"count=$it\") }\n    }\n    println(\"stopped\")\n}",
-      "options": [
-        "name=Ann\nstopped",
-        "name=Ann\ncount=1\nstopped",
-        "count=1\nname=Ann\nstopped",
-        "stopped"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Collecting a `StateFlow` never completes, so the first `collect` suspends until the timeout cancels it and the second line is never reached. The same thing happens inside one `repeatOnLifecycle` block, so each flow needs its own `launch`."
-    },
-    {
-      "id": "d27q12",
       "type": "mcq",
-      "topic": "flowwithlifecycle",
-      "difficulty": "Medium",
-      "question": "What is `flow.flowWithLifecycle(lifecycle, Lifecycle.State.STARTED)` best described as?",
+      "topic": "compiler reports",
+      "difficulty": "Easy",
+      "question": "How can you see which of your composables are skippable and which classes the compiler considers stable?",
       "options": [
-        "An operator that collects upstream only while at least STARTED, like `repeatOnLifecycle`",
-        "A terminal operator that collects the flow by itself, so no coroutine is needed",
-        "An operator that buffers every value emitted while stopped and replays them all on START",
-        "A replacement for `viewModelScope` that ties the flow to the ViewModel"
+        "Enable Compose compiler reports and metrics in Gradle",
+        "Run Lint with the --stability flag on the app module",
+        "Open the Layout Inspector and look at each node's recomposition counts",
+        "Read the generated R.txt file in the build directory"
       ],
       "answer": [
         0
       ],
-      "explanation": "`flowWithLifecycle` is built on `repeatOnLifecycle` and is handy when you have a single flow to collect. It returns a new `Flow`, so it still has to be collected from a coroutine, and it doesn't replay values the upstream emitted while stopped."
-    },
-    {
-      "id": "d27q13",
-      "type": "truefalse",
-      "topic": "repeatonlifecycle suspends",
-      "difficulty": "Medium",
-      "question": "`repeatOnLifecycle(Lifecycle.State.STARTED) { ... }` is a suspend call that doesn't return until the lifecycle is DESTROYED, so code written after it in the same coroutine only runs at that point.",
-      "options": [
-        "True",
-        "False"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`repeatOnLifecycle` keeps re-running its block on every START and resumes the caller only once the lifecycle is destroyed. Code placed after it, such as another `collect`, effectively never runs while the screen is in use."
-    },
-    {
-      "id": "d27q14",
-      "type": "mcq",
-      "topic": "applicationscope",
-      "difficulty": "Medium",
-      "question": "When the user taps Send, a chat message must be written to the local DB and posted (about 1s), even if they immediately press back and the ViewModel is cleared. Surviving process death isn't required. What's the best place to launch this work?",
-      "options": [
-        "An app-wide `CoroutineScope(SupervisorJob())` injected into the repository via DI",
-        "`GlobalScope.launch`, because it is never cancelled",
-        "The Activity's `lifecycleScope`, because it outlives the ViewModel and is only cancelled at process death",
-        "`runBlocking` inside `onCleared()` so the ViewModel waits for it"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "An injected `applicationScope` outlives any one screen while staying owned, testable and replaceable in tests. `GlobalScope` can't be controlled, `lifecycleScope` is cancelled at DESTROYED, which happens on back, and `runBlocking` freezes the main thread. If the work had to survive process death, WorkManager would be the right tool."
-    },
-    {
-      "id": "d27q15",
-      "type": "multi",
-      "topic": "multiple flows",
-      "difficulty": "Medium",
-      "question": "The `onItems` callback never fires. Which changes fix it?",
-      "code": "lifecycleScope.launch {\n    repeatOnLifecycle(Lifecycle.State.STARTED) {\n        viewModel.header.collect { bindHeader(it) }\n        viewModel.items.collect { onItems(it) }\n    }\n}",
-      "options": [
-        "Wrap each `collect` in its own `launch { }` inside the `repeatOnLifecycle` block",
-        "Use two separate `lifecycleScope.launch { repeatOnLifecycle(STARTED) { ... } }` blocks, one per flow",
-        "Swap the order of the two `collect` calls",
-        "Add `yield()` between the two `collect` calls",
-        "Replace `repeatOnLifecycle` with `launchWhenStarted`"
-      ],
-      "answer": [
-        0,
-        1
-      ],
-      "explanation": "`header` is a `StateFlow`, so its `collect` never returns and the second line is never reached. Each collector needs its own coroutine. Swapping the order just starves `header` instead, and `yield()` or `launchWhenStarted` don't change the fact that `collect` suspends forever."
-    },
-    {
-      "id": "d27q16",
-      "type": "mcq",
-      "topic": "viewlifecycleowner",
-      "difficulty": "Hard",
-      "question": "A Fragment calls `lifecycleScope.launch { repeatOnLifecycle(STARTED) { vm.state.collect { binding.title.text = it } } }` in `onViewCreated`. The user navigates to another Fragment (this one goes on the back stack) and then presses back. What's the problem?",
-      "options": [
-        "The Fragment isn't destroyed, so each return adds another collector that outlives its view",
-        "Nothing, because `lifecycleScope` in a Fragment already follows the view lifecycle",
-        "The collector is cancelled when the view is destroyed and never restarts after the user returns",
-        "The app crashes right away because `lifecycleScope` can't be used before `onStart`"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "A Fragment on the back stack loses its view (`onDestroyView`) but the Fragment itself isn't destroyed, so its `lifecycleScope` lives on. Use `viewLifecycleOwner.lifecycleScope` and `viewLifecycleOwner.repeatOnLifecycle` for UI work, so the collector dies with the view and exactly one exists per view."
-    },
-    {
-      "id": "d27q17",
-      "type": "output",
-      "topic": "restart on start",
-      "difficulty": "Hard",
-      "question": "Each loop iteration simulates START (launch) and STOP (cancel), like `repeatOnLifecycle`. What does this print?",
-      "code": "import kotlinx.coroutines.*\nimport kotlinx.coroutines.flow.*\n\nfun main() = runBlocking {\n    val state = MutableStateFlow(0)\n    repeat(2) { round ->\n        val job = launch { state.collect { println(\"r$round:$it\") } }\n        delay(10)\n        state.value++\n        delay(10)\n        job.cancel()\n        state.value++\n    }\n}",
-      "options": [
-        "r0:0\nr0:1\nr1:2\nr1:3",
-        "r0:0\nr0:1\nr0:2\nr1:3",
-        "r0:0\nr0:1\nr1:3",
-        "r0:0\nr0:1\nr1:1\nr1:2\nr1:3"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "While \"stopped\" there is no collector, so the update to 2 isn't printed then. On the next START a fresh collector immediately gets the current `StateFlow` value (2), then 3. Restarting on START gives the UI the latest state without replaying what it missed."
-    },
-    {
-      "id": "d27q18",
-      "type": "multi",
-      "topic": "compose scopes",
-      "difficulty": "Medium",
-      "question": "Which statements about coroutine scopes in Compose are true?",
-      "options": [
-        "`LaunchedEffect(key)` cancels its coroutine and launches a new one when `key` changes",
-        "The scope from `rememberCoroutineScope()` is cancelled when that composable leaves the composition",
-        "`rememberCoroutineScope()` is the right way to start a coroutine from an `onClick` handler",
-        "`LaunchedEffect` can be called directly inside an `onClick` lambda",
-        "`rememberCoroutineScope()` survives configuration changes like `viewModelScope`"
-      ],
-      "answer": [
-        0,
-        1,
-        2
-      ],
-      "explanation": "`LaunchedEffect` is a composable tied to the composition and its keys, so it can't be called from a non-composable callback like `onClick`. Use `rememberCoroutineScope()` there. That scope is bound to the composition, so it's cancelled when the composable leaves it, and also on rotation, when the composition is rebuilt."
-    },
-    {
-      "id": "d27q19",
-      "type": "mcq",
-      "topic": "repeatonlifecycle placement",
-      "difficulty": "Hard",
-      "question": "An Activity calls `lifecycleScope.launch { repeatOnLifecycle(STARTED) { vm.events.collect { show(it) } } }` inside `onStart()` instead of `onCreate()`. After the user leaves the app and comes back twice, what happens?",
-      "options": [
-        "Three collectors are active, because each call keeps restarting its block until DESTROYED",
-        "Exactly one collector is active, because `repeatOnLifecycle` cancels any earlier call",
-        "No collector is active, because `repeatOnLifecycle` called in `onStart` misses the START event",
-        "It throws `IllegalStateException`, because `repeatOnLifecycle` may only be called from `onCreate`"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`repeatOnLifecycle` only returns at DESTROYED and restarts its block on every START, so calling it from `onStart` stacks up a new restarting collector every time. Call it once from `onCreate` (or `onViewCreated` with `viewLifecycleOwner` in a Fragment)."
-    },
-    {
-      "id": "d27q20",
-      "type": "truefalse",
-      "topic": "uncaught exceptions",
-      "difficulty": "Hard",
-      "question": "Because `viewModelScope` uses a `SupervisorJob`, an exception thrown inside `viewModelScope.launch { }` with no try/catch or handler is silently swallowed and the app keeps running.",
-      "options": [
-        "True",
-        "False"
-      ],
-      "answer": [
-        1
-      ],
-      "explanation": "A `SupervisorJob` only stops the failure from cancelling siblings and the scope. The exception is still uncaught, so it goes to the thread's default uncaught exception handler, which crashes an Android app. Catch it in the coroutine or map it to an error state."
+      "explanation": "Setting reportsDestination and metricsDestination makes the compiler write per-module files listing each composable as restartable/skippable and each class's inferred stability. Layout Inspector shows recomposition counts at runtime, which is useful too, but it doesn't explain stability."
     }
   ]
 }

@@ -1,30 +1,30 @@
 {
   "day": 55,
-  "topic": "Scaling the app: modules, feature flags, analytics & crash reporting",
+  "topic": "Security: auth, tokens, secure storage & networking safety",
   "questions": [
     {
       "id": "d55q01",
       "type": "mcq",
-      "topic": "api/impl modules",
+      "topic": "PKCE",
       "difficulty": "Easy",
-      "question": "A team splits its feature into `:feature:search:api` and `:feature:search:impl`, and other features may depend only on `:api`. What is the main benefit?",
+      "question": "Why should a mobile app use the OAuth 2 authorization code flow with PKCE?",
       "options": [
-        "Dependents see only a small, stable contract, so `:impl` changes don't recompile them",
-        "The APK gets smaller because the `:impl` module is delivered on demand through Play Feature Delivery",
-        "R8 can skip obfuscating the `:api` module, which speeds up release builds",
-        "It lets the search feature use a different Kotlin version from the rest of the app"
+        "PKCE lets the app embed its client secret safely, because the secret is hashed before being sent",
+        "A mobile app cannot keep a client secret, and PKCE ties the code to a one-time verifier so an intercepted code is useless",
+        "PKCE encrypts the access token on the device, so a stolen phone cannot read the token from storage",
+        "PKCE removes the need for HTTPS on the redirect, because the code challenge already protects the code"
       ],
       "answer": [
-        0
+        1
       ],
-      "explanation": "Dependents compile against the thin `:api` module (interfaces, routes, models), so editing `:impl` only rebuilds `:impl` and the `:app` module that wires it up. The cost is more modules and DI wiring. It has nothing to do with on-demand delivery, which is what dynamic feature modules are for. Implementation classes also stay hidden from other features."
+      "explanation": "Anything shipped in an app binary can be extracted, so native apps are public clients. PKCE has the app send a hash of a random verifier with the authorization request and the verifier itself when exchanging the code, so a malicious app that grabs the redirect cannot redeem it. It is not encryption of tokens and does not replace TLS."
     },
     {
       "id": "d55q02",
       "type": "truefalse",
-      "topic": "flags & security",
+      "topic": "system browser login",
       "difficulty": "Easy",
-      "question": "Hiding the \"Download offline\" button behind a remote-config flag that is only on for paying users is enough to stop free users from downloading premium content.",
+      "question": "For signing in with a third-party OAuth provider, collecting the password in an embedded WebView is the recommended approach; Custom Tabs and ASWebAuthenticationSession are only a convenience.",
       "options": [
         "True",
         "False"
@@ -32,322 +32,147 @@
       "answer": [
         1
       ],
-      "explanation": "Client flags are UX controls. Anyone can patch the APK, edit cached config or call the API directly. Entitlement must be checked on the server for every download request, and the flag only decides what the UI shows."
+      "explanation": "The OAuth best practice for native apps (RFC 8252) is an external user agent: Custom Tabs on Android, ASWebAuthenticationSession on iOS. With an embedded WebView the app can read the password and inject scripts, users cannot verify the real domain, and existing browser sessions are not reused. Many providers, including Google, block sign-in from embedded WebViews."
     },
     {
       "id": "d55q03",
       "type": "mcq",
-      "topic": "incident response",
-      "difficulty": "Medium",
-      "question": "Your new release is on a 20% staged rollout, and crashes spike on about 5% of devices running it. What do you do first?",
+      "topic": "secure storage",
+      "difficulty": "Easy",
+      "question": "Where should a mobile app store a long-lived refresh token?",
       "options": [
-        "Halt the staged rollout, use the feature's kill switch if there is one, then dig into the crash clusters",
-        "Raise the rollout to 100% so you collect enough crash data to find the cause quickly",
-        "Upload the previous APK again so Play rolls everyone back to the old version",
-        "Wait 48 hours for crash numbers to stabilise, since early rollout data over-represents a few device models"
+        "In SharedPreferences / UserDefaults after Base64-encoding it, so it is not stored as readable plain text",
+        "Encrypted with a key held in the Android Keystore, and in the iOS Keychain with a 'this device only' accessibility class",
+        "In a constant in the app's code, generated at build time for each user and refreshed with every release",
+        "In a plain SQLite table in the app's sandbox, since other apps on the device cannot read that directory"
+      ],
+      "answer": [
+        1
+      ],
+      "explanation": "Keystore keys and Keychain items are protected by the OS (often hardware-backed) and are not included in plain backups when configured correctly. Base64 is encoding, not encryption. The sandbox helps against other apps, but not against backups, rooted or jailbroken devices, or forensic extraction."
+    },
+    {
+      "id": "d55q04",
+      "type": "mcq",
+      "topic": "refresh rotation",
+      "difficulty": "Medium",
+      "question": "Your auth server uses refresh-token rotation with reuse detection. What happens when a refresh token that was already used is presented again?",
+      "options": [
+        "The server treats it as possible theft and revokes the whole token family, so both the attacker and the user must sign in again",
+        "The server ignores the reuse, because rotation only matters for access tokens and not for refresh tokens",
+        "The server returns the same new tokens it issued the first time, which makes refresh safe to retry blindly",
+        "The server accepts it once more but shortens the access token lifetime, then rejects any later reuse"
       ],
       "answer": [
         0
       ],
-      "explanation": "First limit the damage: halting stops new installs of the bad build, and a kill switch can fix users who already have it without waiting for a release. Then group the crashes by device, OS and app version and ship a fix. You can't re-upload an older build because Play requires a higher `versionCode`, and rolling out further only spreads the problem."
-    },
-    {
-      "id": "d55q04",
-      "type": "multi",
-      "topic": "modularization",
-      "difficulty": "Medium",
-      "question": "You're moving a monolithic app to feature modules owned by teams. Which statements are true?",
-      "options": [
-        "Gradle can reuse compiled outputs of unchanged modules, so a change in one feature's implementation rebuilds far less code",
-        "CODEOWNERS entries keyed by module path can route code reviews to the owning team automatically",
-        "A shared design-system module gives every feature the same themed components without features depending on each other",
-        "Splitting into modules makes the release APK smaller by itself",
-        "More modules always means faster builds, so one module per class is ideal"
-      ],
-      "answer": [
-        0,
-        1,
-        2
-      ],
-      "explanation": "Modules give you build avoidance, clear ownership and shared UI building blocks. They don't shrink the APK on their own, because R8 and resource shrinking do that and the code is all merged anyway. Very fine-grained modules add configuration and dependency overhead, so there is a sweet spot."
+      "explanation": "With rotation each refresh returns a new refresh token and invalidates the old one, so a second use of an old token means two parties have it. Revoking the family limits damage from a stolen token. This is why clients must save the new token durably before using it, or a crash mid-refresh can log the user out."
     },
     {
       "id": "d55q05",
       "type": "mcq",
-      "topic": "symbolication",
-      "difficulty": "Easy",
-      "question": "Crash reports from your release build show frames like `at a.b.c.a(Unknown Source:12)`. What fixes this?",
+      "topic": "concurrent 401s",
+      "difficulty": "Medium",
+      "question": "Five parallel requests all get 401 because the access token expired. The server rotates refresh tokens. What should the client do?",
       "options": [
-        "Upload each build's R8 mapping file to the crash reporter and Play Console",
-        "Turn off R8 minification for release builds, since crash reporters can't read minified code",
-        "Add `-keep class ** { *; }` so nothing is renamed",
-        "Switch the crash reporter to debug mode in production"
+        "Retry all five requests with the expired token after a short delay, since the 401 may be a temporary error",
+        "Single-flight the refresh: one caller refreshes behind a lock while the others wait, then all retry with the new token",
+        "Let each request refresh on its own, since refreshing five times in parallel is the fastest way to recover",
+        "Log the user out right away, since several 401s at once usually mean the account has been compromised"
       ],
       "answer": [
-        0
+        1
       ],
-      "explanation": "R8 renames classes and methods, and `mapping.txt` maps the short names back to the originals. Every build has its own mapping, so upload it as part of the release pipeline. Turning off R8 or keeping everything gives up size and performance just to get readable traces."
+      "explanation": "With rotation, five parallel refreshes means four of them present a token already used, which can trip reuse detection and kill the session. A mutex (e.g. inside an OkHttp `Authenticator`, or an actor on iOS) plus a check whether the token already changed avoids this. Retrying with the expired token just produces more 401s."
     },
     {
       "id": "d55q06",
-      "type": "mcq",
-      "topic": "a/b bucketing",
+      "type": "multi",
+      "topic": "certificate pinning",
       "difficulty": "Medium",
-      "question": "How should the client assign a user to a variant of a 50/50 checkout A/B experiment?",
+      "question": "Your team is considering certificate pinning. Which statements reflect the real trade-offs? Select all that apply.",
       "options": [
-        "Bucket by `hash(userId + experimentKey) % 100 < 50`",
-        "Call `Random.nextInt(2)` on every app launch",
-        "Use `hash(deviceId) % 2` for every experiment",
-        "Put odd-numbered installs in A and even-numbered installs in B, based on install order"
+        "Pin the public key (SPKI hash) rather than the leaf certificate, so routine certificate renewals do not break the app",
+        "Ship at least one backup pin, e.g. for a standby key or a second CA, so you can rotate keys safely",
+        "A bad pin or unplanned key change can lock out old app versions that cannot be updated quickly",
+        "Pinning stops an attacker on their own rooted device from inspecting the app's traffic",
+        "Pinning replaces normal certificate chain validation, so the system trust store is no longer consulted"
       ],
       "answer": [
-        0
+        0,
+        1,
+        2
       ],
-      "explanation": "Consistent bucketing keeps a user's experience stable across sessions, and salting with the experiment key stops every experiment from splitting users the same way. Random choice per launch mixes the two variants for one user and ruins the measurement. One unsalted hash for every experiment ties the experiments' populations together."
+      "explanation": "Pinning narrows which keys you trust, which protects against mis-issued or user-installed CAs, but it creates an operational risk if keys change. Someone controlling their own device can bypass pins with hooking tools, so it is not anti-reverse-engineering. Pins are checked in addition to normal validation, not instead of it."
     },
     {
       "id": "d55q07",
       "type": "truefalse",
-      "topic": "staged rollout",
-      "difficulty": "Easy",
-      "question": "When you halt a staged rollout on Google Play, users who already installed the bad version are automatically moved back to the previous version.",
+      "topic": "platform network policy",
+      "difficulty": "Medium",
+      "question": "Android's Network Security Configuration can block cleartext traffic and declare pins in XML, and iOS App Transport Security requires HTTPS by default, with exceptions declared in Info.plist.",
       "options": [
         "True",
         "False"
       ],
       "answer": [
-        1
+        0
       ],
-      "explanation": "Halting only stops more users from getting the update. Users who already installed it keep it until you ship a fixed build with a higher `versionCode`. That's why kill switches, which work without a new release, are so valuable."
+      "explanation": "Both platforms let you set transport policy declaratively: `network_security_config.xml` (cleartext is blocked by default for apps targeting API 28+) and ATS keys in Info.plist. Declarative config is easier to audit than custom TrustManager or URLSession delegate code. Exceptions should be scoped to specific domains, not applied globally."
     },
     {
       "id": "d55q08",
       "type": "mcq",
-      "topic": "crash-free kpi",
-      "difficulty": "Easy",
-      "question": "Leadership asks: \"What fraction of our users hit at least one crash this week?\" Which metric answers that directly?",
+      "topic": "secrets in apps",
+      "difficulty": "Hard",
+      "question": "Your app calls a paid third-party API with a secret key. A security review flags it. What is the right design?",
       "options": [
-        "Crash-free users",
-        "Crash-free sessions",
-        "Total crash count",
-        "Crashes per thousand API requests"
+        "Hide the key in native code through the NDK and obfuscate it, so it does not appear in the decompiled dex",
+        "Encrypt the key with AES and ship the encryption key in a different class so the two parts are never together",
+        "Store the key in BuildConfig or Info.plist and enable R8 / bitcode stripping so it is removed from release builds",
+        "Move the call behind your own backend, which holds the key, and authenticate the app to it (optionally with Play Integrity / App Attest)"
       ],
       "answer": [
-        0
+        3
       ],
-      "explanation": "Crash-free users counts distinct users with no crash in the period. Crash-free sessions is weighted by usage, so a few heavy users who crash a lot move it more. Teams usually track both, because they surface different problems."
+      "explanation": "Anything the app can use, an attacker with the binary can also use; obfuscation, native code and split keys only slow them down. A backend proxy keeps the secret on the server and lets you rate-limit and revoke per user. Attestation helps reject traffic from modified apps, but it adds to server-side control rather than replacing it."
     },
     {
       "id": "d55q09",
-      "type": "multi",
-      "topic": "analytics pipeline",
-      "difficulty": "Medium",
-      "question": "You're designing the client side of an analytics pipeline. Which practices are sound?",
+      "type": "mcq",
+      "topic": "biometric binding",
+      "difficulty": "Hard",
+      "question": "Requirement: the payment token may only be usable after a successful biometric check. Which implementation actually enforces that?",
       "options": [
-        "Persist events to a local queue such as a Room table, so they survive offline periods and process death",
-        "Upload in batches with WorkManager, putting non-urgent batches behind unmetered-network or charging constraints and capping the queue size",
-        "Sample very high-volume, low-value events at a fixed rate and send the rate, so the backend can scale the counts back up",
-        "Send every event in its own HTTP request as soon as it happens, so dashboards are real-time",
-        "Drop events recorded while offline, since they're stale by the time the network returns"
+        "Keep the token in EncryptedSharedPreferences and show BiometricPrompt the first time the app is opened each day",
+        "Show BiometricPrompt / LAContext, and when the success callback returns true, read the token from regular storage",
+        "Hash the user's fingerprint template in the app and use that hash as the key that encrypts the stored token",
+        "Encrypt the token with a Keystore key that requires user authentication, used through BiometricPrompt's CryptoObject; on iOS, a Keychain item with biometric access control"
       ],
       "answer": [
-        0,
-        1,
-        2
+        3
       ],
-      "explanation": "Batching and deferring uploads saves radio wake-ups and battery, and a persistent queue keeps offline data. Recording the sample rate keeps sampled counts accurate. One request per event drains the battery, and dropping offline events skews the data against users with poor connections."
+      "explanation": "When the key itself is gated on authentication, the OS refuses to decrypt without a real biometric match, so hooking the callback gains nothing. A boolean 'success' check is easy to bypass on a compromised device. Apps never get biometric templates, so the last option is not possible."
     },
     {
       "id": "d55q10",
-      "type": "mcq",
-      "topic": "flag defaults",
-      "difficulty": "Medium",
-      "question": "On first launch the device is offline, so remote config can't be fetched. How should the app behave?",
-      "options": [
-        "Use bundled safe defaults (new features off) and apply fetched config on the next launch",
-        "Keep the splash screen up until the config fetch succeeds, so flags never change mid-session",
-        "Default every flag to on, so new users see the newest features from their very first session",
-        "Show an error asking the user to connect before they can use the app"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Flags must never block startup, and the bundled defaults should be the safe, known-good behaviour. Applying fetched values at a stable point stops the UI from changing in the middle of a session. The cost is that changes reach users one launch later. Fetch in the background so startup never waits on the network."
-    },
-    {
-      "id": "d55q11",
-      "type": "truefalse",
-      "topic": "android vitals",
-      "difficulty": "Easy",
-      "question": "If your app's user-perceived crash rate or ANR rate exceeds Android vitals' bad-behaviour thresholds, Google Play may reduce your app's visibility and can show a warning on its store listing.",
-      "options": [
-        "True",
-        "False"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Play uses core vitals (user-perceived crash rate and ANR rate) for discovery, both overall and per device model. Stability problems therefore cost you installs as well as reviews."
-    },
-    {
-      "id": "d55q12",
-      "type": "mcq",
-      "topic": "breadcrumbs",
-      "difficulty": "Easy",
-      "question": "What are breadcrumbs in a crash reporting SDK?",
-      "options": [
-        "A trail of recent events (screens, taps, network results) attached to a crash report",
-        "Frame-by-frame rendering timings recorded before a crash and sent for jank analysis",
-        "The mapping entries used to deobfuscate a stack trace",
-        "The list of app versions a user upgraded through"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "A stack trace shows where the app crashed, and breadcrumbs show how the user got there. Keep them small and free of PII, since they are sent with every report."
-    },
-    {
-      "id": "d55q13",
-      "type": "mcq",
-      "topic": "min supported version",
-      "difficulty": "Medium",
-      "question": "A backend change will break app versions older than 4.2, and analytics shows some users still run versions from two years ago. What is the best approach?",
-      "options": [
-        "Check a server-set minimum version at launch and force an immediate in-app update below it",
-        "Rely on Play auto-update, which updates nearly every user within a day of a release going live",
-        "Ship the backend change and let old clients fail with HTTP errors until users update",
-        "Show a toast on every launch asking users to update"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Old versions live for years because of auto-update being off, low storage or rarely opened apps. A remotely controlled minimum version lets you retire them gracefully. Use forced updates sparingly because they add friction, and keep the old API around as long as you can. Below a separate recommended version, show a dismissible prompt instead (Play In-App Updates supports both immediate and flexible flows)."
-    },
-    {
-      "id": "d55q14",
       "type": "multi",
-      "topic": "server-driven ui",
+      "topic": "token lifetime design",
       "difficulty": "Hard",
-      "question": "You're considering server-driven UI, where the server sends a JSON tree of components that the app renders natively. Which are real costs of this approach?",
+      "question": "You are designing session tokens for a banking-grade app. Which choices are sound? Select all that apply.",
       "options": [
-        "The component schema must be versioned, and old app versions need a graceful fallback for component types they don't know",
-        "Screens need a network round-trip or a cached layout before they can render, and generic rendering adds parsing and layout overhead",
-        "Testing is harder, because the behaviour depends on every combination of server payload and app version",
-        "Google Play policy forbids apps from changing their layout based on server responses",
-        "Because the UI comes from the server, native components and accessibility support can't be used"
+        "Verifying the JWT signature in the app and treating that as the authorisation check for sensitive actions",
+        "Server-side revocation of refresh tokens on logout, password change or a 'sign out everywhere' action",
+        "Short-lived access tokens (minutes) paired with a longer-lived, rotating refresh token",
+        "Binding tokens to a device key (e.g. DPoP or a Keystore / Secure Enclave key) so a copied token is hard to replay",
+        "A 30-day access token kept on disk, so the app rarely needs to refresh and fails less often on bad networks"
       ],
       "answer": [
-        0,
         1,
-        2
+        2,
+        3
       ],
-      "explanation": "Server-driven UI lets you change screens without a release, but you pay for it in versioning, latency and offline handling, and testing. Play prohibits downloading executable code, not data that drives native views. Because the app renders its own components, they keep native performance and accessibility."
-    },
-    {
-      "id": "d55q15",
-      "type": "mcq",
-      "topic": "navigation contract",
-      "difficulty": "Hard",
-      "question": "`:feature:checkout` needs to open the edit-address screen owned by `:feature:profile`. How should you wire this in a multi-team modular app?",
-      "options": [
-        "Checkout depends on `:feature:profile:api` (a route or navigator interface), and `:app` binds the `:impl` via DI",
-        "`:feature:checkout` depends directly on `:feature:profile` and calls its composable",
-        "Start the screen by class name with `Class.forName(\"com.app.profile.EditAddressActivity\")` to avoid any dependency",
-        "Merge checkout and profile into one module, since they need each other"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "A contract layer lets features navigate to each other without depending on each other's implementation. That avoids long rebuild chains and dependency cycles, and lets teams change internals freely. Depending on the implementation module couples them, and reflection with string class names breaks silently under R8 or a rename. `:feature:profile:impl` provides the actual screen."
-    },
-    {
-      "id": "d55q16",
-      "type": "truefalse",
-      "topic": "release logging",
-      "difficulty": "Medium",
-      "question": "`Log.d` and `Log.v` calls are automatically removed from release builds, so it's safe to log auth tokens at debug level.",
-      "options": [
-        "True",
-        "False"
-      ],
-      "answer": [
-        1
-      ],
-      "explanation": "Nothing strips them by default. They still run in release and can be read via `adb logcat` or bug reports unless you strip them (e.g. R8 `-assumenosideeffects`) or route logs through a facade with no release sink. Never log secrets or PII at any level."
-    },
-    {
-      "id": "d55q17",
-      "type": "mcq",
-      "topic": "performance monitoring",
-      "difficulty": "Medium",
-      "question": "Cold start takes 600 ms on your team's flagship test phones, but Android vitals reports slow cold starts for many users. What is the best next step?",
-      "options": [
-        "Use sampled field metrics by device and OS, then reproduce on a matching low-end device with a release build",
-        "Profile a debug build on the emulator, since that's where Android Studio's profilers give the most detailed traces",
-        "Ignore vitals, because the in-house benchmark is the controlled measurement and field data is noisy",
-        "Add a longer splash animation so the wait feels shorter"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "Lab results on fast phones don't represent your users, and field data shows where the real slowness is. Sampling keeps monitoring overhead low. Debug builds and emulators perform very differently from a release build on real hardware. Break the field data down by app version too, since a regression often arrives with one release."
-    },
-    {
-      "id": "d55q18",
-      "type": "multi",
-      "topic": "privacy & consent",
-      "difficulty": "Medium",
-      "question": "Which analytics and crash reporting practices protect user privacy?",
-      "options": [
-        "Keep PII such as email, phone number and precise location out of event properties and breadcrumbs",
-        "Don't collect analytics until the user consents where the law requires it, and stop when they withdraw consent",
-        "Identify users with a resettable, app-scoped pseudonymous ID instead of a hardware identifier",
-        "Hash the email with SHA-256 before sending it, which makes it anonymous",
-        "Attach full request and response bodies to crash reports for easier debugging"
-      ],
-      "answer": [
-        0,
-        1,
-        2
-      ],
-      "explanation": "Collect as little as possible, respect consent and use resettable IDs. A hashed email is still a stable identifier that links the user across systems, and common emails can be guessed back from the hash. Request bodies often contain tokens and personal data."
-    },
-    {
-      "id": "d55q19",
-      "type": "mcq",
-      "topic": "anr reporting",
-      "difficulty": "Hard",
-      "question": "Your crash reporter shows almost no crashes, but Android vitals shows a high ANR rate. Why don't the ANRs show up in the crash reporter?",
-      "options": [
-        "ANRs aren't exceptions: the system kills the frozen app, so the uncaught-exception handler never runs",
-        "The R8 mapping file wasn't uploaded, so the crash reporter dropped the ANR traces as unreadable frames",
-        "ANRs only happen in debug builds, and vitals mistakenly includes them",
-        "The crash reporter samples out every report that has no stack trace, and ANRs never carry one"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "ANRs come from the main thread being blocked by disk I/O, locks or long work, not from exceptions, so they need dedicated detection such as main-thread watchdogs or `ApplicationExitInfo` on API 30+. A missing mapping file makes traces unreadable but doesn't hide them, and ANRs are a serious problem in release builds. Some SDKs capture ANRs separately, for example by reading `ApplicationExitInfo`."
-    },
-    {
-      "id": "d55q20",
-      "type": "multi",
-      "topic": "flag debt",
-      "difficulty": "Hard",
-      "question": "The codebase has 300 feature flags and nobody knows which are still used. Which practices fix and prevent this flag debt?",
-      "options": [
-        "Give every flag an owner and an expiry date or removal ticket when it is created",
-        "Once a rollout has been at 100% and stable, delete the flag and the dead code path in a follow-up release",
-        "While a flag is live, test both the on and off code paths",
-        "Reuse a retired flag's key for a new feature, to keep the config tidy",
-        "Keep every release flag forever, so any feature can be reverted later"
-      ],
-      "answer": [
-        0,
-        1,
-        2
-      ],
-      "explanation": "Release flags are temporary: they need owners, deadlines and cleanup, and each live flag doubles the paths you have to test. Reusing a key is a classic trap, because old app versions still read it and would switch on the old behaviour. Keep only a few deliberate long-lived kill switches, not every flag."
+      "explanation": "Short access tokens limit the window of a leak, revocable refresh tokens give the server control, and sender-constrained tokens make theft less useful. A long-lived access token cannot be revoked quickly without extra checks on every call. Authorisation decisions must be made on the server; anything checked only on the client can be patched out."
     }
   ]
 }

@@ -1,69 +1,13 @@
 {
   "day": 13,
-  "topic": "Collections: map, filter, fold, groupBy & associate",
+  "topic": "StateFlow, SharedFlow, channels & backpressure",
   "questions": [
     {
       "id": "d13q01",
-      "type": "output",
-      "topic": "map & filter",
-      "difficulty": "Easy",
-      "question": "What does this print?",
-      "code": "fun main() {\n    val nums = listOf(1, 2, 3, 4, 5)\n    println(nums.filter { it % 2 == 1 }.map { it * it })\n}",
-      "options": [
-        "[1, 9, 25]",
-        "[1, 4, 9, 16, 25]",
-        "[4, 16]",
-        "[1, 3, 5]"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`filter` runs first and keeps the odd numbers `[1, 3, 5]`, then `map` squares each one. Each step returns a new list, so the chain reads left to right."
-    },
-    {
-      "id": "d13q02",
-      "type": "mcq",
-      "topic": "read-only list",
-      "difficulty": "Easy",
-      "question": "What happens when you compile and run this?",
-      "code": "fun main() {\n    val ids = listOf(1, 2)\n    ids.add(3)\n    println(ids)\n}",
-      "options": [
-        "Compile error: `add` is not available on a read-only `List`",
-        "It prints [1, 2, 3]",
-        "It throws UnsupportedOperationException",
-        "Compile error: a `val` cannot be reassigned, and `add` modifies `ids`"
-      ],
-      "answer": [
-        0
-      ],
-      "compiles": false,
-      "explanation": "`listOf` returns the read-only `List` interface, which has no `add`, so the compiler rejects the call. `val` is not the problem here, since `add` would not reassign `ids`. Use `mutableListOf` or `arrayListOf` if you need to add items."
-    },
-    {
-      "id": "d13q03",
-      "type": "output",
-      "topic": "mapNotNull",
-      "difficulty": "Easy",
-      "question": "An API returns counts as strings. What does this print?",
-      "code": "fun main() {\n    val raw = listOf(\"12\", \"n/a\", \"7\", \"\")\n    println(raw.mapNotNull { it.toIntOrNull() })\n}",
-      "options": [
-        "[12, 7]",
-        "[12, null, 7, null]",
-        "[12, 0, 7, 0]",
-        "[12, 7, 0]"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`mapNotNull` applies the transform and drops every `null` result. `toIntOrNull()` returns `null` for \"n/a\" and for the empty string, so only 12 and 7 are left. Plain `map` would have kept the nulls."
-    },
-    {
-      "id": "d13q04",
       "type": "truefalse",
-      "topic": "read-only vs immutable",
-      "difficulty": "Medium",
-      "question": "After this code runs, `readOnly.size` is 3.",
-      "code": "val source = mutableListOf(\"a\", \"b\")\nval readOnly: List<String> = source\nsource.add(\"c\")",
+      "topic": "StateFlow conflation",
+      "difficulty": "Easy",
+      "question": "Setting a `MutableStateFlow`'s `value` to something equal (`==`) to its current value does not notify collectors.",
       "options": [
         "True",
         "False"
@@ -71,127 +15,158 @@
       "answer": [
         0
       ],
-      "explanation": "`readOnly` is the same list object seen through the read-only `List` interface, not a copy. Read-only only means you can't mutate it through that reference. Anyone holding the `MutableList` can still change it, and `readOnly` sees the change."
+      "explanation": "StateFlow is `distinctUntilChanged` by design: an assignment equal to the current value is a no-op. This is why a StateFlow holding data classes only emits real changes, and also why mutating an object in place and reassigning it does not emit."
+    },
+    {
+      "id": "d13q02",
+      "type": "mcq",
+      "topic": "choosing a hot flow",
+      "difficulty": "Easy",
+      "question": "You need an observable \"current screen state\" that every new collector receives immediately, even if nothing has changed since. Which fits best?",
+      "options": [
+        "MutableStateFlow(initialState)",
+        "MutableSharedFlow<State>() with defaults",
+        "Channel<State>(Channel.UNLIMITED)",
+        "A cold flow { } that emits the state"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "A StateFlow always has a value and hands it to each new collector straight away, which is exactly what state needs. A default `MutableSharedFlow` has `replay = 0`, so late collectors get nothing. A Channel delivers each element to only one receiver, and a cold flow recomputes for every collector instead of sharing one state."
+    },
+    {
+      "id": "d13q03",
+      "type": "output",
+      "topic": "StateFlow conflation",
+      "difficulty": "Medium",
+      "question": "What does this print?",
+      "code": "import kotlinx.coroutines.*\nimport kotlinx.coroutines.flow.*\n\nfun main() = runBlocking {\n    val state = MutableStateFlow(0)\n    val job = launch { state.collect { println(\"got $it\") } }\n    yield()\n    state.value = 1\n    state.value = 2\n    yield()\n    state.value = 2\n    yield()\n    job.cancel()\n}",
+      "options": [
+        "got 0\ngot 2",
+        "got 0\ngot 1\ngot 2",
+        "got 0\ngot 1\ngot 2\ngot 2",
+        "got 2"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "The first `yield()` lets the collector start; it immediately receives the current value 0. The two assignments then happen without the main coroutine suspending, so by the time the collector runs again it reads only the latest value, 2; StateFlow conflates. The final `value = 2` equals the current value, so nothing is emitted."
+    },
+    {
+      "id": "d13q04",
+      "type": "mcq",
+      "topic": "SharedFlow replay",
+      "difficulty": "Medium",
+      "question": "The UI only starts collecting `events` after `onSaved()` has already emitted. What does the UI receive?",
+      "code": "val events = MutableSharedFlow<String>()\n\nfun onSaved() {\n    viewModelScope.launch { events.emit(\"Saved\") }\n}",
+      "options": [
+        "Nothing: with no subscribers and replay = 0, the value is dropped",
+        "\"Saved\", because emit suspends until a first subscriber arrives",
+        "\"Saved\", because a SharedFlow always replays its latest value",
+        "Nothing, and emit throws IllegalStateException with no subscribers"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "With `replay = 0` and no subscribers, `emit` returns immediately and the value is simply discarded; it does not wait for a subscriber. Only a configured replay cache keeps values for late collectors. This is a common cause of \"lost\" one-off events emitted during a configuration change."
     },
     {
       "id": "d13q05",
-      "type": "output",
-      "topic": "fold vs reduce",
+      "type": "mcq",
+      "topic": "Channel for events",
       "difficulty": "Medium",
-      "question": "What does this print?",
-      "code": "fun main() {\n    val xs = listOf(1, 2, 3)\n    println(xs.fold(10) { acc, x -> acc + x })\n    println(xs.reduce { acc, x -> acc + x })\n}",
+      "question": "Why do some teams model one-off UI events as `Channel<Event>(Channel.BUFFERED)` exposed with `receiveAsFlow()` instead of `MutableSharedFlow<Event>()`?",
       "options": [
-        "16\n6",
-        "16\n16",
-        "6\n6",
-        "16\n7"
+        "Events sent while no one collects stay buffered and are delivered once to the next collector",
+        "A channel delivers each event to every active collector, so multiple screens see every event",
+        "Channels are hot while SharedFlow is cold, so the ViewModel can send without a running scope",
+        "Buffered channels are written to disk, so pending events survive the process being killed"
       ],
       "answer": [
         0
       ],
-      "explanation": "`fold` starts the accumulator at the initial value you pass (10), so the result is 10 + 1 + 2 + 3 = 16. `reduce` has no initial value. It starts with the first element as the accumulator, so it gives 1 + 2 + 3 = 6."
+      "explanation": "A channel buffers elements until someone receives them, and each element goes to exactly one receiver, so an event sent during rotation is not lost the way it is with a replay-0 SharedFlow. SharedFlow is the one that broadcasts to all collectors, and both are hot. Nothing survives process death, which is one reason Google's guidance prefers modeling such events as UI state."
     },
     {
       "id": "d13q06",
-      "type": "mcq",
-      "topic": "reduce on empty",
-      "difficulty": "Medium",
-      "question": "What happens when this runs?",
-      "code": "fun main() {\n    val totals = emptyList<Int>()\n    println(totals.reduce { acc, x -> acc + x })\n}",
+      "type": "output",
+      "topic": "replay cache",
+      "difficulty": "Easy",
+      "question": "What does this print?",
+      "code": "import kotlinx.coroutines.*\nimport kotlinx.coroutines.flow.*\n\nfun main() = runBlocking {\n    val shared = MutableSharedFlow<Int>(replay = 2)\n    shared.emit(1)\n    shared.emit(2)\n    shared.emit(3)\n    println(shared.take(2).toList())\n    println(shared.replayCache)\n}",
       "options": [
-        "It throws UnsupportedOperationException",
-        "It prints 0",
-        "It prints null",
-        "It throws NoSuchElementException (\"List is empty.\")"
+        "[2, 3]\n[2, 3]",
+        "[1, 2]\n[2, 3]",
+        "[1, 2]\n[1, 2, 3]",
+        "[]\n[2, 3]"
       ],
       "answer": [
         0
       ],
-      "explanation": "`reduce` needs at least one element to use as the starting accumulator, so on an empty collection it throws `UnsupportedOperationException` (\"Empty collection can't be reduced.\"). Use `fold(0)` or `reduceOrNull` when the list might be empty."
+      "explanation": "With no subscribers, `emit` does not suspend; it just keeps the most recent `replay` values, so the cache ends up as [2, 3] and 1 is evicted. A new collector first receives the replay cache, so `take(2)` gets 2 and 3. The values were not lost, because a replay cache was configured."
     },
     {
       "id": "d13q07",
-      "type": "mcq",
-      "topic": "groupBy",
-      "difficulty": "Easy",
-      "question": "A chat screen shows a date header above each day's messages. Which call gives you a `Map<LocalDate, List<Message>>`?",
-      "code": "data class Message(val id: Long, val text: String, val sentAt: LocalDateTime)\n\nval messages: List<Message> = repository.loadMessages()",
-      "options": [
-        "`messages.groupBy { it.sentAt.toLocalDate() }`",
-        "`messages.associateBy { it.sentAt.toLocalDate() }`",
-        "`messages.associateWith { it.sentAt.toLocalDate() }`",
-        "`messages.partition { it.sentAt.toLocalDate() }`"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`groupBy` collects every element with the same key into a list. `associateBy` gives a `Map<LocalDate, Message>` and keeps only the last message per day. `associateWith` uses the messages as keys, and `partition` needs a Boolean predicate."
-    },
-    {
-      "id": "d13q08",
-      "type": "output",
-      "topic": "associateBy",
-      "difficulty": "Medium",
-      "question": "The API response contains a duplicate id. What does this print?",
-      "code": "data class UserDto(val id: Int, val name: String)\n\nfun main() {\n    val users = listOf(UserDto(1, \"Ann\"), UserDto(2, \"Bo\"), UserDto(1, \"Cy\"))\n    val byId = users.associateBy { it.id }\n    println(byId.mapValues { it.value.name })\n}",
-      "options": [
-        "{1=Cy, 2=Bo}",
-        "{1=Ann, 2=Bo}",
-        "{2=Bo, 1=Cy}",
-        "{1=[Ann, Cy], 2=[Bo]}"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "When keys collide, `associateBy` keeps the last element, so id 1 maps to Cy. The result is a `LinkedHashMap`, and overwriting a value doesn't move its key, so 1 stays first. A list per key would need `groupBy`."
-    },
-    {
-      "id": "d13q09",
       "type": "multi",
-      "topic": "first vs find",
-      "difficulty": "Medium",
-      "question": "`msgs` is an empty `List<Message>`. Which of these calls return `null` instead of throwing? Select all that apply.",
-      "code": "val msgs = emptyList<Message>()",
+      "topic": "backpressure",
+      "difficulty": "Hard",
+      "question": "A producer emits every 10 ms and the collector needs 100 ms per item. Which statements are correct? Select all that apply.",
       "options": [
-        "`msgs.firstOrNull()`",
-        "`msgs.find { it.unread }`",
-        "`msgs.maxByOrNull { it.sentAt }`",
-        "`msgs.first()`",
-        "`msgs.single()`",
-        "`msgs.last { it.unread }`"
+        "`buffer()` runs the producer in a separate coroutine so it can get ahead until the buffer is full",
+        "`conflate()` drops intermediate values, so a slow collector always gets the latest available one",
+        "`collectLatest { }` cancels the block still handling the old value when a new value arrives",
+        "With no operator, the producer keeps emitting and the values pile up in memory without limit",
+        "`conflate()` guarantees that the collector sees every value, only with a delay"
       ],
       "answer": [
         0,
         1,
         2
       ],
-      "explanation": "`find` is an alias for `firstOrNull(predicate)`, and the `...OrNull` functions return `null` when there's nothing to return. `first`, `last` and `single` throw `NoSuchElementException` on an empty list or when nothing matches."
+      "explanation": "By default a flow is sequential: `emit` suspends until the collector finishes, so the producer is simply slowed down and nothing piles up. `buffer` decouples the two with a channel, `conflate` keeps only the newest value, and `collectLatest` restarts the handler for each new value. `conflate` by definition skips values."
     },
     {
-      "id": "d13q10",
-      "type": "output",
-      "topic": "flatMap vs flatten",
-      "difficulty": "Easy",
-      "question": "A paged API gives you a list of pages. What does this print?",
-      "code": "fun main() {\n    val pages = listOf(listOf(\"a\", \"b\"), listOf(\"c\"))\n    println(pages.flatten())\n    println(pages.flatMap { page -> page.map { it.uppercase() } })\n}",
+      "id": "d13q08",
+      "type": "mcq",
+      "topic": "tryEmit",
+      "difficulty": "Hard",
+      "question": "A collector is subscribed to `events`, yet `tryEmit` returns `false` and the value is lost. Why?",
+      "code": "val events = MutableSharedFlow<Int>()\n\n// called from a non-suspending SDK callback\nfun onSdkEvent(code: Int) {\n    val ok = events.tryEmit(code)\n}",
       "options": [
-        "[a, b, c]\n[A, B, C]",
-        "[[a, b], [c]]\n[A, B, C]",
-        "[a, b, c]\n[[A, B], [C]]",
-        "[a, b, c]\n[AB, C]"
+        "No replay and no extra buffer, so there's nowhere to put it without suspending",
+        "tryEmit only succeeds when it's called from the same dispatcher as the collector",
+        "tryEmit always fails while the collector is still busy running on another thread",
+        "The collector must call resetReplayCache() before tryEmit can deliver any values"
       ],
       "answer": [
         0
       ],
-      "explanation": "`flatten` joins a list of lists into one flat list. `flatMap` maps each element to a list and then flattens the results, so you get one flat list, not nested lists. It's like `map { ... }.flatten()` in one step."
+      "explanation": "A default `MutableSharedFlow` has no buffer at all, so delivering to a subscriber requires suspending until it is ready; `tryEmit` cannot suspend and returns `false`. Add `extraBufferCapacity` (or use `BufferOverflow.DROP_OLDEST`) so there is room to store the value. Dispatchers and the replay cache have nothing to do with it."
     },
     {
-      "id": "d13q11",
+      "id": "d13q09",
+      "type": "mcq",
+      "topic": "mutable state value",
+      "difficulty": "Hard",
+      "question": "Tapping Add changes the list, but the UI collecting `items` never updates. Why?",
+      "code": "val items = MutableStateFlow(mutableListOf<String>())\n\nfun add(s: String) {\n    items.value.add(s)\n    items.value = items.value\n}",
+      "options": [
+        "It's the same list instance as before, so StateFlow sees an equal value and skips it",
+        "StateFlow only emits values that were set from Dispatchers.Main, and add() can run on any thread",
+        "Assignments to value are batched until the next frame, and the list was already rendered",
+        "MutableStateFlow ignores plain assignments of collections; only update { } triggers emission"
+      ],
+      "answer": [
+        0
+      ],
+      "explanation": "The list is mutated in place and then assigned back, so the new value is the same object as the current value and `==` is true. StateFlow skips equal values, so collectors are never notified (and could even observe a list changing underneath them). Keep state immutable and assign a new list, for example `items.update { it + s }` with a `List<String>`."
+    },
+    {
+      "id": "d13q10",
       "type": "truefalse",
-      "topic": "plus operator",
-      "difficulty": "Easy",
-      "question": "After this code runs, `a` contains 4 elements.",
-      "code": "val a = listOf(1, 2, 3)\nval b = a + 4",
+      "topic": "channel fan-out",
+      "difficulty": "Medium",
+      "question": "If two coroutines both iterate the same `Channel` with `for (x in channel)`, every element is delivered to both of them.",
       "options": [
         "True",
         "False"
@@ -199,169 +174,7 @@
       "answer": [
         1
       ],
-      "explanation": "On a read-only `List`, `+` returns a new list `[1, 2, 3, 4]` and leaves `a` unchanged. `-` works the same way. Only `b` has 4 elements."
-    },
-    {
-      "id": "d13q12",
-      "type": "mcq",
-      "topic": "filterIsInstance",
-      "difficulty": "Medium",
-      "question": "`items` is a `List<ChatItem>` for a RecyclerView. What are the static types of `a` and `b`?",
-      "code": "sealed interface ChatItem {\n    data class Text(val body: String) : ChatItem\n    data class DateHeader(val label: String) : ChatItem\n}\n\nval a = items.filter { it is ChatItem.Text }\nval b = items.filterIsInstance<ChatItem.Text>()",
-      "options": [
-        "`a: List<ChatItem>`, `b: List<ChatItem.Text>`",
-        "Both are `List<ChatItem.Text>`",
-        "Both are `List<ChatItem>`",
-        "`a: List<ChatItem.Text>`, `b: List<ChatItem>`"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`filter` always returns `List<T>` with the original element type, and an `is` check inside the lambda doesn't smart cast the result. `filterIsInstance<R>()` filters and casts at once, so it returns `List<ChatItem.Text>` and you can access `body` directly."
-    },
-    {
-      "id": "d13q13",
-      "type": "output",
-      "topic": "any/all/none",
-      "difficulty": "Hard",
-      "question": "What does this print?",
-      "code": "fun main() {\n    val unread = emptyList<Int>()\n    val any = unread.any { it > 0 }\n    val all = unread.all { it > 0 }\n    val none = unread.none { it > 0 }\n    println(\"$any $all $none\")\n}",
-      "options": [
-        "false true true",
-        "false false true",
-        "false false false",
-        "true true true"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "On an empty collection, `any` is false because no element matches. `all` is vacuously true because no element fails the check. `none` is true. This is a classic bug: `items.all { it.isRead }` returns true when there are no items at all."
-    },
-    {
-      "id": "d13q14",
-      "type": "mcq",
-      "topic": "sumOf",
-      "difficulty": "Easy",
-      "question": "The inbox badge should show the total number of unread messages across all conversations. Which expression gives that number?",
-      "code": "data class Conversation(val id: Long, val unreadCount: Int)\n\nval conversations: List<Conversation> = dao.getAll()",
-      "options": [
-        "`conversations.sumOf { it.unreadCount }`",
-        "`conversations.count { it.unreadCount > 0 }`",
-        "`conversations.fold(0) { acc, c -> c.unreadCount }`",
-        "`conversations.maxOf { it.unreadCount }`"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`sumOf` adds up the selector's value for every element. `count { ... }` counts conversations that have any unread messages, not the messages themselves. The `fold` lambda ignores `acc`, so it just returns the last conversation's count."
-    },
-    {
-      "id": "d13q15",
-      "type": "output",
-      "topic": "sortedWith",
-      "difficulty": "Hard",
-      "question": "What does this print?",
-      "code": "data class Chat(val sender: String, val unread: Int)\n\nfun main() {\n    val chats = listOf(Chat(\"Cara\", 2), Chat(\"Abe\", 5), Chat(\"Bob\", 2), Chat(\"Dan\", 5))\n    val sorted = chats.sortedWith(\n        compareByDescending<Chat> { it.unread }.thenBy { it.sender }\n    )\n    println(sorted.map { it.sender })\n}",
-      "options": [
-        "[Abe, Dan, Bob, Cara]",
-        "[Dan, Abe, Cara, Bob]",
-        "[Abe, Dan, Cara, Bob]",
-        "[Bob, Cara, Abe, Dan]"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "The primary key is `unread` in descending order, so the 5s come first. `thenBy` breaks ties by `sender` in ascending order, because the descending applies only to the first comparator. That puts Abe before Dan and Bob before Cara."
-    },
-    {
-      "id": "d13q16",
-      "type": "mcq",
-      "topic": "distinctBy",
-      "difficulty": "Medium",
-      "question": "You merge cached messages with fresh ones from the network. Which text does the message with id 1 have in `merged`?",
-      "code": "data class Msg(val id: Int, val text: String)\n\nval cached = listOf(Msg(1, \"old\"), Msg(2, \"hi\"))\nval fresh = listOf(Msg(1, \"edited\"))\nval merged = (cached + fresh).distinctBy { it.id }",
-      "options": [
-        "\"old\"",
-        "\"edited\"",
-        "Both are kept because the two `Msg` objects are not equal",
-        "It throws IllegalStateException because of the duplicate key"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`distinctBy` keeps the first element for each key and drops later ones, so the stale cached copy wins. To let fresh data win, put `fresh` first or use `associateBy { it.id }`, where the last element wins."
-    },
-    {
-      "id": "d13q17",
-      "type": "output",
-      "topic": "getOrPut",
-      "difficulty": "Medium",
-      "question": "What does this print?",
-      "code": "fun main() {\n    val byDay = mutableMapOf<String, MutableList<Int>>()\n    val msgs = listOf(\"Tue\" to 1, \"Mon\" to 2, \"Tue\" to 3)\n    for ((day, id) in msgs) {\n        byDay.getOrPut(day) { mutableListOf() }.add(id)\n    }\n    println(byDay)\n}",
-      "options": [
-        "{Tue=[1, 3], Mon=[2]}",
-        "{Mon=[2], Tue=[1, 3]}",
-        "{Tue=[3], Mon=[2]}",
-        "{Tue=[], Mon=[]}"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`getOrPut` returns the existing list for a key, or creates one, stores it in the map and returns it, so both Tuesday ids end up in the same list. `mutableMapOf` is a `LinkedHashMap`, so keys come out in insertion order, not sorted."
-    },
-    {
-      "id": "d13q18",
-      "type": "truefalse",
-      "topic": "buildList",
-      "difficulty": "Medium",
-      "question": "Inside `buildList` the receiver is a `MutableList`, but the value it returns has the read-only type `List`.",
-      "code": "val items: List<String> = buildList {\n    add(\"header\")\n    addAll(listOf(\"a\", \"b\"))\n}",
-      "options": [
-        "True",
-        "False"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`buildList` gives the lambda a `MutableList<E>` receiver so you can call `add`/`addAll`, and then returns the result typed as `List<E>`. You get imperative building without exposing a mutable type."
-    },
-    {
-      "id": "d13q19",
-      "type": "mcq",
-      "topic": "casting back",
-      "difficulty": "Hard",
-      "question": "A Fragment runs the last line below. What happens?",
-      "code": "class FeedViewModel : ViewModel() {\n    private val _items = mutableListOf<Item>()\n    val items: List<Item> = _items\n}\n\n// in a Fragment\n(viewModel.items as MutableList<Item>).add(Item(\"hack\"))",
-      "options": [
-        "It succeeds, and the ViewModel's private list now has the item",
-        "Compile error: a read-only `List` can't be cast to `MutableList`",
-        "It throws ClassCastException at runtime",
-        "It throws UnsupportedOperationException"
-      ],
-      "answer": [
-        0
-      ],
-      "explanation": "`List` and `MutableList` both map to `java.util.List` at runtime, so the cast succeeds, and the object really is an `ArrayList`, so `add` works. Exposing a mutable list as `List` doesn't protect it. Expose a copy (`toList()`) or immutable state instead. You'd only get UnsupportedOperationException if the object were a fixed-size list such as the one `listOf(a, b)` returns."
-    },
-    {
-      "id": "d13q20",
-      "type": "multi",
-      "topic": "associate family",
-      "difficulty": "Hard",
-      "question": "Which statements about building maps from a `List<User>` are true? Select all that apply.",
-      "options": [
-        "`groupBy { it.city }` keeps every user for a repeated key, while `associateBy { it.city }` keeps only the last one",
-        "`associateWith { it.name }` uses the users as keys and the names as values",
-        "`associate { it.id to it.name }` builds the map from the `Pair`s the lambda returns",
-        "`associateBy` throws IllegalArgumentException when two elements produce the same key",
-        "`associateWith { it.name }` uses the names as keys and the users as values"
-      ],
-      "answer": [
-        0,
-        1,
-        2
-      ],
-      "explanation": "`associateBy` derives the key (last one wins on duplicates, no exception), `associateWith` derives the value with the element as the key, and `associate` takes a whole `Pair`. `groupBy` is the one that keeps all elements, as a `List` per key."
+      "explanation": "A channel is a queue: each element is received by exactly one receiver, so two consumers split the work (fan-out). If every consumer must see every value, use a `SharedFlow` instead, which broadcasts to all subscribers."
     }
   ]
 }
