@@ -128,5 +128,109 @@
         "gotcha": "Initializing best to 0 returns 0 for an all-negative array like [-3, -1], but the answer must be -1 since the subarray can't be empty."
       }
     ]
+  },
+  "6": {
+    "day": 6,
+    "items": [
+      {
+        "approach": "Fill nums1 from the back. Compare the largest remaining elements of both arrays and place the bigger one at the end. Once nums2 is exhausted, the rest of nums1 is already in place.",
+        "time": "O(m + n)",
+        "space": "O(1)",
+        "code": "class Solution {\n    fun merge(nums1: IntArray, m: Int, nums2: IntArray, n: Int) {\n        var i = m - 1\n        var j = n - 1\n        var k = m + n - 1\n        while (j >= 0) {\n            if (i >= 0 && nums1[i] > nums2[j]) nums1[k--] = nums1[i--]\n            else nums1[k--] = nums2[j--]\n        }\n    }\n}",
+        "gotcha": "Merging from the front overwrites unread nums1 values; loop on j >= 0, not i, so leftover nums2 elements get copied."
+      },
+      {
+        "approach": "Rotating right by k is the same as reversing the whole array, then reversing the first k elements and the remaining n - k elements. Take k modulo n first.",
+        "time": "O(n)",
+        "space": "O(1)",
+        "code": "class Solution {\n    fun rotate(nums: IntArray, k: Int) {\n        val n = nums.size\n        val r = k % n\n        reverse(nums, 0, n - 1)\n        reverse(nums, 0, r - 1)\n        reverse(nums, r, n - 1)\n    }\n\n    private fun reverse(a: IntArray, from: Int, to: Int) {\n        var l = from\n        var h = to\n        while (l < h) {\n            val t = a[l]; a[l] = a[h]; a[h] = t\n            l++; h--\n        }\n    }\n}",
+        "gotcha": "Forgetting k % n breaks when k is larger than the array length."
+      },
+      {
+        "approach": "The answer lies in 1..n+1, so use the array itself as a hash. Cyclic-sort each value v in 1..n into index v - 1 by swapping. Then the first index i where nums[i] != i + 1 gives the answer i + 1, otherwise n + 1.",
+        "time": "O(n)",
+        "space": "O(1)",
+        "code": "class Solution {\n    fun firstMissingPositive(nums: IntArray): Int {\n        val n = nums.size\n        for (i in 0 until n) {\n            while (nums[i] in 1..n && nums[nums[i] - 1] != nums[i]) {\n                val j = nums[i] - 1\n                val t = nums[i]; nums[i] = nums[j]; nums[j] = t\n            }\n        }\n        for (i in 0 until n) if (nums[i] != i + 1) return i + 1\n        return n + 1\n    }\n}",
+        "gotcha": "Checking nums[i] != i + 1 instead of nums[nums[i] - 1] != nums[i] loops forever on duplicates."
+      }
+    ]
+  },
+  "7": {
+    "day": 7,
+    "items": [
+      {
+        "approach": "Use the sign of each slot as a seen-marker. For each value v, negate nums[|v| - 1]. Indices still holding positive values correspond to the missing numbers.",
+        "time": "O(n)",
+        "space": "O(1)",
+        "code": "class Solution {\n    fun findDisappearedNumbers(nums: IntArray): List<Int> {\n        for (v in nums) {\n            val idx = Math.abs(v) - 1\n            if (nums[idx] > 0) nums[idx] = -nums[idx]\n        }\n        val result = mutableListOf<Int>()\n        for (i in nums.indices) if (nums[i] > 0) result.add(i + 1)\n        return result\n    }\n}",
+        "gotcha": "Use abs(v) when indexing because the value may already have been negated."
+      },
+      {
+        "approach": "Keep four boundaries: top, bottom, left, right. Walk right along top, down along right, left along bottom, then up along left, shrinking the matching boundary after each pass. Re-check the boundaries before the bottom and left passes.",
+        "time": "O(m * n)",
+        "space": "O(1) extra",
+        "code": "class Solution {\n    fun spiralOrder(matrix: Array<IntArray>): List<Int> {\n        val res = mutableListOf<Int>()\n        var top = 0\n        var bottom = matrix.size - 1\n        var left = 0\n        var right = matrix[0].size - 1\n        while (top <= bottom && left <= right) {\n            for (c in left..right) res.add(matrix[top][c])\n            top++\n            for (r in top..bottom) res.add(matrix[r][right])\n            right--\n            if (top <= bottom) {\n                for (c in right downTo left) res.add(matrix[bottom][c])\n                bottom--\n            }\n            if (left <= right) {\n                for (r in bottom downTo top) res.add(matrix[r][left])\n                left++\n            }\n        }\n        return res\n    }\n}",
+        "gotcha": "Without the top <= bottom and left <= right checks, a single remaining row or column is added twice."
+      },
+      {
+        "approach": "A 90-degree clockwise rotation equals a transpose followed by reversing each row. Both steps are done in place by swapping.",
+        "time": "O(n^2)",
+        "space": "O(1)",
+        "code": "class Solution {\n    fun rotate(matrix: Array<IntArray>) {\n        val n = matrix.size\n        for (i in 0 until n) {\n            for (j in i + 1 until n) {\n                val t = matrix[i][j]; matrix[i][j] = matrix[j][i]; matrix[j][i] = t\n            }\n        }\n        for (row in matrix) row.reverse()\n    }\n}",
+        "gotcha": "Transposing with j starting at 0 swaps every pair twice and leaves the matrix unchanged."
+      }
+    ]
+  },
+  "8": {
+    "day": 8,
+    "items": [
+      {
+        "approach": "Use two pointers from both ends, skipping characters that are not letters or digits. Compare the remaining characters case-insensitively and move inward.",
+        "time": "O(n)",
+        "space": "O(1)",
+        "code": "class Solution {\n    fun isPalindrome(s: String): Boolean {\n        var l = 0\n        var r = s.length - 1\n        while (l < r) {\n            while (l < r && !s[l].isLetterOrDigit()) l++\n            while (l < r && !s[r].isLetterOrDigit()) r--\n            if (s[l].lowercaseChar() != s[r].lowercaseChar()) return false\n            l++; r--\n        }\n        return true\n    }\n}",
+        "gotcha": "Digits count as alphanumeric, so \"0P\" is not a palindrome; don't filter out numbers."
+      },
+      {
+        "approach": "Because the array is sorted, start pointers at both ends. If the sum is too small move the left pointer right, if too large move the right pointer left. Return 1-indexed positions.",
+        "time": "O(n)",
+        "space": "O(1)",
+        "code": "class Solution {\n    fun twoSum(numbers: IntArray, target: Int): IntArray {\n        var l = 0\n        var r = numbers.size - 1\n        while (l < r) {\n            val sum = numbers[l] + numbers[r]\n            when {\n                sum == target -> return intArrayOf(l + 1, r + 1)\n                sum < target -> l++\n                else -> r--\n            }\n        }\n        return intArrayOf()\n    }\n}",
+        "gotcha": "The answer must be 1-indexed, not 0-indexed."
+      },
+      {
+        "approach": "Sort the array, fix each element as the first number, and run a two-pointer search for the pair summing to its negation. Skip duplicate values for the fixed element and after each found triplet to avoid repeats.",
+        "time": "O(n^2)",
+        "space": "O(1) extra (excluding output and sort)",
+        "code": "class Solution {\n    fun threeSum(nums: IntArray): List<List<Int>> {\n        nums.sort()\n        val res = mutableListOf<List<Int>>()\n        for (i in 0 until nums.size - 2) {\n            if (nums[i] > 0) break\n            if (i > 0 && nums[i] == nums[i - 1]) continue\n            var l = i + 1\n            var r = nums.size - 1\n            while (l < r) {\n                val sum = nums[i] + nums[l] + nums[r]\n                when {\n                    sum < 0 -> l++\n                    sum > 0 -> r--\n                    else -> {\n                        res.add(listOf(nums[i], nums[l], nums[r]))\n                        while (l < r && nums[l] == nums[l + 1]) l++\n                        while (l < r && nums[r] == nums[r - 1]) r--\n                        l++; r--\n                    }\n                }\n            }\n        }\n        return res\n    }\n}",
+        "gotcha": "Forgetting to skip duplicates after a match produces repeated triplets like [-1,0,1] twice."
+      }
+    ]
+  },
+  "9": {
+    "day": 9,
+    "items": [
+      {
+        "approach": "Keep a write pointer for the next non-zero slot. Swap each non-zero element into that slot, which keeps relative order and pushes zeros to the end.",
+        "time": "O(n)",
+        "space": "O(1)",
+        "code": "class Solution {\n    fun moveZeroes(nums: IntArray) {\n        var w = 0\n        for (i in nums.indices) {\n            if (nums[i] != 0) {\n                val t = nums[w]; nums[w] = nums[i]; nums[i] = t\n                w++\n            }\n        }\n    }\n}",
+        "gotcha": "Creating a new array or sorting breaks the in-place and relative-order requirements."
+      },
+      {
+        "approach": "Start with pointers at both ends; the area is limited by the shorter line. Moving the taller line inward can never help, so always move the shorter one and track the maximum area.",
+        "time": "O(n)",
+        "space": "O(1)",
+        "code": "class Solution {\n    fun maxArea(height: IntArray): Int {\n        var l = 0\n        var r = height.size - 1\n        var best = 0\n        while (l < r) {\n            best = maxOf(best, minOf(height[l], height[r]) * (r - l))\n            if (height[l] < height[r]) l++ else r--\n        }\n        return best\n    }\n}",
+        "gotcha": "Moving the taller pointer instead of the shorter one can skip the optimal pair."
+      },
+      {
+        "approach": "Water above each bar is min(maxLeft, maxRight) - height. With two pointers, process the side with the smaller max: its water is fully determined by that max, since the other side is at least as tall.",
+        "time": "O(n)",
+        "space": "O(1)",
+        "code": "class Solution {\n    fun trap(height: IntArray): Int {\n        var l = 0\n        var r = height.size - 1\n        var leftMax = 0\n        var rightMax = 0\n        var water = 0\n        while (l < r) {\n            if (height[l] < height[r]) {\n                leftMax = maxOf(leftMax, height[l])\n                water += leftMax - height[l]\n                l++\n            } else {\n                rightMax = maxOf(rightMax, height[r])\n                water += rightMax - height[r]\n                r--\n            }\n        }\n        return water\n    }\n}",
+        "gotcha": "Using only one side's running max overcounts water where the opposite side is lower."
+      }
+    ]
   }
 }
