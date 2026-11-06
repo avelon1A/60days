@@ -206,31 +206,5 @@
         "gotcha": "Forgetting to skip duplicates after a match produces repeated triplets like [-1,0,1] twice."
       }
     ]
-  },
-  "9": {
-    "day": 9,
-    "items": [
-      {
-        "approach": "Keep a write pointer for the next non-zero slot. Swap each non-zero element into that slot, which keeps relative order and pushes zeros to the end.",
-        "time": "O(n)",
-        "space": "O(1)",
-        "code": "class Solution {\n    fun moveZeroes(nums: IntArray) {\n        var w = 0\n        for (i in nums.indices) {\n            if (nums[i] != 0) {\n                val t = nums[w]; nums[w] = nums[i]; nums[i] = t\n                w++\n            }\n        }\n    }\n}",
-        "gotcha": "Creating a new array or sorting breaks the in-place and relative-order requirements."
-      },
-      {
-        "approach": "Start with pointers at both ends; the area is limited by the shorter line. Moving the taller line inward can never help, so always move the shorter one and track the maximum area.",
-        "time": "O(n)",
-        "space": "O(1)",
-        "code": "class Solution {\n    fun maxArea(height: IntArray): Int {\n        var l = 0\n        var r = height.size - 1\n        var best = 0\n        while (l < r) {\n            best = maxOf(best, minOf(height[l], height[r]) * (r - l))\n            if (height[l] < height[r]) l++ else r--\n        }\n        return best\n    }\n}",
-        "gotcha": "Moving the taller pointer instead of the shorter one can skip the optimal pair."
-      },
-      {
-        "approach": "Water above each bar is min(maxLeft, maxRight) - height. With two pointers, process the side with the smaller max: its water is fully determined by that max, since the other side is at least as tall.",
-        "time": "O(n)",
-        "space": "O(1)",
-        "code": "class Solution {\n    fun trap(height: IntArray): Int {\n        var l = 0\n        var r = height.size - 1\n        var leftMax = 0\n        var rightMax = 0\n        var water = 0\n        while (l < r) {\n            if (height[l] < height[r]) {\n                leftMax = maxOf(leftMax, height[l])\n                water += leftMax - height[l]\n                l++\n            } else {\n                rightMax = maxOf(rightMax, height[r])\n                water += rightMax - height[r]\n                r--\n            }\n        }\n        return water\n    }\n}",
-        "gotcha": "Using only one side's running max overcounts water where the opposite side is lower."
-      }
-    ]
   }
 }
