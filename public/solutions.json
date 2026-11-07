@@ -206,5 +206,31 @@
         "gotcha": "Forgetting to skip duplicates after a match produces repeated triplets like [-1,0,1] twice."
       }
     ]
+  },
+  "9": {
+    "day": 9,
+    "items": [
+      {
+        "approach": "Use a write pointer that marks where the next non-zero element belongs. Scan the array; whenever you see a non-zero, swap it into the write position and advance the pointer. This keeps the relative order of non-zeros and pushes zeros to the end in one pass.",
+        "time": "O(n)",
+        "space": "O(1)",
+        "code": "class Solution {\n    fun moveZeroes(nums: IntArray) {\n        var write = 0\n        for (i in nums.indices) {\n            if (nums[i] != 0) {\n                val tmp = nums[write]\n                nums[write] = nums[i]\n                nums[i] = tmp\n                write++\n            }\n        }\n    }\n}",
+        "gotcha": "The array must be modified in place without returning or copying it, and the relative order of non-zero elements must be preserved."
+      },
+      {
+        "approach": "Start with pointers at both ends; the area is the shorter height times the width. Always move the pointer at the shorter line inward, because moving the taller one can never increase the area while the width shrinks. Track the maximum area seen.",
+        "time": "O(n)",
+        "space": "O(1)",
+        "code": "class Solution {\n    fun maxArea(height: IntArray): Int {\n        var l = 0\n        var r = height.size - 1\n        var best = 0\n        while (l < r) {\n            best = maxOf(best, minOf(height[l], height[r]) * (r - l))\n            if (height[l] < height[r]) l++ else r--\n        }\n        return best\n    }\n}",
+        "gotcha": "Moving the taller pointer instead of the shorter one discards the optimal pair and gives wrong answers."
+      },
+      {
+        "approach": "Water above each bar is min(maxLeft, maxRight) minus its height. Use two pointers with running leftMax and rightMax; process the side with the smaller max, since that side's water level is fully determined by its own max. Accumulate trapped water as you move inward.",
+        "time": "O(n)",
+        "space": "O(1)",
+        "code": "class Solution {\n    fun trap(height: IntArray): Int {\n        var l = 0\n        var r = height.size - 1\n        var leftMax = 0\n        var rightMax = 0\n        var water = 0\n        while (l < r) {\n            if (height[l] < height[r]) {\n                leftMax = maxOf(leftMax, height[l])\n                water += leftMax - height[l]\n                l++\n            } else {\n                rightMax = maxOf(rightMax, height[r])\n                water += rightMax - height[r]\n                r--\n            }\n        }\n        return water\n    }\n}",
+        "gotcha": "Updating the max before subtracting matters; otherwise a bar taller than the current max produces negative water."
+      }
+    ]
   }
 }
