@@ -232,5 +232,31 @@
         "gotcha": "Updating the max before subtracting matters; otherwise a bar taller than the current max produces negative water."
       }
     ]
+  },
+  "10": {
+    "day": 10,
+    "items": [
+      {
+        "approach": "Keep a write pointer k for the next slot of the unique prefix. Scan with a read pointer; whenever the current value differs from the last written value, copy it to position k and advance k. Because the array is sorted, duplicates are always adjacent.",
+        "time": "O(n)",
+        "space": "O(1)",
+        "code": "class Solution {\n    fun removeDuplicates(nums: IntArray): Int {\n        if (nums.isEmpty()) return 0\n        var k = 1\n        for (i in 1 until nums.size) {\n            if (nums[i] != nums[k - 1]) {\n                nums[k++] = nums[i]\n            }\n        }\n        return k\n    }\n}",
+        "gotcha": "Compare against the last written element nums[k - 1], not nums[i - 1] after overwriting, and handle the empty array."
+      },
+      {
+        "approach": "Sort the array, then fix each index i and run two pointers lo and hi on the rest. Compare the triple sum to the target: move lo right if it is too small, hi left if too large, and return immediately on an exact match. Track the sum with the smallest absolute difference seen.",
+        "time": "O(n^2)",
+        "space": "O(log n)",
+        "code": "class Solution {\n    fun threeSumClosest(nums: IntArray, target: Int): Int {\n        nums.sort()\n        var best = nums[0] + nums[1] + nums[2]\n        for (i in 0 until nums.size - 2) {\n            if (i > 0 && nums[i] == nums[i - 1]) continue\n            var lo = i + 1\n            var hi = nums.size - 1\n            while (lo < hi) {\n                val sum = nums[i] + nums[lo] + nums[hi]\n                if (Math.abs(sum - target) < Math.abs(best - target)) best = sum\n                when {\n                    sum < target -> lo++\n                    sum > target -> hi--\n                    else -> return sum\n                }\n            }\n        }\n        return best\n    }\n}",
+        "gotcha": "Initialise best with a real triple sum rather than Int.MAX_VALUE, or the difference calculation overflows."
+      },
+      {
+        "approach": "Sort, then fix the first two indices i and j with nested loops and find the remaining pair with two pointers, giving O(n^3) overall. Skip duplicate values at every level so each quadruplet is reported once. Compute sums as Long because four ints can overflow.",
+        "time": "O(n^3)",
+        "space": "O(log n)",
+        "code": "class Solution {\n    fun fourSum(nums: IntArray, target: Int): List<List<Int>> {\n        nums.sort()\n        val n = nums.size\n        val result = mutableListOf<List<Int>>()\n        for (i in 0 until n - 3) {\n            if (i > 0 && nums[i] == nums[i - 1]) continue\n            for (j in i + 1 until n - 2) {\n                if (j > i + 1 && nums[j] == nums[j - 1]) continue\n                var lo = j + 1\n                var hi = n - 1\n                while (lo < hi) {\n                    val sum = nums[i].toLong() + nums[j] + nums[lo] + nums[hi]\n                    when {\n                        sum < target -> lo++\n                        sum > target -> hi--\n                        else -> {\n                            result.add(listOf(nums[i], nums[j], nums[lo], nums[hi]))\n                            lo++\n                            hi--\n                            while (lo < hi && nums[lo] == nums[lo - 1]) lo++\n                            while (lo < hi && nums[hi] == nums[hi + 1]) hi--\n                        }\n                    }\n                }\n            }\n        }\n        return result\n    }\n}",
+        "gotcha": "Summing four values near 10^9 overflows Int, so the sum must be computed as Long."
+      }
+    ]
   }
 }
