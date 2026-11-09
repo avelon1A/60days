@@ -258,5 +258,31 @@
         "gotcha": "Summing four values near 10^9 overflows Int, so the sum must be computed as Long."
       }
     ]
+  },
+  "11": {
+    "day": 11,
+    "items": [
+      {
+        "approach": "Use a fixed-size sliding window of length k. Compute the sum of the first k elements, then slide the window one step at a time by adding the incoming element and subtracting the outgoing one, tracking the maximum sum. Divide the best sum by k at the end.",
+        "time": "O(n)",
+        "space": "O(1)",
+        "code": "class Solution {\n    fun findMaxAverage(nums: IntArray, k: Int): Double {\n        var sum = 0L\n        for (i in 0 until k) sum += nums[i]\n        var best = sum\n        for (i in k until nums.size) {\n            sum += nums[i] - nums[i - k]\n            if (sum > best) best = sum\n        }\n        return best.toDouble() / k\n    }\n}",
+        "gotcha": "Dividing on every step or using integer division loses precision; keep the max sum and divide once as a Double at the end."
+      },
+      {
+        "approach": "Maintain a variable-size window [left, right] with no repeated characters. Store the last index seen for each character; when the current character was seen inside the window, jump left to one past that index. The answer is the largest window length seen.",
+        "time": "O(n)",
+        "space": "O(min(n, charset))",
+        "code": "class Solution {\n    fun lengthOfLongestSubstring(s: String): Int {\n        val last = IntArray(128) { -1 }\n        var left = 0\n        var best = 0\n        for (right in s.indices) {\n            val c = s[right].code\n            if (last[c] >= left) left = last[c] + 1\n            last[c] = right\n            best = maxOf(best, right - left + 1)\n        }\n        return best\n    }\n}",
+        "gotcha": "Only move left when the previous occurrence is inside the current window (last[c] >= left), otherwise left can jump backwards."
+      },
+      {
+        "approach": "Slide a window and track character counts plus the highest count of any single character seen in the window. The window is valid if its length minus that max count is at most k, since those other characters can be replaced. When it becomes invalid, shrink from the left by one; maxCount never needs to decrease because only a larger max can produce a longer answer.",
+        "time": "O(n)",
+        "space": "O(1)",
+        "code": "class Solution {\n    fun characterReplacement(s: String, k: Int): Int {\n        val count = IntArray(26)\n        var left = 0\n        var maxCount = 0\n        var best = 0\n        for (right in s.indices) {\n            maxCount = maxOf(maxCount, ++count[s[right] - 'A'])\n            while (right - left + 1 - maxCount > k) {\n                count[s[left] - 'A']--\n                left++\n            }\n            best = maxOf(best, right - left + 1)\n        }\n        return best\n    }\n}",
+        "gotcha": "Recomputing maxCount by scanning all 26 counts after each shrink is unnecessary; a stale maxCount never yields a wrong answer, only a window that can't grow."
+      }
+    ]
   }
 }
