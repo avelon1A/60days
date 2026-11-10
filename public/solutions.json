@@ -284,5 +284,31 @@
         "gotcha": "Recomputing maxCount by scanning all 26 counts after each shrink is unnecessary; a stale maxCount never yields a wrong answer, only a window that can't grow."
       }
     ]
+  },
+  "12": {
+    "day": 12,
+    "items": [
+      {
+        "approach": "Use a fixed-size sliding window of length s1.length over s2. Keep a count array of characters still needed and a 'missing' counter; adding a char that was still needed decrements missing, and removing a char that becomes needed again increments it. When missing hits zero, the window is a permutation of s1.",
+        "time": "O(n)",
+        "space": "O(1)",
+        "code": "class Solution {\n    fun checkInclusion(s1: String, s2: String): Boolean {\n        if (s1.length > s2.length) return false\n        val need = IntArray(26)\n        for (c in s1) need[c - 'a']++\n        var missing = s1.length\n        for (i in s2.indices) {\n            if (need[s2[i] - 'a']-- > 0) missing--\n            if (i >= s1.length && ++need[s2[i - s1.length] - 'a'] > 0) missing++\n            if (missing == 0) return true\n        }\n        return false\n    }\n}",
+        "gotcha": "Return false early when s1 is longer than s2, and only drop the left char once the window has exceeded s1.length."
+      },
+      {
+        "approach": "Same fixed-size window as Permutation in String, but instead of returning on the first match, record the window's start index every time all characters of p are matched. The need array plus a missing counter makes each slide O(1).",
+        "time": "O(n)",
+        "space": "O(1)",
+        "code": "class Solution {\n    fun findAnagrams(s: String, p: String): List<Int> {\n        val result = mutableListOf<Int>()\n        if (p.length > s.length) return result\n        val need = IntArray(26)\n        for (c in p) need[c - 'a']++\n        var missing = p.length\n        for (i in s.indices) {\n            if (need[s[i] - 'a']-- > 0) missing--\n            if (i >= p.length && ++need[s[i - p.length] - 'a'] > 0) missing++\n            if (missing == 0) result.add(i - p.length + 1)\n        }\n        return result\n    }\n}",
+        "gotcha": "The recorded index is the window start (i - p.length + 1), not the current index i."
+      },
+      {
+        "approach": "Variable-size sliding window: expand right until the window contains every character of t (missing == 0), then shrink from the left as far as possible while it stays valid, recording the smallest window seen. Counts can go negative for surplus characters, so a char only becomes 'missing' again when its count rises above zero.",
+        "time": "O(m + n)",
+        "space": "O(1)",
+        "code": "class Solution {\n    fun minWindow(s: String, t: String): String {\n        if (t.length > s.length) return \"\"\n        val need = IntArray(128)\n        for (c in t) need[c.code]++\n        var missing = t.length\n        var left = 0\n        var bestStart = 0\n        var bestLen = Int.MAX_VALUE\n        for (right in s.indices) {\n            if (need[s[right].code]-- > 0) missing--\n            while (missing == 0) {\n                if (right - left + 1 < bestLen) {\n                    bestLen = right - left + 1\n                    bestStart = left\n                }\n                if (++need[s[left].code] > 0) missing++\n                left++\n            }\n        }\n        return if (bestLen == Int.MAX_VALUE) \"\" else s.substring(bestStart, bestStart + bestLen)\n    }\n}",
+        "gotcha": "t can contain duplicate characters, so track counts rather than a set, and use a 128-size array since both upper and lower case letters appear."
+      }
+    ]
   }
 }
