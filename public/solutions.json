@@ -310,5 +310,31 @@
         "gotcha": "t can contain duplicate characters, so track counts rather than a set, and use a 128-size array since both upper and lower case letters appear."
       }
     ]
+  },
+  "13": {
+    "day": 13,
+    "items": [
+      {
+        "approach": "Use a variable-size sliding window over positive numbers. Expand the right end, adding to a running sum, and while the sum is at least target, record the window length and shrink from the left. Because all values are positive, shrinking always decreases the sum, so each index enters and leaves the window once.",
+        "time": "O(n)",
+        "space": "O(1)",
+        "code": "class Solution {\n    fun minSubArrayLen(target: Int, nums: IntArray): Int {\n        var left = 0\n        var sum = 0\n        var best = Int.MAX_VALUE\n        for (right in nums.indices) {\n            sum += nums[right]\n            while (sum >= target) {\n                best = minOf(best, right - left + 1)\n                sum -= nums[left++]\n            }\n        }\n        return if (best == Int.MAX_VALUE) 0 else best\n    }\n}",
+        "gotcha": "Return 0 when no subarray reaches the target instead of leaking Int.MAX_VALUE."
+      },
+      {
+        "approach": "Find the longest window containing at most k zeros. Expand the right end and count zeros; when the count exceeds k, move the left end forward until a zero leaves the window. The window length at each step is a candidate answer.",
+        "time": "O(n)",
+        "space": "O(1)",
+        "code": "class Solution {\n    fun longestOnes(nums: IntArray, k: Int): Int {\n        var left = 0\n        var zeros = 0\n        var best = 0\n        for (right in nums.indices) {\n            if (nums[right] == 0) zeros++\n            while (zeros > k) {\n                if (nums[left] == 0) zeros--\n                left++\n            }\n            best = maxOf(best, right - left + 1)\n        }\n        return best\n    }\n}",
+        "gotcha": "With k = 0 the answer is just the longest run of ones, so make sure the shrink loop still works when no flips are allowed."
+      },
+      {
+        "approach": "Keep a deque of indices whose values are in decreasing order, so the front is always the current window's maximum. Before adding index i, pop from the back every index with a value less than or equal to nums[i], since they can never be a maximum again. Drop the front when it falls out of the window, and record the front once the first full window forms.",
+        "time": "O(n)",
+        "space": "O(k)",
+        "code": "class Solution {\n    fun maxSlidingWindow(nums: IntArray, k: Int): IntArray {\n        val deque = ArrayDeque<Int>()\n        val result = IntArray(nums.size - k + 1)\n        for (i in nums.indices) {\n            if (deque.isNotEmpty() && deque.first() <= i - k) deque.removeFirst()\n            while (deque.isNotEmpty() && nums[deque.last()] <= nums[i]) deque.removeLast()\n            deque.addLast(i)\n            if (i >= k - 1) result[i - k + 1] = nums[deque.first()]\n        }\n        return result\n    }\n}",
+        "gotcha": "Store indices, not values, in the deque, or you can't tell when the maximum has slid out of the window."
+      }
+    ]
   }
 }
