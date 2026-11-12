@@ -336,5 +336,31 @@
         "gotcha": "Store indices, not values, in the deque, or you can't tell when the maximum has slid out of the window."
       }
     ]
+  },
+  "14": {
+    "day": 14,
+    "items": [
+      {
+        "approach": "Use vertical scanning: walk the characters of the first string by index and check that every other string has the same character at that position. The first mismatch, or the first string that runs out of characters, marks where the common prefix ends. If no mismatch is found, the whole first string is the prefix.",
+        "time": "O(S)",
+        "space": "O(1)",
+        "code": "class Solution {\n    fun longestCommonPrefix(strs: Array<String>): String {\n        val first = strs[0]\n        for (i in first.indices) {\n            val c = first[i]\n            for (j in 1 until strs.size) {\n                if (i >= strs[j].length || strs[j][i] != c) return first.substring(0, i)\n            }\n        }\n        return first\n    }\n}",
+        "gotcha": "Check the bounds of each other string before indexing it, because a shorter string later in the array (or an empty string) ends the prefix early."
+      },
+      {
+        "approach": "Every palindrome mirrors around a center, and there are 2n-1 possible centers: each character for odd lengths and each gap between characters for even lengths. Expand outward from every center while the characters at both ends match, and keep track of the longest span found. This needs no extra memory, unlike the DP table.",
+        "time": "O(n^2)",
+        "space": "O(1)",
+        "code": "class Solution {\n    fun longestPalindrome(s: String): String {\n        var start = 0\n        var maxLen = 0\n        fun expand(left: Int, right: Int) {\n            var l = left\n            var r = right\n            while (l >= 0 && r < s.length && s[l] == s[r]) {\n                l--\n                r++\n            }\n            if (r - l - 1 > maxLen) {\n                maxLen = r - l - 1\n                start = l + 1\n            }\n        }\n        for (i in s.indices) {\n            expand(i, i)\n            expand(i, i + 1)\n        }\n        return s.substring(start, start + maxLen)\n    }\n}",
+        "gotcha": "Expanding only from single characters misses even-length palindromes like \"abba\"; you must also expand from each pair (i, i+1)."
+      },
+      {
+        "approach": "Parse in stages: skip leading spaces, read an optional '+' or '-', then read consecutive ASCII digits and stop at the first non-digit. Build the value in a Long and clamp to the Int range as soon as it goes past a bound, so it can never overflow even with very long digit strings. If no digits are read, the result is 0.",
+        "time": "O(n)",
+        "space": "O(1)",
+        "code": "class Solution {\n    fun myAtoi(s: String): Int {\n        val n = s.length\n        var i = 0\n        while (i < n && s[i] == ' ') i++\n        var sign = 1L\n        if (i < n && (s[i] == '+' || s[i] == '-')) {\n            if (s[i] == '-') sign = -1L\n            i++\n        }\n        var result = 0L\n        while (i < n && s[i] in '0'..'9') {\n            result = result * 10 + (s[i] - '0')\n            if (sign * result >= Int.MAX_VALUE) return Int.MAX_VALUE\n            if (sign * result <= Int.MIN_VALUE) return Int.MIN_VALUE\n            i++\n        }\n        return (sign * result).toInt()\n    }\n}",
+        "gotcha": "Clamp inside the loop rather than after it, because an input like \"99999999999999999999\" overflows even a Long if you wait until the end."
+      }
+    ]
   }
 }
