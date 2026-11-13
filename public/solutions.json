@@ -362,5 +362,31 @@
         "gotcha": "Clamp inside the loop rather than after it, because an input like \"99999999999999999999\" overflows even a Long if you wait until the end."
       }
     ]
+  },
+  "15": {
+    "day": 15,
+    "items": [
+      {
+        "approach": "Scan the string and push each opening bracket onto a stack. On a closing bracket, the top of the stack must be its matching opener, otherwise the string is invalid. The string is valid only if the stack is empty at the end.",
+        "time": "O(n)",
+        "space": "O(n)",
+        "code": "class Solution {\n    fun isValid(s: String): Boolean {\n        val stack = ArrayDeque<Char>()\n        for (c in s) {\n            when (c) {\n                '(' -> stack.addLast(')')\n                '[' -> stack.addLast(']')\n                '{' -> stack.addLast('}')\n                else -> if (stack.isEmpty() || stack.removeLast() != c) return false\n            }\n        }\n        return stack.isEmpty()\n    }\n}",
+        "gotcha": "Forgetting to check that the stack is empty at the end makes inputs like \"((\" return true."
+      },
+      {
+        "approach": "Store each pushed value together with the minimum of the stack at the moment it was pushed. The current minimum is then always the min stored in the top entry, so every operation is constant time. Popping automatically restores the previous minimum.",
+        "time": "O(1)",
+        "space": "O(n)",
+        "code": "class MinStack() {\n    private val values = ArrayList<Int>()\n    private val mins = ArrayList<Int>()\n\n    fun push(`val`: Int) {\n        values.add(`val`)\n        mins.add(if (mins.isEmpty()) `val` else minOf(`val`, mins.last()))\n    }\n\n    fun pop() {\n        values.removeAt(values.size - 1)\n        mins.removeAt(mins.size - 1)\n    }\n\n    fun top(): Int = values.last()\n\n    fun getMin(): Int = mins.last()\n}",
+        "gotcha": "Keeping only a single min variable breaks after popping the minimum, because you can no longer recover the previous minimum."
+      },
+      {
+        "approach": "Push numbers onto a stack. When an operator appears, pop the right operand first, then the left operand, apply the operator, and push the result. The single value left on the stack is the answer.",
+        "time": "O(n)",
+        "space": "O(n)",
+        "code": "class Solution {\n    fun evalRPN(tokens: Array<String>): Int {\n        val stack = ArrayDeque<Int>()\n        for (t in tokens) {\n            when (t) {\n                \"+\", \"-\", \"*\", \"/\" -> {\n                    val b = stack.removeLast()\n                    val a = stack.removeLast()\n                    stack.addLast(\n                        when (t) {\n                            \"+\" -> a + b\n                            \"-\" -> a - b\n                            \"*\" -> a * b\n                            else -> a / b\n                        }\n                    )\n                }\n                else -> stack.addLast(t.toInt())\n            }\n        }\n        return stack.last()\n    }\n}",
+        "gotcha": "Popping operands in the wrong order gives wrong results for '-' and '/', and checking t[0] == '-' to detect operators misreads negative numbers like \"-11\"."
+      }
+    ]
   }
 }
