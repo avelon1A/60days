@@ -388,5 +388,31 @@
         "gotcha": "Popping operands in the wrong order gives wrong results for '-' and '/', and checking t[0] == '-' to detect operators misreads negative numbers like \"-11\"."
       }
     ]
+  },
+  "16": {
+    "day": 16,
+    "items": [
+      {
+        "approach": "Use two stacks: an input stack for pushes and an output stack for pops/peeks. Only when the output stack is empty, move every element from input to output, which reverses the order so the oldest element is on top. Each element is moved at most once, giving amortized O(1) operations.",
+        "time": "O(1) amortized",
+        "space": "O(n)",
+        "code": "class MyQueue() {\n    private val input = ArrayDeque<Int>()\n    private val output = ArrayDeque<Int>()\n\n    fun push(x: Int) {\n        input.addLast(x)\n    }\n\n    fun pop(): Int {\n        shift()\n        return output.removeLast()\n    }\n\n    fun peek(): Int {\n        shift()\n        return output.last()\n    }\n\n    fun empty(): Boolean = input.isEmpty() && output.isEmpty()\n\n    private fun shift() {\n        if (output.isEmpty()) {\n            while (input.isNotEmpty()) output.addLast(input.removeLast())\n        }\n    }\n}",
+        "gotcha": "Only transfer elements when the output stack is empty; transferring on every pop breaks the FIFO order and the amortized bound."
+      },
+      {
+        "approach": "Keep a monotonic decreasing stack of indices whose warmer day hasn't been found yet. For each day, pop every index with a lower temperature and set its answer to the index difference, then push the current index. Indices left on the stack keep the default answer 0.",
+        "time": "O(n)",
+        "space": "O(n)",
+        "code": "class Solution {\n    fun dailyTemperatures(temperatures: IntArray): IntArray {\n        val result = IntArray(temperatures.size)\n        val stack = IntArray(temperatures.size)\n        var top = -1\n        for (i in temperatures.indices) {\n            while (top >= 0 && temperatures[stack[top]] < temperatures[i]) {\n                val j = stack[top--]\n                result[j] = i - j\n            }\n            stack[++top] = i\n        }\n        return result\n    }\n}",
+        "gotcha": "Store indices, not temperatures, on the stack, and use strict < so equal temperatures don't count as warmer."
+      },
+      {
+        "approach": "Scan the string with two stacks: one for repeat counts and one for the string built before each '['. Digits accumulate into a multi-digit number; on '[' push the current count and builder and start fresh; on ']' pop them and append the current segment repeated count times to the previous builder. Letters are appended to the current builder.",
+        "time": "O(output length)",
+        "space": "O(output length)",
+        "code": "class Solution {\n    fun decodeString(s: String): String {\n        val counts = ArrayDeque<Int>()\n        val builders = ArrayDeque<StringBuilder>()\n        var current = StringBuilder()\n        var num = 0\n        for (c in s) {\n            when {\n                c.isDigit() -> num = num * 10 + (c - '0')\n                c == '[' -> {\n                    counts.addLast(num)\n                    builders.addLast(current)\n                    current = StringBuilder()\n                    num = 0\n                }\n                c == ']' -> {\n                    val k = counts.removeLast()\n                    val prev = builders.removeLast()\n                    repeat(k) { prev.append(current) }\n                    current = prev\n                }\n                else -> current.append(c)\n            }\n        }\n        return current.toString()\n    }\n}",
+        "gotcha": "Repeat counts can have multiple digits (e.g. \"12[a]\"), so build the number as num * 10 + digit and reset it after '['."
+      }
+    ]
   }
 }
