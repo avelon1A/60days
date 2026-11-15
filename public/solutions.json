@@ -414,5 +414,31 @@
         "gotcha": "Repeat counts can have multiple digits (e.g. \"12[a]\"), so build the number as num * 10 + digit and reset it after '['."
       }
     ]
+  },
+  "17": {
+    "day": 17,
+    "items": [
+      {
+        "approach": "Walk nums2 once while keeping a stack of values that are still waiting for a greater element. Each new value pops every smaller value off the stack and becomes that value's next greater element, which goes into a map. After the pass, look up each nums1 value in the map, defaulting to -1.",
+        "time": "O(n + m)",
+        "space": "O(n)",
+        "code": "class Solution {\n    fun nextGreaterElement(nums1: IntArray, nums2: IntArray): IntArray {\n        val next = HashMap<Int, Int>()\n        val stack = ArrayDeque<Int>()\n        for (x in nums2) {\n            while (stack.isNotEmpty() && stack.last() < x) next[stack.removeLast()] = x\n            stack.addLast(x)\n        }\n        return IntArray(nums1.size) { next[nums1[it]] ?: -1 }\n    }\n}",
+        "gotcha": "The answer must come from nums2's ordering, so build the map over nums2 rather than scanning from each nums1 value's own index."
+      },
+      {
+        "approach": "Use a stack to hold the asteroids that survive. A collision only happens when the incoming asteroid moves left and the top of the stack moves right. While that holds, pop smaller right-movers, destroy both on a tie, and stop if the top is bigger. Push the incoming asteroid only if it survives.",
+        "time": "O(n)",
+        "space": "O(n)",
+        "code": "class Solution {\n    fun asteroidCollision(asteroids: IntArray): IntArray {\n        val stack = ArrayDeque<Int>()\n        for (a in asteroids) {\n            var alive = true\n            while (alive && a < 0 && stack.isNotEmpty() && stack.last() > 0) {\n                val top = stack.last()\n                when {\n                    top < -a -> stack.removeLast()\n                    top == -a -> { stack.removeLast(); alive = false }\n                    else -> alive = false\n                }\n            }\n            if (alive) stack.addLast(a)\n        }\n        return stack.toIntArray()\n    }\n}",
+        "gotcha": "A left-moving asteroid followed by a right-moving one never collides, so check only for a right-mover on the stack with a left-mover incoming."
+      },
+      {
+        "approach": "Keep a stack of bar indices with increasing heights. When a shorter bar arrives, pop taller bars. For each popped bar, the current index is its right boundary and the new stack top is its left boundary, so its widest rectangle is height times width. A sentinel height of 0 at the end flushes whatever is left on the stack.",
+        "time": "O(n)",
+        "space": "O(n)",
+        "code": "class Solution {\n    fun largestRectangleArea(heights: IntArray): Int {\n        val stack = ArrayDeque<Int>()\n        var best = 0\n        for (i in 0..heights.size) {\n            val h = if (i == heights.size) 0 else heights[i]\n            while (stack.isNotEmpty() && heights[stack.last()] >= h) {\n                val height = heights[stack.removeLast()]\n                val left = if (stack.isEmpty()) -1 else stack.last()\n                best = maxOf(best, height * (i - left - 1))\n            }\n            stack.addLast(i)\n        }\n        return best\n    }\n}",
+        "gotcha": "Without the final zero-height sentinel, bars still on the stack at the end (such as a strictly increasing histogram) are never measured."
+      }
+    ]
   }
 }
