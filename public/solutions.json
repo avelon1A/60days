@@ -492,5 +492,31 @@
         "gotcha": "Comparing against nums[lo] instead of nums[hi] fails on an unrotated array, since you can't tell which side the minimum is on."
       }
     ]
+  },
+  "20": {
+    "day": 20,
+    "items": [
+      {
+        "approach": "The eating speed k is monotonic: if Koko can finish at speed k, she can finish at any faster speed. Binary search k over [1, max(piles)], and for each candidate compute the total hours as the sum of ceil(pile / k). Shrink to the left when the hours fit within h, otherwise move right.",
+        "time": "O(n log m)",
+        "space": "O(1)",
+        "code": "class Solution {\n    fun minEatingSpeed(piles: IntArray, h: Int): Int {\n        var lo = 1\n        var hi = piles.max()\n        while (lo < hi) {\n            val mid = lo + (hi - lo) / 2\n            var hours = 0L\n            for (p in piles) hours += (p + mid - 1) / mid\n            if (hours <= h) hi = mid else lo = mid + 1\n        }\n        return lo\n    }\n}",
+        "gotcha": "Accumulate hours in a Long, since summing many ceil divisions at small speeds can overflow Int."
+      },
+      {
+        "approach": "Binary search the ship capacity between max(weights), the smallest capacity that can carry every package, and sum(weights), which ships everything in one day. For a candidate capacity, greedily load packages in order and start a new day when the next package would overflow. If the days needed are at most the given days, try a smaller capacity.",
+        "time": "O(n log S)",
+        "space": "O(1)",
+        "code": "class Solution {\n    fun shipWithinDays(weights: IntArray, days: Int): Int {\n        var lo = weights.max()\n        var hi = weights.sum()\n        while (lo < hi) {\n            val mid = lo + (hi - lo) / 2\n            var need = 1\n            var load = 0\n            for (w in weights) {\n                if (load + w > mid) {\n                    need++\n                    load = 0\n                }\n                load += w\n            }\n            if (need <= days) hi = mid else lo = mid + 1\n        }\n        return lo\n    }\n}",
+        "gotcha": "Starting the lower bound at 1 instead of max(weights) lets the greedy check accept a capacity that cannot carry the heaviest package."
+      },
+      {
+        "approach": "Binary search a partition index i in the smaller array, with j = (m + n + 1) / 2 - i taken from the other array, so the left halves together hold half of all elements. The partition is correct when every element on the left is at most every element on the right, that is a[i-1] <= b[j] and b[j-1] <= a[i]. The median then comes from the max of the left side and the min of the right side, depending on whether the total length is odd or even.",
+        "time": "O(log min(m, n))",
+        "space": "O(1)",
+        "code": "class Solution {\n    fun findMedianSortedArrays(nums1: IntArray, nums2: IntArray): Double {\n        if (nums1.size > nums2.size) return findMedianSortedArrays(nums2, nums1)\n        val m = nums1.size\n        val n = nums2.size\n        val half = (m + n + 1) / 2\n        var lo = 0\n        var hi = m\n        while (lo <= hi) {\n            val i = (lo + hi) / 2\n            val j = half - i\n            val aLeft = if (i == 0) Int.MIN_VALUE else nums1[i - 1]\n            val aRight = if (i == m) Int.MAX_VALUE else nums1[i]\n            val bLeft = if (j == 0) Int.MIN_VALUE else nums2[j - 1]\n            val bRight = if (j == n) Int.MAX_VALUE else nums2[j]\n            if (aLeft <= bRight && bLeft <= aRight) {\n                val leftMax = maxOf(aLeft, bLeft)\n                return if ((m + n) % 2 == 1) leftMax.toDouble()\n                else (leftMax.toLong() + minOf(aRight, bRight)) / 2.0\n            } else if (aLeft > bRight) {\n                hi = i - 1\n            } else {\n                lo = i + 1\n            }\n        }\n        throw IllegalArgumentException()\n    }\n}",
+        "gotcha": "Search over the shorter array; searching the longer one can make j negative or past the end of the other array."
+      }
+    ]
   }
 }
