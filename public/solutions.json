@@ -518,5 +518,31 @@
         "gotcha": "Search over the shorter array; searching the longer one can make j negative or past the end of the other array."
       }
     ]
+  },
+  "21": {
+    "day": 21,
+    "items": [
+      {
+        "approach": "Binary search on the slope: compare nums[mid] with nums[mid + 1]. If the next element is larger, a peak must exist to the right, so move lo to mid + 1; otherwise a peak is at mid or to its left, so set hi = mid. The loop converges on a peak because the boundaries are treated as negative infinity.",
+        "time": "O(log n)",
+        "space": "O(1)",
+        "code": "class Solution {\n    fun findPeakElement(nums: IntArray): Int {\n        var lo = 0\n        var hi = nums.size - 1\n        while (lo < hi) {\n            val mid = lo + (hi - lo) / 2\n            if (nums[mid] < nums[mid + 1]) lo = mid + 1 else hi = mid\n        }\n        return lo\n    }\n}",
+        "gotcha": "Using lo <= hi with hi = mid loops forever; keep lo < hi so mid + 1 is always in bounds."
+      },
+      {
+        "approach": "Store, for each key, a list of (timestamp, value) pairs; since set is called with strictly increasing timestamps, each list is already sorted. For get, binary search that list for the rightmost timestamp <= the query and return its value, or an empty string if none exists.",
+        "time": "O(1) set, O(log n) get",
+        "space": "O(n)",
+        "code": "class TimeMap() {\n    private val store = HashMap<String, MutableList<Pair<Int, String>>>()\n\n    fun set(key: String, value: String, timestamp: Int) {\n        store.getOrPut(key) { mutableListOf() }.add(timestamp to value)\n    }\n\n    fun get(key: String, timestamp: Int): String {\n        val list = store[key] ?: return \"\"\n        var lo = 0\n        var hi = list.size - 1\n        var ans = \"\"\n        while (lo <= hi) {\n            val mid = lo + (hi - lo) / 2\n            if (list[mid].first <= timestamp) {\n                ans = list[mid].second\n                lo = mid + 1\n            } else {\n                hi = mid - 1\n            }\n        }\n        return ans\n    }\n}",
+        "gotcha": "If every stored timestamp is greater than the query, return an empty string instead of the earliest value."
+      },
+      {
+        "approach": "Binary search on the answer: the largest subarray sum lies between max(nums) and sum(nums). For a candidate limit, greedily pack elements into subarrays and start a new one when adding the next element would exceed the limit; if that needs at most k subarrays, the limit is feasible. Find the smallest feasible limit.",
+        "time": "O(n log S)",
+        "space": "O(1)",
+        "code": "class Solution {\n    fun splitArray(nums: IntArray, k: Int): Int {\n        var lo = nums.max()\n        var hi = nums.sum()\n        while (lo < hi) {\n            val mid = lo + (hi - lo) / 2\n            if (pieces(nums, mid) <= k) hi = mid else lo = mid + 1\n        }\n        return lo\n    }\n\n    private fun pieces(nums: IntArray, limit: Int): Int {\n        var count = 1\n        var current = 0\n        for (x in nums) {\n            if (current + x > limit) {\n                count++\n                current = x\n            } else {\n                current += x\n            }\n        }\n        return count\n    }\n}",
+        "gotcha": "The lower bound must be max(nums), not 0 or 1, or the greedy check can produce a piece that already exceeds the limit."
+      }
+    ]
   }
 }
