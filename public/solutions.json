@@ -544,5 +544,31 @@
         "gotcha": "The lower bound must be max(nums), not 0 or 1, or the greedy check can produce a piece that already exceeds the limit."
       }
     ]
+  },
+  "22": {
+    "day": 22,
+    "items": [
+      {
+        "approach": "Walk the list once while keeping a pointer to the previous node. For each node, save its next, point it back to prev, then advance both pointers. When the walk ends, prev is the new head.",
+        "time": "O(n)",
+        "space": "O(1)",
+        "code": "class Solution {\n    fun reverseList(head: ListNode?): ListNode? {\n        var prev: ListNode? = null\n        var curr = head\n        while (curr != null) {\n            val next = curr.next\n            curr.next = prev\n            prev = curr\n            curr = next\n        }\n        return prev\n    }\n}",
+        "gotcha": "Save curr.next before overwriting it, otherwise you lose the rest of the list."
+      },
+      {
+        "approach": "Use a dummy head and a tail pointer. Repeatedly attach the smaller of the two current nodes to the tail and advance that list. When one list runs out, attach the remainder of the other in one step.",
+        "time": "O(n + m)",
+        "space": "O(1)",
+        "code": "class Solution {\n    fun mergeTwoLists(list1: ListNode?, list2: ListNode?): ListNode? {\n        val dummy = ListNode(0)\n        var tail = dummy\n        var a = list1\n        var b = list2\n        while (a != null && b != null) {\n            if (a.`val` <= b.`val`) {\n                tail.next = a\n                a = a.next\n            } else {\n                tail.next = b\n                b = b.next\n            }\n            tail = tail.next!!\n        }\n        tail.next = a ?: b\n        return dummy.next\n    }\n}",
+        "gotcha": "Forgetting to attach the leftover list at the end drops the remaining nodes."
+      },
+      {
+        "approach": "Use Floyd's tortoise and hare: slow moves one step, fast moves two, and they meet inside the cycle if one exists. Then reset one pointer to head and move both one step at a time; they meet exactly at the cycle's entry node. This works because the distance from head to the entry equals the distance from the meeting point to the entry, modulo the cycle length.",
+        "time": "O(n)",
+        "space": "O(1)",
+        "code": "class Solution {\n    fun detectCycle(head: ListNode?): ListNode? {\n        var slow = head\n        var fast = head\n        while (fast?.next != null) {\n            slow = slow!!.next\n            fast = fast.next!!.next\n            if (slow === fast) {\n                var p = head\n                while (p !== slow) {\n                    p = p!!.next\n                    slow = slow!!.next\n                }\n                return p\n            }\n        }\n        return null\n    }\n}",
+        "gotcha": "Returning the meeting point itself is wrong; you must run the second phase from head to find the entry."
+      }
+    ]
   }
 }
