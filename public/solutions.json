@@ -570,5 +570,31 @@
         "gotcha": "Returning the meeting point itself is wrong; you must run the second phase from head to find the entry."
       }
     ]
+  },
+  "23": {
+    "day": 23,
+    "items": [
+      {
+        "approach": "Use slow and fast pointers. The slow pointer moves one step while the fast pointer moves two. When fast reaches the end (or its next is null), slow is at the middle; for even lengths this yields the second middle node as required.",
+        "time": "O(n)",
+        "space": "O(1)",
+        "code": "class Solution {\n    fun middleNode(head: ListNode?): ListNode? {\n        var slow = head\n        var fast = head\n        while (fast?.next != null) {\n            slow = slow?.next\n            fast = fast.next?.next\n        }\n        return slow\n    }\n}",
+        "gotcha": "Looping on fast.next.next instead of fast?.next returns the first middle for even-length lists, but the problem wants the second."
+      },
+      {
+        "approach": "Add a dummy node before head so removing the head needs no special case. Advance a fast pointer n steps ahead, then move fast and slow together until fast is at the last node. Slow is then just before the target node, so unlink slow.next.",
+        "time": "O(n)",
+        "space": "O(1)",
+        "code": "class Solution {\n    fun removeNthFromEnd(head: ListNode?, n: Int): ListNode? {\n        val dummy = ListNode(0).apply { next = head }\n        var fast: ListNode? = dummy\n        var slow: ListNode = dummy\n        repeat(n) { fast = fast?.next }\n        while (fast?.next != null) {\n            fast = fast?.next\n            slow = slow.next!!\n        }\n        slow.next = slow.next?.next\n        return dummy.next\n    }\n}",
+        "gotcha": "Without a dummy node, removing the head (n equals list length) breaks or needs a separate branch."
+      },
+      {
+        "approach": "Split the problem into three linked-list primitives. Find the middle with slow/fast pointers and cut the list there, reverse the second half in place, then merge the two halves by alternating nodes starting with the first half.",
+        "time": "O(n)",
+        "space": "O(1)",
+        "code": "class Solution {\n    fun reorderList(head: ListNode?): Unit {\n        if (head?.next == null) return\n        var slow: ListNode = head\n        var fast: ListNode? = head\n        while (fast?.next?.next != null) {\n            slow = slow.next!!\n            fast = fast.next?.next\n        }\n        var prev: ListNode? = null\n        var curr = slow.next\n        slow.next = null\n        while (curr != null) {\n            val nxt = curr.next\n            curr.next = prev\n            prev = curr\n            curr = nxt\n        }\n        var first: ListNode? = head\n        var second = prev\n        while (second != null) {\n            val n1 = first?.next\n            val n2 = second.next\n            first?.next = second\n            second.next = n1\n            first = n1\n            second = n2\n        }\n    }\n}",
+        "gotcha": "Forgetting to set slow.next = null after finding the middle leaves a cycle in the final list."
+      }
+    ]
   }
 }
