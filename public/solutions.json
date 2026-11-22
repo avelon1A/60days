@@ -596,5 +596,31 @@
         "gotcha": "Forgetting to set slow.next = null after finding the middle leaves a cycle in the final list."
       }
     ]
+  },
+  "24": {
+    "day": 24,
+    "items": [
+      {
+        "approach": "Use slow and fast pointers to find the middle of the list. Reverse the second half in place, then walk the first half and the reversed second half together, comparing values. This avoids copying the list into an array.",
+        "time": "O(n)",
+        "space": "O(1)",
+        "code": "class Solution {\n    fun isPalindrome(head: ListNode?): Boolean {\n        var slow = head\n        var fast = head\n        while (fast != null && fast.next != null) {\n            slow = slow!!.next\n            fast = fast.next!!.next\n        }\n        var prev: ListNode? = null\n        var cur = slow\n        while (cur != null) {\n            val nxt = cur.next\n            cur.next = prev\n            prev = cur\n            cur = nxt\n        }\n        var a = head\n        var b = prev\n        while (b != null) {\n            if (a!!.`val` != b.`val`) return false\n            a = a.next\n            b = b.next\n        }\n        return true\n    }\n}",
+        "gotcha": "Iterate the comparison over the reversed half, not the first half, so odd-length lists don't run past the shared middle node."
+      },
+      {
+        "approach": "Digits are stored in reverse order, so add them node by node from the head like grade-school addition. Keep a carry and build the result off a dummy head. Continue while either list has nodes or the carry is non-zero.",
+        "time": "O(max(m, n))",
+        "space": "O(1) extra (output list excluded)",
+        "code": "class Solution {\n    fun addTwoNumbers(l1: ListNode?, l2: ListNode?): ListNode? {\n        val dummy = ListNode(0)\n        var tail = dummy\n        var p = l1\n        var q = l2\n        var carry = 0\n        while (p != null || q != null || carry != 0) {\n            val sum = (p?.`val` ?: 0) + (q?.`val` ?: 0) + carry\n            carry = sum / 10\n            tail.next = ListNode(sum % 10)\n            tail = tail.next!!\n            p = p?.next\n            q = q?.next\n        }\n        return dummy.next\n    }\n}",
+        "gotcha": "Forgetting the final carry drops a digit, e.g. 5 + 5 must return 0 -> 1, not just 0."
+      },
+      {
+        "approach": "Interleave a copy after each original node (A -> A' -> B -> B'). Then each copy's random is simply original.random.next. Finally unweave the two lists, restoring the original's next pointers. This replaces the usual HashMap with O(1) extra space.",
+        "time": "O(n)",
+        "space": "O(1) extra (output list excluded)",
+        "code": "class Solution {\n    fun copyRandomList(node: Node?): Node? {\n        if (node == null) return null\n        var cur: Node? = node\n        while (cur != null) {\n            val copy = Node(cur.`val`)\n            copy.next = cur.next\n            cur.next = copy\n            cur = copy.next\n        }\n        cur = node\n        while (cur != null) {\n            cur.next!!.random = cur.random?.next\n            cur = cur.next!!.next\n        }\n        val newHead = node.next\n        cur = node\n        while (cur != null) {\n            val copy = cur.next!!\n            cur.next = copy.next\n            copy.next = copy.next?.next\n            cur = cur.next\n        }\n        return newHead\n    }\n}",
+        "gotcha": "Set all random pointers before splitting the lists, and restore the original list's next pointers or the judge will reject the result."
+      }
+    ]
   }
 }
