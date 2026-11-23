@@ -1,4 +1,4 @@
-Presentation architecture decides where your screen logic lives, how state flows to the UI, and how user actions flow back. On modern Android this means a Jetpack `ViewModel`, Kotlin `Flow`, and Compose, arranged as either MVVM or MVI. These notes cover the why, the history, Google's recommended layers, both patterns in depth with a full worked example, testing, and the interview questions you are most likely to face.
+Presentation architecture decides where your screen logic lives, how state flows to the UI, and how user actions flow back. On modern Android this means a Jetpack `ViewModel`, Kotlin `Flow`, and Compose, arranged as either MVVM or MVI. Around that sits the app-wide structure: Google's recommended layers or Clean Architecture, which decide how presentation, domain, and data code depend on each other. These notes cover the why, the history, Google's recommended layers, Clean Architecture, both patterns in depth with a full worked example, testing, and the interview questions you are most likely to face.
 
 ## Why Architecture
 
@@ -137,6 +137,471 @@ class OfflineFirstNewsRepository @Inject constructor(
 ```
 
 > **Tip:** Unidirectional data flow (UDF) is the rule that ties the layers together: state flows down (data to UI), events flow up (UI to data). Google uses the term UDF throughout its docs, so use it in interviews.
+
+## Clean Architecture
+
+### What it is and the problem it solves
+
+Clean Architecture is a set of rules for organizing a whole app. Robert C. Martin ("Uncle Bob") described it in a 2012 blog post and later in his 2017 book *Clean Architecture*. It pulls together older ideas such as Hexagonal Architecture (Ports and Adapters) and Onion Architecture. They all share one goal: keep the business rules at the center, and keep frameworks, databases, and UI at the edges.
+
+The problem it solves is coupling. In many apps the business logic knows about Retrofit response types, Room entities, and Android classes. Then a change in the API, a database migration, or a new UI toolkit forces changes deep in the logic. Logic that is mixed with framework code is also hard to unit test.
+
+Clean Architecture aims for code that is:
+
+- **Independent of frameworks.** Android, Room, and Retrofit are tools, not the center of the app.
+- **Testable.** Business rules can be tested without UI, database, or network.
+- **Independent of UI and database.** You could swap Views for Compose, or Room for something else, without touching business rules.
+
+### The concentric circles
+
+Uncle Bob draws the app as circles. Inner circles are policies (business rules). Outer circles are mechanisms (details).
+
+```text
++-----------------------------------------------------------+
+| Frameworks & Drivers                                      |
+|   Android SDK, Compose, Room, Retrofit, DataStore         |
+|  +-----------------------------------------------------+  |
+|  | Interface Adapters                                  |  |
+|  |   ViewModels, repository impls, mappers, DTOs       |  |
+|  |  +-----------------------------------------------+  |  |
+|  |  | Use Cases (application business rules)        |  |  |
+|  |  |   GetUserProfileUseCase, PlaceOrderUseCase    |  |  |
+|  |  |  +-----------------------------------------+  |  |  |
+|  |  |  | Entities (core business rules)          |  |  |  |
+|  |  |  |   User, Order, Money                    |  |  |  |
+|  |  |  +-----------------------------------------+  |  |  |
+|  |  +-----------------------------------------------+  |  |
+|  +-----------------------------------------------------+  |
++-----------------------------------------------------------+
+     Source code dependencies point INWARD only
+```
+
+- **Entities:** the core business objects and rules. They would exist even without this app. For example, "an order total cannot be negative".
+- **Use Cases:** rules specific to this app. They orchestrate entities to do one task, like "place an order".
+- **Interface Adapters:** convert data between the format the inner circles want and the format the outer tools want. Presenters, ViewModels, repository implementations, and mappers live here.
+- **Frameworks & Drivers:** the outer details: the UI toolkit, the database, the HTTP client, the OS.
+
+Uncle Bob says four circles is not a rule. You can have more or fewer. What matters is the direction of dependencies.
+
+### The Dependency Rule
+
+The one rule that makes it work: **source code dependencies can only point inward**. Nothing in an inner circle can know anything about an outer circle. No class names, no functions, no data formats.
+
+In practice that means:
+
+- An entity never imports a use case, a ViewModel, or a Room annotation.
+- A use case never imports a Retrofit type, a DTO, or `android.*`.
+- Data crossing a boundary inward is converted into a simple form the inner circle owns.
+
+Control can still flow outward at runtime. A use case calls a repository, which hits the network. The trick is that the use case only knows an **interface** that it owns. This is Dependency Inversion.
+
+> **Interview:** "The Dependency Rule says source code dependencies point only inward, toward higher-level policy. Runtime calls can go outward, but we invert those dependencies with interfaces owned by the inner layer."
+
+### Dependency Inversion in practice
+
+The domain layer defines the interface it needs. The data layer implements it. DI connects them at runtime.
+
+```kotlin
+// :domain  (pure Kotlin)
+interface UserRepository {
+    suspend fun getUser(id: String): AppResult<User>
+    fun observeUser(id: String): Flow<User?>
+}
+
+// :data  (Android library, depends on :domain)
+class UserRepositoryImpl @Inject constructor(
+    private val api: UserApi,
+    private val dao: UserDao,
+    @IoDispatcher private val io: CoroutineDispatcher,
+) : UserRepository {
+    override suspend fun getUser(id: String): AppResult<User> = withContext(io) {
+        safeCall { api.getUser(id).toDomain() }
+    }
+
+    override fun observeUser(id: String): Flow<User?> =
+        dao.observeUser(id).map { it?.toDomain() }
+}
+```
+
+```kotlin
+// :data  (Hilt lives here or in :app, never in :domain)
+@Module
+@InstallIn(SingletonComponent::class)
+abstract class UserDataModule {
+    @Binds
+    @Singleton
+    abstract fun bindUserRepository(impl: UserRepositoryImpl): UserRepository
+}
+```
+
+The arrow in the source code now goes from data to domain (`UserRepositoryImpl : UserRepository`), even though at runtime the domain calls into data. That is the whole point.
+
+> **Note:** `@Inject` comes from `javax.inject`, a tiny pure Java artifact. Using it in a pure Kotlin domain module is fine. Hilt modules, `@HiltViewModel`, and `@InstallIn` belong in Android modules.
+
+### The typical Android mapping
+
+Most Android teams collapse the circles into three layers:
+
+| Layer | Contains | Depends on |
+|---|---|---|
+| Presentation | Composables, ViewModels, UI state, UI models | Domain |
+| Domain | Entities (domain models), use cases, repository interfaces | Nothing (pure Kotlin) |
+| Data | Repository impls, data sources, DTOs, Room entities, mappers | Domain |
+
+```text
+  presentation  ------>  domain  <------  data
+  (Android)            (pure Kotlin)     (Android)
+```
+
+Domain is in the middle and knows no one. Presentation and data both point at it. The `:app` module (or DI graph) is the only place that sees everything, because it wires implementations to interfaces.
+
+### Google's guide vs Clean Architecture
+
+The layer names look the same, but the arrows are different. This is a favorite senior interview question.
+
+| Aspect | Google's guide | Clean Architecture |
+|---|---|---|
+| Dependency direction | UI to domain to data | Presentation and data both point to domain |
+| Where repositories live | Data layer (class or interface) | Interface in domain, implementation in data |
+| Domain layer | Optional | Required, it is the center |
+| Domain depends on | Data layer repositories and models | Nothing outside itself |
+| Android in domain | Not forbidden by the structure | Forbidden, pure Kotlin |
+| Models | Often shared across layers | Separate models per layer with mappers |
+| Use cases | Only when logic is reused or complex | Often one per user action |
+| Main goal | Pragmatic, scalable apps | Business rules isolated from all details |
+
+In Google's guide, a use case imports `NewsRepository` from the data layer, so domain depends on data. In Clean Architecture, the domain owns `NewsRepository` as an interface, so data depends on domain.
+
+> **Tip:** In practice many codebases are a hybrid: Google's layer names, plus repository interfaces in a pure Kotlin domain module. Say that you know both, and pick based on team size and app complexity.
+
+### Why the domain should be pure Kotlin
+
+- **Fast tests.** Pure JVM unit tests, no Robolectric, no emulator.
+- **Enforced boundaries.** If the domain is a `kotlin("jvm")` module, it cannot import `android.*` at all. The compiler guards the rule, not code review.
+- **Reuse.** The same domain code can be shared with Kotlin Multiplatform, a backend, or a CLI tool.
+- **Stability.** Android and library upgrades do not touch your business rules.
+
+Things that are fine in domain: `kotlinx.coroutines` (`Flow`, `suspend`), `javax.inject`, `java.time`. Things that are not: `Context`, `LiveData`, `Parcelable`, Room or Retrofit annotations, `@StringRes`.
+
+### Use cases in depth
+
+A use case (also called an interactor) represents **one action the user or system can take**. It has a single public entry point, usually `operator fun invoke`, so callers write `getUserProfile(id)` as if it were a function.
+
+```kotlin
+class GetUserProfileUseCase @Inject constructor(
+    private val userRepository: UserRepository,
+    private val sessionRepository: SessionRepository,
+) {
+    suspend operator fun invoke(userId: String): AppResult<UserProfile> {
+        val myId = sessionRepository.currentUserId()
+        return userRepository.getUser(userId).map { user ->
+            UserProfile(
+                user = user,
+                isMe = user.id == myId,
+                canMessage = user.id != myId && !user.isBlocked,
+            )
+        }
+    }
+}
+```
+
+Good use cases:
+
+- **Do one thing.** Name it verb + noun: `GetUserProfileUseCase`, `PlaceOrderUseCase`.
+- **Combine repositories.** The ViewModel should not need to know that a profile needs both the user and the session.
+- **Hold real business rules.** "You cannot message yourself or a blocked user" is a rule. It belongs here, not in a composable or a ViewModel.
+- **Are main-safe.** Repositories already switch threads. If a use case does heavy CPU work, it moves it off main with an injected dispatcher.
+- **Are stateless.** No mutable fields. That makes them cheap to create and safe to share.
+
+Use cases can also return `Flow` when the result changes over time:
+
+```kotlin
+class ObserveUnreadCountUseCase @Inject constructor(
+    private val messages: MessageRepository,
+    private val settings: SettingsRepository,
+) {
+    operator fun invoke(): Flow<Int> =
+        combine(messages.observeUnread(), settings.observeMutedChats()) { unread, muted ->
+            unread.count { it.chatId !in muted }
+        }
+}
+```
+
+**The pass-through smell.** This adds a file and a test but no value:
+
+```kotlin
+class GetUserUseCase @Inject constructor(private val repo: UserRepository) {
+    suspend operator fun invoke(id: String) = repo.getUser(id)
+}
+```
+
+Some strict teams accept pass-throughs for consistency ("ViewModels only ever talk to use cases"). That is a valid team rule, but know the cost: more files, more indirection, and nothing new to test. The pragmatic choice is to let a ViewModel call the repository interface directly until there is real logic to extract.
+
+> **Interview:** "A use case should earn its place. If it only forwards one call, I skip it or treat it as a team convention, not a rule. I add one when there is a business rule, when it combines repositories, or when several ViewModels need the same logic."
+
+### Models per layer and mappers
+
+Each layer gets its own model for the same concept:
+
+- **DTO** (data): mirrors the JSON. Nullable fields, API naming, `@Serializable`.
+- **Entity** (data): mirrors a Room table. `@Entity`, column types.
+- **Domain model** (domain): what the business means. Non-null, typed, no annotations.
+- **UI model** (presentation): what the screen needs. Formatted strings, flags, resource ids.
+
+```text
+UserDto (JSON)  --toDomain()-->  User  --toUi()-->  ProfileUi
+UserEntity (Room) -toDomain()-/
+```
+
+Mappers live in the **outer** layer of each boundary, because only the outer layer knows both types. `UserDto.toDomain()` lives in data. `User.toUi()` lives in presentation. The domain never knows about DTOs or UI models.
+
+```kotlin
+// :data
+@Serializable
+data class UserDto(
+    @SerialName("id") val id: String,
+    @SerialName("display_name") val displayName: String?,
+    @SerialName("created_at") val createdAt: String,
+    @SerialName("blocked") val blocked: Boolean? = null,
+)
+
+fun UserDto.toDomain() = User(
+    id = id,
+    name = displayName ?: "Unknown",
+    joinedAt = Instant.parse(createdAt),
+    isBlocked = blocked ?: false,
+)
+```
+
+Why bother: an API rename now changes one DTO and one mapper, not every screen. Nullability and defaults are handled once, at the edge.
+
+The trade-off is **boilerplate**. For a simple read-only screen, three almost identical classes and two mappers can feel silly. A pragmatic rule: always keep DTOs separate from domain models (APIs change without warning), but let presentation use the domain model directly when the screen needs no formatting.
+
+### Worked example: user profile, file by file
+
+One feature, all layers. The `UserRepository`, `UserRepositoryImpl`, Hilt binding, `UserDto`, and use case were shown above.
+
+```text
+domain/
+  model/User.kt, UserProfile.kt, AppResult.kt, DomainError.kt
+  repository/UserRepository.kt, SessionRepository.kt
+  usecase/GetUserProfileUseCase.kt
+data/
+  remote/UserApi.kt, UserDto.kt
+  mapper/UserMappers.kt
+  repository/UserRepositoryImpl.kt
+  di/UserDataModule.kt
+presentation/profile/
+  ProfileUiState.kt, ProfileViewModel.kt, ProfileScreen.kt
+```
+
+The domain models are plain data classes:
+
+```kotlin
+data class User(
+    val id: String,
+    val name: String,
+    val joinedAt: Instant,
+    val isBlocked: Boolean,
+)
+
+data class UserProfile(val user: User, val isMe: Boolean, val canMessage: Boolean)
+```
+
+The ViewModel only knows the use case and maps to UI:
+
+```kotlin
+@HiltViewModel
+class ProfileViewModel @Inject constructor(
+    private val getUserProfile: GetUserProfileUseCase,
+    savedStateHandle: SavedStateHandle,
+) : ViewModel() {
+    private val userId: String = checkNotNull(savedStateHandle["userId"])
+    private val _uiState = MutableStateFlow<ProfileUiState>(ProfileUiState.Loading)
+    val uiState: StateFlow<ProfileUiState> = _uiState.asStateFlow()
+
+    init { load() }
+
+    fun onRetry() = load()
+
+    private fun load() {
+        viewModelScope.launch {
+            _uiState.value = ProfileUiState.Loading
+            _uiState.value = when (val result = getUserProfile(userId)) {
+                is AppResult.Success -> ProfileUiState.Content(result.data.toUi())
+                is AppResult.Failure -> ProfileUiState.Error(result.error.toMessageRes())
+            }
+        }
+    }
+}
+```
+
+The UI state and the presentation mapper:
+
+```kotlin
+sealed interface ProfileUiState {
+    data object Loading : ProfileUiState
+    data class Content(val profile: ProfileUi) : ProfileUiState
+    data class Error(@StringRes val messageRes: Int) : ProfileUiState
+}
+
+data class ProfileUi(
+    val name: String,
+    val joinedText: String,
+    val showEditButton: Boolean,
+    val showMessageButton: Boolean,
+)
+
+fun UserProfile.toUi() = ProfileUi(
+    name = user.name,
+    joinedText = DateTimeFormatter.ofPattern("MMM yyyy")
+        .withZone(ZoneId.systemDefault()).format(user.joinedAt),
+    showEditButton = isMe,
+    showMessageButton = canMessage,
+)
+```
+
+The composable stays the same as any other MVVM screen: a Route collects `uiState` with `collectAsStateWithLifecycle()` and a stateless Screen renders it.
+
+### Error handling across layers
+
+Each layer speaks its own error language. Exceptions from libraries should not leak into the domain, and domain errors should not reach the UI as raw text.
+
+```kotlin
+// :domain
+sealed interface AppResult<out T> {
+    data class Success<T>(val data: T) : AppResult<T>
+    data class Failure(val error: DomainError) : AppResult<Nothing>
+}
+
+sealed interface DomainError {
+    data object NoNetwork : DomainError
+    data object NotFound : DomainError
+    data object Unauthorized : DomainError
+    data class Unknown(val cause: Throwable) : DomainError
+}
+
+inline fun <T, R> AppResult<T>.map(transform: (T) -> R): AppResult<R> = when (this) {
+    is AppResult.Success -> AppResult.Success(transform(data))
+    is AppResult.Failure -> this
+}
+```
+
+The data layer translates library exceptions into domain errors. It catches only the types it expects, so `CancellationException` still propagates.
+
+```kotlin
+// :data
+suspend fun <T> safeCall(block: suspend () -> T): AppResult<T> = try {
+    AppResult.Success(block())
+} catch (e: IOException) {
+    AppResult.Failure(DomainError.NoNetwork)
+} catch (e: HttpException) {
+    AppResult.Failure(
+        when (e.code()) {
+            401 -> DomainError.Unauthorized
+            404 -> DomainError.NotFound
+            else -> DomainError.Unknown(e)
+        }
+    )
+}
+```
+
+The presentation layer turns domain errors into something the user can read:
+
+```kotlin
+@StringRes
+fun DomainError.toMessageRes(): Int = when (this) {
+    DomainError.NoNetwork -> R.string.error_no_network
+    DomainError.NotFound -> R.string.error_user_not_found
+    DomainError.Unauthorized -> R.string.error_signed_out
+    is DomainError.Unknown -> R.string.error_generic
+}
+```
+
+The flow is: `IOException` (data) becomes `DomainError.NoNetwork` (domain), which becomes `R.string.error_no_network` (presentation). Because `DomainError` is sealed, the `when` is exhaustive. Add a new error case and the compiler shows every place that must handle it.
+
+> **Pitfall:** Do not name your result type `Result` if you also use Kotlin's built-in `kotlin.Result`. The clash leads to confusing imports. Also avoid `runCatching` around suspend calls, because it swallows `CancellationException`.
+
+### Gradle module structure
+
+Layers can be packages in one module, but modules let the compiler enforce the Dependency Rule. Two common shapes:
+
+```text
+By layer                      By feature, layers inside
+:app                          :app
+:presentation                 :feature:profile:presentation
+:domain       (kotlin jvm)    :feature:profile:domain   (kotlin jvm)
+:data                         :feature:profile:data
+                              :core:domain  :core:data  :core:network
+```
+
+- **By layer** is simple and fine for small and medium apps. It gets crowded as the app grows, and every change rebuilds a big module.
+- **By feature** scales better for large teams. Each feature owns its layers, and shared code goes in `core` modules.
+- **api/impl:** expose only interfaces and models in `:feature:profile:api` and keep the rest in `:impl`. Other features depend on the api module only.
+
+Make the domain module a pure JVM module so Android cannot leak in:
+
+```kotlin
+// domain/build.gradle.kts
+plugins {
+    alias(libs.plugins.kotlin.jvm)
+}
+
+dependencies {
+    implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.javax.inject)
+    testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
+}
+```
+
+> **Pitfall:** Do not split into twenty modules on day one. Each module adds Gradle config and build time. Start with packages, then extract modules when build times or team boundaries hurt.
+
+### Testing benefits per layer
+
+| Layer | What to test | How |
+|---|---|---|
+| Domain entities | Business rules on models | Plain JUnit, no coroutines |
+| Use cases | Rules and combining repositories | JUnit + `runTest` + fake repositories |
+| Data | Mappers, error mapping, caching logic | JUnit for mappers, MockWebServer for API, in-memory Room |
+| Presentation | State transitions, UI mapping | `MainDispatcherRule`, fake use case inputs, Turbine |
+| UI | Rendering each state | Compose UI tests with a hand-made `UiState` |
+
+Because repositories are interfaces owned by the domain, a fake is a few lines. The use case test for "cannot message a blocked user" needs no network, no database, and no Android.
+
+### Where MVVM and MVI fit
+
+MVVM and MVI are **presentation-layer patterns**. They decide how a screen holds state and handles events. Clean Architecture is **app-wide**. It decides how the whole app is split into layers and which way dependencies point.
+
+They are not alternatives. You can use Clean Architecture with MVVM, with MVI, or with MVP. The ViewModel sits in the Interface Adapters circle: it calls use cases and adapts domain models into UI state.
+
+> **Interview:** If asked "MVVM or Clean Architecture?", correct the framing: "They work at different levels. MVVM or MVI shapes one screen. Clean Architecture shapes the whole app. I usually use them together."
+
+### When not to use it
+
+Full Clean Architecture has a real cost: more files, more mappers, more modules, and more indirection for a new developer to follow. It pays off when:
+
+- The app is large or long-lived, with many developers.
+- Business rules are complex and change often.
+- You share logic across platforms (Kotlin Multiplatform).
+
+It is over-engineering for a prototype, a small app with mostly CRUD screens, or a hackathon. A pragmatic version that keeps most of the benefit:
+
+1. Keep DTOs separate from the models the rest of the app uses.
+2. Put repository interfaces next to the domain models, in a pure Kotlin module or package.
+3. Add use cases only where there is real logic or reuse.
+4. Let presentation use domain models directly when no formatting is needed.
+5. Split into more modules only when build time or team size demands it.
+
+### Common pitfalls
+
+- **Android classes in domain.** `Context`, `LiveData`, `Parcelable`, `@StringRes`, or Room annotations in the domain break the Dependency Rule. A pure JVM module prevents this.
+- **Use cases that only forward calls.** They add files without adding behavior.
+- **One model everywhere.** Using the DTO as the domain model and the UI model couples the screen to the API. One backend rename breaks the UI.
+- **Too many modules too early.** Slow builds and Gradle pain before there is anything to isolate.
+- **Leaking exceptions.** Throwing `HttpException` up to the ViewModel means presentation now depends on Retrofit.
+- **Mappers in the wrong place.** A `toDto()` inside the domain means the domain knows about data.
+- **Dogma over value.** Following every rule on every screen, even when it only adds ceremony. The goal is isolation of business rules, not a fixed number of layers.
 
 ## Jetpack ViewModel Deep Dive
 
@@ -1131,6 +1596,26 @@ Explain the trade-off rather than picking a winner. Google-style MVVM with a sin
 
 ViewModel state is screen-level and business-related: data loaded from repositories, results of logic. `rememberSaveable` is for UI-element state such as whether a dropdown is expanded or the text in a local field. Both can survive process death if saved, but ViewModel state uses `SavedStateHandle` and composable state uses `rememberSaveable`.
 
+### Q: What is the Dependency Rule in Clean Architecture?
+
+Source code dependencies can only point inward, toward higher-level policy. Entities know nothing about use cases, use cases know nothing about ViewModels, Room, or Retrofit. Runtime calls can still go outward (a use case calls a repository that hits the network), but the inner layer owns the interface and the outer layer implements it. That is Dependency Inversion.
+
+### Q: How is Clean Architecture different from Google's recommended architecture?
+
+Google's guide has UI depending on an optional domain layer, which depends on the data layer, where repositories live. In Clean Architecture the domain is the required center: it owns the repository interfaces and depends on nothing, while both presentation and data depend on it. Clean Architecture also usually means separate models per layer with mappers. Many real apps use a hybrid: Google's layer names with repository interfaces in a pure Kotlin domain module.
+
+### Q: Why should the domain layer be pure Kotlin?
+
+So the compiler enforces the boundary: a `kotlin-jvm` module simply cannot import `android.*`. Domain tests then run as fast JVM tests with no emulator or Robolectric, the rules survive Android and library upgrades, and the code can be shared with Kotlin Multiplatform. Coroutines, `Flow`, and `javax.inject` are fine there; `Context`, `LiveData`, and Room annotations are not.
+
+### Q: Why have separate models per layer, and where do mappers live?
+
+A DTO mirrors the API, a domain model expresses business meaning, and a UI model holds what the screen displays. Separating them stops an API rename or a nullable field from rippling through every screen. Mappers live in the outer layer of each boundary, because only that layer knows both types: `UserDto.toDomain()` in data, `User.toUi()` in presentation. The cost is boilerplate, so many teams let simple screens use the domain model directly.
+
+### Q: Is a use case that just calls a repository useful?
+
+Usually not. It adds a file, a test, and a layer of indirection with no behavior. Some teams keep pass-throughs for a consistent rule that ViewModels only talk to use cases, which is a valid convention if the team agrees. I add a use case when there is a business rule, when it combines several repositories, or when several ViewModels need the same logic.
+
 ## Cheat Sheet, Practice and References
 
 ### One-screen cheat sheet
@@ -1150,6 +1635,10 @@ ViewModel state is screen-level and business-related: data loaded from repositor
 - Paging: `Pager(...).flow.cachedIn(viewModelScope)`, separate from `UiState`.
 - Testing: `MainDispatcherRule`, `runTest`, fakes, Turbine, `backgroundScope` collector for `stateIn`.
 - Never: Context in ViewModel, public MutableStateFlow, logic in composables, LiveData below UI, GlobalScope.
+- Clean Architecture: Entities, Use Cases, Interface Adapters, Frameworks & Drivers. Dependency Rule: source dependencies point inward only.
+- Clean vs Google: Google has domain depending on data; Clean puts repository interfaces in a pure Kotlin domain, and data implements them (`@Binds`).
+- Models: DTO in data, domain model in domain, UI model in presentation. Mappers live in the outer layer of each boundary.
+- Errors: data maps exceptions to a sealed `DomainError`, presentation maps that to a string resource. Skip pass-through use cases.
 
 ### Practice exercises
 
@@ -1158,6 +1647,7 @@ ViewModel state is screen-level and business-related: data loaded from repositor
 3. Take the MVVM search example and add a "recent searches" list stored in Room. Combine it with the search results so recent searches show when the query is blank. Write a Turbine test with a fake repository.
 4. Add Paging 3 to a feed screen. Show a full-screen loader on first load, an inline retry footer on append error, and an empty state. Keep `PagingData` out of the `UiState`.
 5. Split a small app into modules: `:app`, `:feature:search`, `:feature:detail`, `:core:data`, `:core:model`, `:core:testing`. Make sure the two features do not depend on each other, and put `MainDispatcherRule` and fakes in `:core:testing`.
+6. Refactor the search example to Clean Architecture: move `SearchRepository` and a domain `Item` into a pure `kotlin-jvm` `:domain` module, add a `SearchItemDto` and mapper in `:data`, map `IOException` to a sealed `DomainError`, and map that to a string resource in the ViewModel. Confirm that importing `android.content.Context` in `:domain` fails to compile.
 
 ### References
 
@@ -1179,3 +1669,4 @@ ViewModel state is screen-level and business-related: data loaded from repositor
 - [Guide to Android app modularization](https://developer.android.com/topic/modularization)
 - [Now in Android sample](https://github.com/android/nowinandroid)
 - [Turbine](https://github.com/cashapp/turbine)
+- [The Clean Architecture, Robert C. Martin (2012)](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html)

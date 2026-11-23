@@ -8,7 +8,7 @@
         { "id": "kotlin", "title": "Kotlin (master it)", "icon": "🟪", "file": "kotlin.md", "summary": "Type system, functions, classes, generics, delegation, collections, interop and what the compiler generates." },
         { "id": "coroutines-flow", "title": "Coroutines & Flow", "icon": "🌊", "file": "coroutines-flow.md", "summary": "Suspend functions under the hood, structured concurrency, cancellation, exceptions, Flow, StateFlow and testing." },
         { "id": "compose", "title": "Compose", "icon": "🎨", "file": "compose.md", "summary": "Phases, state, recomposition, side effects, modifiers, layouts, lists, animation and performance." },
-        { "id": "mvvm-mvi", "title": "MVVM/MVI", "icon": "🏛️", "file": "mvvm-mvi.md", "summary": "App layers, ViewModel, UI state, events, reducers and a full feature built both ways." },
+        { "id": "mvvm-mvi", "title": "MVVM/MVI", "icon": "🏛️", "file": "mvvm-mvi.md", "summary": "App layers, Clean Architecture, ViewModel, UI state, events, reducers and a full feature built both ways." },
         { "id": "room", "title": "Room", "icon": "🗄️", "file": "room.md", "summary": "Entities, DAOs, Flow queries, relations, transactions, migrations, offline-first and testing." },
         { "id": "retrofit-ktor", "title": "Retrofit/Ktor", "icon": "🌐", "file": "retrofit-ktor.md", "summary": "HTTP basics, Retrofit and OkHttp, interceptors, token refresh, Ktor Client, error handling and testing." }
       ]
