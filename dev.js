@@ -6,7 +6,7 @@ import { startLeetcodePoller } from "./lib/leetcode.js";
 
 const PORT = Number(process.env.PORT || 3000);
 const PUBLIC = path.join(path.dirname(new URL(import.meta.url).pathname), "public");
-const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".json": "application/json", ".css": "text/css", ".svg": "image/svg+xml" };
+const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".json": "application/json", ".css": "text/css", ".svg": "image/svg+xml", ".md": "text/markdown; charset=utf-8" };
 
 http.createServer(async (req, res) => {
   if (req.url.startsWith("/api/")) return handler(req, res);
