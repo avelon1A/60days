@@ -622,5 +622,31 @@
         "gotcha": "Set all random pointers before splitting the lists, and restore the original list's next pointers or the judge will reject the result."
       }
     ]
+  },
+  "25": {
+    "day": 25,
+    "items": [
+      {
+        "approach": "Walk two pointers, one from each head. When a pointer reaches the end, move it to the head of the other list. Both pointers then travel lenA + lenB steps, so they meet at the intersection node or both reach null together.",
+        "time": "O(m + n)",
+        "space": "O(1)",
+        "code": "class Solution {\n    fun getIntersectionNode(headA: ListNode?, headB: ListNode?): ListNode? {\n        var a = headA\n        var b = headB\n        while (a !== b) {\n            a = if (a == null) headB else a.next\n            b = if (b == null) headA else b.next\n        }\n        return a\n    }\n}",
+        "gotcha": "Compare node identity (===), not values, because two different nodes can hold the same value."
+      },
+      {
+        "approach": "Use merge sort on the list. Find the middle with slow/fast pointers, cut the list in two, sort each half recursively, then merge the two sorted halves with a dummy head. A linked list merge needs no extra array, which makes merge sort the natural fit here.",
+        "time": "O(n log n)",
+        "space": "O(log n)",
+        "code": "class Solution {\n    fun sortList(head: ListNode?): ListNode? {\n        if (head?.next == null) return head\n        var slow: ListNode = head\n        var fast: ListNode? = head.next\n        while (fast?.next != null) {\n            slow = slow.next!!\n            fast = fast.next!!.next\n        }\n        val mid = slow.next\n        slow.next = null\n        return merge(sortList(head), sortList(mid))\n    }\n\n    private fun merge(l1: ListNode?, l2: ListNode?): ListNode? {\n        val dummy = ListNode(0)\n        var tail = dummy\n        var a = l1\n        var b = l2\n        while (a != null && b != null) {\n            if (a.`val` <= b.`val`) {\n                tail.next = a\n                a = a.next\n            } else {\n                tail.next = b\n                b = b.next\n            }\n            tail = tail.next!!\n        }\n        tail.next = a ?: b\n        return dummy.next\n    }\n}",
+        "gotcha": "Start fast at head.next, not head; otherwise a two-node list never splits and the recursion never ends."
+      },
+      {
+        "approach": "Keep a pointer to the node before the current group. Check that k more nodes exist; if not, stop and leave the rest as it is. Reverse the group in place, with prev starting at the node after the group so the reversed tail links forward. Then attach the group's new head to groupPrev and move groupPrev to the group's old head, which is now its tail.",
+        "time": "O(n)",
+        "space": "O(1)",
+        "code": "class Solution {\n    fun reverseKGroup(head: ListNode?, k: Int): ListNode? {\n        val dummy = ListNode(0)\n        dummy.next = head\n        var groupPrev: ListNode = dummy\n        while (true) {\n            var kth: ListNode? = groupPrev\n            repeat(k) { kth = kth?.next }\n            val end = kth ?: break\n            val groupNext = end.next\n            var prev: ListNode? = groupNext\n            var curr = groupPrev.next\n            while (curr !== groupNext) {\n                val next = curr!!.next\n                curr.next = prev\n                prev = curr\n                curr = next\n            }\n            val first = groupPrev.next!!\n            groupPrev.next = end\n            groupPrev = first\n        }\n        return dummy.next\n    }\n}",
+        "gotcha": "Leave the last group unreversed when it has fewer than k nodes; check that k nodes exist before you start reversing."
+      }
+    ]
   }
 }
