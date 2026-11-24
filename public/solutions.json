@@ -648,5 +648,31 @@
         "gotcha": "Leave the last group unreversed when it has fewer than k nodes; check that k nodes exist before you start reversing."
       }
     ]
+  },
+  "26": {
+    "day": 26,
+    "items": [
+      {
+        "approach": "The depth of a tree is one plus the larger depth of its two subtrees. Recurse on left and right, return 0 for a null node. This is a straightforward post-order DFS.",
+        "time": "O(n)",
+        "space": "O(h)",
+        "code": "class Solution {\n    fun maxDepth(root: TreeNode?): Int {\n        if (root == null) return 0\n        return 1 + maxOf(maxDepth(root.left), maxDepth(root.right))\n    }\n}",
+        "gotcha": "A skewed tree makes recursion depth O(n), so for very deep trees an iterative BFS avoids stack overflow."
+      },
+      {
+        "approach": "Swap the left and right children of every node. Recursively invert both subtrees, then assign them to the opposite sides. Saving the inverted results before assigning avoids overwriting a child you still need.",
+        "time": "O(n)",
+        "space": "O(h)",
+        "code": "class Solution {\n    fun invertTree(root: TreeNode?): TreeNode? {\n        if (root == null) return null\n        val left = invertTree(root.left)\n        root.left = invertTree(root.right)\n        root.right = left\n        return root\n    }\n}",
+        "gotcha": "Assigning root.left = invertTree(root.right) before saving the original left loses the left subtree."
+      },
+      {
+        "approach": "Use BFS with a queue. At the start of each level, record the queue size; pop exactly that many nodes, collecting their values and enqueueing their children. Each batch forms one level of the result.",
+        "time": "O(n)",
+        "space": "O(n)",
+        "code": "class Solution {\n    fun levelOrder(root: TreeNode?): List<List<Int>> {\n        val result = mutableListOf<List<Int>>()\n        if (root == null) return result\n        val queue = ArrayDeque<TreeNode>()\n        queue.addLast(root)\n        while (queue.isNotEmpty()) {\n            val size = queue.size\n            val level = ArrayList<Int>(size)\n            repeat(size) {\n                val node = queue.removeFirst()\n                level.add(node.`val`)\n                node.left?.let { queue.addLast(it) }\n                node.right?.let { queue.addLast(it) }\n            }\n            result.add(level)\n        }\n        return result\n    }\n}",
+        "gotcha": "Reading queue.size inside the loop condition instead of capturing it first mixes nodes from the next level into the current one."
+      }
+    ]
   }
 }
