@@ -674,5 +674,31 @@
         "gotcha": "Reading queue.size inside the loop condition instead of capturing it first mixes nodes from the next level into the current one."
       }
     ]
+  },
+  "27": {
+    "day": 27,
+    "items": [
+      {
+        "approach": "Recursively compare both trees in lockstep. If both nodes are null they match; if exactly one is null or their values differ they don't. Otherwise the trees are the same only if both left subtrees and both right subtrees are the same.",
+        "time": "O(n)",
+        "space": "O(h)",
+        "code": "class Solution {\n    fun isSameTree(p: TreeNode?, q: TreeNode?): Boolean {\n        if (p == null && q == null) return true\n        if (p == null || q == null || p.`val` != q.`val`) return false\n        return isSameTree(p.left, q.left) && isSameTree(p.right, q.right)\n    }\n}",
+        "gotcha": "Checking only values without handling the case where exactly one node is null leads to a null-pointer crash or a wrong true."
+      },
+      {
+        "approach": "Do a post-order DFS that returns each node's height. At every node, the longest path passing through it is leftHeight + rightHeight edges, so track the maximum of that across all nodes. The diameter need not pass through the root.",
+        "time": "O(n)",
+        "space": "O(h)",
+        "code": "class Solution {\n    private var best = 0\n\n    fun diameterOfBinaryTree(root: TreeNode?): Int {\n        best = 0\n        height(root)\n        return best\n    }\n\n    private fun height(node: TreeNode?): Int {\n        if (node == null) return 0\n        val l = height(node.left)\n        val r = height(node.right)\n        best = maxOf(best, l + r)\n        return 1 + maxOf(l, r)\n    }\n}",
+        "gotcha": "Returning only the path through the root misses longer paths entirely inside one subtree, and the answer counts edges, not nodes."
+      },
+      {
+        "approach": "Run a level-order BFS and record the last node of each level, which is the one visible from the right. Process exactly the queue's current size per level so levels don't mix.",
+        "time": "O(n)",
+        "space": "O(w)",
+        "code": "class Solution {\n    fun rightSideView(root: TreeNode?): List<Int> {\n        val result = mutableListOf<Int>()\n        if (root == null) return result\n        val queue = ArrayDeque<TreeNode>()\n        queue.addLast(root)\n        while (queue.isNotEmpty()) {\n            val size = queue.size\n            for (i in 0 until size) {\n                val node = queue.removeFirst()\n                if (i == size - 1) result.add(node.`val`)\n                node.left?.let { queue.addLast(it) }\n                node.right?.let { queue.addLast(it) }\n            }\n        }\n        return result\n    }\n}",
+        "gotcha": "Just following right children is wrong: a left-subtree node is visible when the right subtree is shallower."
+      }
+    ]
   }
 }
