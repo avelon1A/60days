@@ -726,5 +726,31 @@
         "gotcha": "Collecting the full in-order list wastes O(n) time and space when you can stop as soon as the kth node is popped."
       }
     ]
+  },
+  "29": {
+    "day": 29,
+    "items": [
+      {
+        "approach": "Walk every node of root and, at each one, check whether the tree rooted there is identical to subRoot. Identity is checked with a standard recursive sameTree comparison of values and both children. Short-circuit as soon as any match is found.",
+        "time": "O(m * n)",
+        "space": "O(h)",
+        "code": "class Solution {\n    fun isSubtree(root: TreeNode?, subRoot: TreeNode?): Boolean {\n        if (subRoot == null) return true\n        if (root == null) return false\n        return sameTree(root, subRoot) || isSubtree(root.left, subRoot) || isSubtree(root.right, subRoot)\n    }\n\n    private fun sameTree(a: TreeNode?, b: TreeNode?): Boolean {\n        if (a == null || b == null) return a == b\n        return a.`val` == b.`val` && sameTree(a.left, b.left) && sameTree(a.right, b.right)\n    }\n}",
+        "gotcha": "Matching values alone is not enough: the candidate subtree must match subRoot all the way down, including where its leaves end (no extra descendants)."
+      },
+      {
+        "approach": "Recurse post-order: if the current node is null, p or q, return it. Otherwise search both subtrees. If both sides return non-null, p and q are split across this node so it is the LCA; otherwise bubble up whichever side found something.",
+        "time": "O(n)",
+        "space": "O(h)",
+        "code": "class Solution {\n    fun lowestCommonAncestor(root: TreeNode?, p: TreeNode?, q: TreeNode?): TreeNode? {\n        if (root == null || root === p || root === q) return root\n        val left = lowestCommonAncestor(root.left, p, q)\n        val right = lowestCommonAncestor(root.right, p, q)\n        return when {\n            left != null && right != null -> root\n            left != null -> left\n            else -> right\n        }\n    }\n}",
+        "gotcha": "A node can be its own ancestor, so when p is an ancestor of q the answer is p itself, which the early return handles without searching below it."
+      },
+      {
+        "approach": "The first preorder element is the root; its position in inorder splits the left and right subtrees. Precompute a value-to-index map of inorder for O(1) lookups, and consume preorder with a single moving pointer while recursing on inorder bounds, building the left subtree before the right.",
+        "time": "O(n)",
+        "space": "O(n)",
+        "code": "class Solution {\n    private var preIdx = 0\n    private lateinit var pre: IntArray\n    private val inPos = HashMap<Int, Int>()\n\n    fun buildTree(preorder: IntArray, inorder: IntArray): TreeNode? {\n        pre = preorder\n        preIdx = 0\n        inPos.clear()\n        inorder.forEachIndexed { i, v -> inPos[v] = i }\n        return build(0, inorder.size - 1)\n    }\n\n    private fun build(lo: Int, hi: Int): TreeNode? {\n        if (lo > hi) return null\n        val rootVal = pre[preIdx++]\n        val node = TreeNode(rootVal)\n        val mid = inPos.getValue(rootVal)\n        node.left = build(lo, mid - 1)\n        node.right = build(mid + 1, hi)\n        return node\n    }\n}",
+        "gotcha": "You must build the left subtree before the right because the preorder pointer advances in root-left-right order; swapping them silently produces a wrong tree."
+      }
+    ]
   }
 }
