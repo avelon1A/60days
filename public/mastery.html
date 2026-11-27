@@ -27,12 +27,18 @@
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #0b1220; --card: #121b2e; --line: #243149; --line-2: #1b2640; --fg: #e6edf7; --muted: #9aa8bd; --faint: #6b7a92;
-  --blue: #3b82f6; --blue-soft: #1c3253; --blue-ink: #bfdbfe;
-  --easy: #4ade80; --easy-bg: #11331f; --med: #fbbf24; --med-bg: #3a2b0c; --hard: #f87171; --hard-bg: #3d1616;
-  --purple: #c4b5fd; --purple-bg: #2a2147;
-  --code-bg: #0e1626; --strong: #3a4a66; --shadow: rgba(0, 0, 0, .45);
+  --bg: #0b0c14; --card: #0f101a; --line: rgba(147, 157, 184, .13); --line-2: rgba(147, 157, 184, .08); --fg: #f1f3f9; --muted: #939db8; --faint: #6b7390;
+  --blue: #7c87f7; --blue-soft: rgba(124, 135, 247, .14); --blue-ink: #c7ccff;
+  --easy: #4ade80; --easy-bg: rgba(74, 222, 128, .08); --med: #fbbf24; --med-bg: rgba(251, 191, 36, .08); --hard: #f87171; --hard-bg: rgba(248, 113, 113, .08);
+  --purple: #c4b5fd; --purple-bg: rgba(196, 181, 253, .08);
+  --code-bg: #0d0e17; --strong: rgba(147, 157, 184, .3); --shadow: rgba(0, 0, 0, .5);
 }
+:root[data-theme="dark"] body { background: radial-gradient(900px 380px at 50% -160px, rgba(124, 135, 247, .18), transparent 70%) no-repeat, var(--bg); }
+:root[data-theme="dark"] header { background: rgba(11, 12, 20, .78); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-bottom-color: var(--line-2); }
+:root[data-theme="dark"] .doc h1 .tt { background: linear-gradient(180deg, #fff 30%, #9aa3c0); -webkit-background-clip: text; background-clip: text; color: transparent; }
+:root[data-theme="dark"] .eyebrow { color: var(--blue); }
+:root[data-theme="dark"] .prog div { background: linear-gradient(90deg, #5b63d3, #7c87f7); }
+:root[data-theme="dark"] .md pre .lang { color: var(--muted); }
 * { box-sizing: border-box; }
 html { scroll-padding-top: 72px; }
 body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.65 var(--sans); }
@@ -145,7 +151,7 @@ main { display: grid; grid-template-columns: 290px minmax(0, 1fr); gap: 22px; pa
 <script>
 function applyTheme(t) {
   document.documentElement.dataset.theme = t;
-  document.querySelector('meta[name="theme-color"]').content = t === "dark" ? "#121b2e" : "#ffffff";
+  document.querySelector('meta[name="theme-color"]').content = t === "dark" ? "#0b0c14" : "#ffffff";
   document.querySelectorAll("[data-theme-toggle]").forEach(b => {
     b.textContent = t === "dark" ? "☀️" : "🌙";
     b.setAttribute("aria-label", t === "dark" ? "Switch to light mode" : "Switch to dark mode");
@@ -331,7 +337,7 @@ async function renderDoc() {
     el("div", { class: "doc-top" },
       el("div", {},
         el("div", { class: "eyebrow" }, `Level ${t.level.level} · ${t.level.title}`),
-        el("h1", {}, t.icon + " " + t.title),
+        el("h1", {}, t.icon + " ", el("span", { class: "tt" }, t.title)),
         el("p", { class: "sum" }, t.summary)),
       el("button", { class: "done-btn", "aria-pressed": done ? "true" : "false", onclick: () => { setDone(id, !doneSet().has(id)); renderDoc(); } },
         done ? "✓ Done" : "Mark as done")),

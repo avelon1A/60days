@@ -24,13 +24,30 @@
   --sans: "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
+:root { --on-blue: #fff; --blue-fill: var(--blue); }
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #0b1220; --card: #121b2e; --line: #243149; --line-2: #1b2640; --fg: #e6edf7; --muted: #9aa8bd; --faint: #6b7a92;
-  --blue: #3b82f6; --blue-soft: #1c3253; --blue-ink: #bfdbfe;
-  --easy: #4ade80; --easy-bg: #11331f; --med: #fbbf24; --med-bg: #3a2b0c; --hard: #f87171; --hard-bg: #3d1616;
-  --fire: #fb923c; --code-bg: #0e1626; --strong: #3a4a66; --foot-bg: #0f182a; --on-easy: #0b1220; --shadow: rgba(0, 0, 0, .45);
+  --bg: #0b0c14; --card: #0f101a; --line: rgba(147, 157, 184, .13); --line-2: rgba(147, 157, 184, .08); --fg: #f1f3f9; --muted: #939db8; --faint: #6b7390;
+  --blue: #7c87f7; --blue-soft: rgba(124, 135, 247, .14); --blue-ink: #c7ccff; --on-blue: #fff;
+  --blue-fill: linear-gradient(353deg, #5b63d3 18%, #7c87f7 180%);
+  --easy: #4ade80; --easy-bg: rgba(74, 222, 128, .08); --med: #fbbf24; --med-bg: rgba(251, 191, 36, .08); --hard: #f87171; --hard-bg: rgba(248, 113, 113, .08);
+  --fire: #fb923c; --code-bg: #0d0e17; --strong: rgba(147, 157, 184, .3); --foot-bg: #0d0e17; --on-easy: #0b0c14; --shadow: rgba(0, 0, 0, .5);
 }
+/* Dark mode: blue-black canvas with a soft spotlight and a faint dot grid at the top. */
+:root[data-theme="dark"] body { background: radial-gradient(900px 380px at 50% -160px, rgba(124, 135, 247, .18), transparent 70%) no-repeat, var(--bg); }
+:root[data-theme="dark"] body::after { content: ""; position: absolute; inset: 0 0 auto; height: 520px; z-index: -1; pointer-events: none; background-image: radial-gradient(rgba(147, 157, 184, .10) 1px, transparent 1px); background-size: 20px 20px; -webkit-mask: linear-gradient(#000, transparent); mask: linear-gradient(#000, transparent); }
+:root[data-theme="dark"] header { background: rgba(11, 12, 20, .78); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-bottom-color: var(--line-2); }
+:root[data-theme="dark"] .card { border-radius: 18px; }
+:root[data-theme="dark"] h1 { background: linear-gradient(180deg, #fff 30%, #9aa3c0); -webkit-background-clip: text; background-clip: text; color: transparent; }
+:root[data-theme="dark"] .btn:not(.ghost):not(.danger), :root[data-theme="dark"] .chip.done, :root[data-theme="dark"] .opt.on .key { box-shadow: inset 0 1px 3px rgba(255, 255, 255, .25); }
+:root[data-theme="dark"] .tick.on { background: var(--blue-fill); border-color: transparent; box-shadow: inset 0 1px 3px rgba(255, 255, 255, .25); }
+:root[data-theme="dark"] .tick.on svg { stroke: #fff; }
+:root[data-theme="dark"] .diff { border: 1px solid currentColor; border-color: color-mix(in srgb, currentColor 28%, transparent); border-radius: 7px; }
+:root[data-theme="dark"] .pill-btn { border-radius: 8px; background: rgba(147, 157, 184, .04); }
+:root[data-theme="dark"] .stat b, :root[data-theme="dark"] .lb-row .tot, :root[data-theme="dark"] .lb-row .rk { font-family: var(--mono); font-weight: 500; }
+:root[data-theme="dark"] .eyebrow { font-family: var(--mono); color: var(--blue); font-weight: 500; }
+:root[data-theme="dark"] .clock { background: transparent; border: 1px solid var(--line); color: #aab2cb; border-radius: 8px; }
+:root[data-theme="dark"] dialog::backdrop { background: rgba(0, 0, 0, .6); }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.6 var(--sans); }
 body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--card); }
@@ -41,11 +58,12 @@ button:focus-visible, a:focus-visible, textarea:focus-visible, input:focus-visib
 .wrap { max-width: 1120px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
 header { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--card); border-bottom: 1px solid var(--line); }
 .hbar { display: flex; align-items: center; gap: 16px; padding-block: 12px; }
-.brand { font-weight: 800; font-size: 18px; letter-spacing: -.01em; }
+.brand { font-weight: 800; font-size: 18px; letter-spacing: -.01em; white-space: nowrap; }
 .brand span { color: var(--blue); }
 .hmeta { margin-left: auto; display: flex; align-items: center; gap: 14px; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .clock { font-family: var(--mono); font-size: 12px; color: var(--blue-ink); background: var(--blue-soft); padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
 @media (max-width: 520px) { .hdate { display: none; } }
+@media (max-width: 440px) { .cl-l { display: none; } .hbar { gap: 10px; } .hmeta { gap: 8px; } .brand { font-size: 16px; } }
 .av { width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0; display: grid; place-items: center; font-size: 12px; font-weight: 700; color: #fff; text-transform: uppercase; }
 .me-btn { border: 0; padding: 0; background: none; border-radius: 50%; }
 .menu-wrap { position: relative; }
@@ -72,7 +90,7 @@ h1 small { color: var(--faint); font-size: 18px; font-weight: 700; }
 .strip { display: flex; gap: 6px; overflow-x: auto; padding: 2px 2px 8px; scrollbar-width: thin; }
 .chip { flex: 0 0 auto; width: 38px; height: 38px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); font: 600 13px var(--sans); display: grid; place-items: center; position: relative; font-variant-numeric: tabular-nums; }
 .chip.part { background: var(--blue-soft); border-color: transparent; color: var(--blue-ink); }
-.chip.done { background: var(--blue); border-color: transparent; color: #fff; }
+.chip.done { background: var(--blue-fill); border-color: transparent; color: var(--on-blue); }
 .chip.sel { outline: 2px solid var(--fg); outline-offset: 1px; }
 .chip.lock { color: var(--faint); background: transparent; border-style: dashed; cursor: not-allowed; }
 .chip.preview { border-style: dashed; border-color: var(--blue); color: var(--blue-ink); background: transparent; }
@@ -107,6 +125,20 @@ h1 small { color: var(--faint); font-size: 18px; font-weight: 700; }
 .d-Easy { background: var(--easy-bg); color: var(--easy); } .d-Medium { background: var(--med-bg); color: var(--med); } .d-Hard { background: var(--hard-bg); color: var(--hard); }
 .pbody { margin-left: 50px; }
 @media (max-width: 520px) { .pbody { margin-left: 0; } }
+.solvers { margin-top: 10px; font-size: 13px; color: var(--muted); }
+.solvers.none { display: inline-block; padding: 3px 10px; border: 1px dashed var(--line); border-radius: 999px; color: var(--faint); font-size: 12px; }
+.solvers summary { display: inline-flex; align-items: center; gap: 8px; padding: 3px 10px 3px 4px; border: 1px solid var(--line); border-radius: 999px; background: var(--card); cursor: pointer; list-style: none; user-select: none; }
+.solvers summary::-webkit-details-marker { display: none; }
+.solvers summary:hover { border-color: var(--strong); color: var(--fg); }
+.solvers summary b { color: var(--fg); font-weight: 600; font-variant-numeric: tabular-nums; }
+.solvers .stack { display: inline-flex; }
+.solvers .av { width: 22px; height: 22px; font-size: 9px; border: 2px solid var(--card); }
+.solvers .stack .av + .av { margin-left: -7px; }
+.solvers .car { transition: transform .15s; font-size: 12px; }
+.solvers[open] .car { transform: rotate(180deg); }
+.who-list { margin-top: 8px; padding: 4px 0; border: 1px solid var(--line); border-radius: 12px; background: var(--code-bg); max-width: 360px; }
+.who { display: flex; align-items: center; gap: 8px; padding: 5px 12px; color: var(--fg); }
+.who.rest { color: var(--faint); border-top: 1px solid var(--line-2); margin-top: 2px; padding-top: 8px; font-size: 12px; }
 .hint { margin: 6px 0 0; color: var(--muted); font-size: 14px; }
 .links { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
 .pill-btn { border: 1px solid var(--line); background: var(--card); border-radius: 999px; padding: 4px 12px; font-size: 13px; font-weight: 600; color: var(--muted); }
@@ -128,7 +160,7 @@ pre { margin: 10px 0; padding: 12px 14px; background: var(--card); border: 1px s
 .cmt .txt { font-size: 14px; white-space: pre-wrap; overflow-wrap: anywhere; margin: 2px 0 0; }
 .compose { display: flex; gap: 8px; margin-top: 10px; align-items: flex-end; }
 .compose textarea { flex: 1; min-width: 0; resize: vertical; min-height: 40px; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--fg); font: 14px/1.4 var(--sans); }
-.btn { border: 0; border-radius: 10px; padding: 9px 16px; background: var(--blue); color: #fff; font-weight: 700; font-size: 14px; }
+.btn { border: 0; border-radius: 10px; padding: 9px 16px; background: var(--blue-fill); color: var(--on-blue); font-weight: 700; font-size: 14px; }
 .btn[disabled] { opacity: .6; cursor: default; }
 .btn.ghost { background: var(--card); color: var(--fg); border: 1px solid var(--line); }
 .btn.danger { background: var(--card); color: var(--hard); border: 1px solid var(--hard-bg); }
@@ -221,7 +253,7 @@ pre.kt { background: var(--code-bg); }
 .opt .otext { white-space: pre-wrap; overflow-wrap: anywhere; padding-top: 1px; }
 .opt .otext.mono { font: 13.5px/1.5 var(--mono); }
 .opt.on { border-color: var(--blue); background: var(--blue-soft); }
-.opt.on .key { background: var(--blue); border-color: var(--blue); color: #fff; }
+.opt.on .key { background: var(--blue-fill); border-color: var(--blue); color: var(--on-blue); }
 .opt.right { border-color: var(--easy); background: var(--easy-bg); cursor: default; }
 .opt.right .key { background: var(--easy); border-color: var(--easy); color: var(--on-easy); }
 .opt.wrong { border-color: var(--hard); background: var(--hard-bg); cursor: default; }
@@ -304,10 +336,6 @@ pre.kt { background: var(--code-bg); }
           <div id="lb"></div>
         </section>
         <section class="card side">
-          <h2>Mobile quiz board</h2>
-          <div id="qlb"></div>
-        </section>
-        <section class="card side">
           <h2 id="roadT">Roadmap</h2>
           <div id="road"></div>
         </section>
@@ -318,7 +346,6 @@ pre.kt { background: var(--code-bg); }
             <li>Try for 30 minutes before opening the hint or solution</li>
             <li>Discussion opens once you solve a problem, so no spoilers</li>
             <li>Missed a day? Catch up, don't skip</li>
-            <li>10 mobile questions a day. One attempt, so no peeking</li>
           </ol>
         </section>
       </aside>
@@ -374,7 +401,7 @@ function savedTheme() { try { const t = localStorage.getItem("sdp-theme"); retur
 const darkQuery = matchMedia("(prefers-color-scheme: dark)");
 function applyTheme(t) {
   document.documentElement.dataset.theme = t;
-  document.querySelector('meta[name="theme-color"]').content = t === "dark" ? "#121b2e" : "#ffffff";
+  document.querySelector('meta[name="theme-color"]').content = t === "dark" ? "#0b0c14" : "#ffffff";
   document.querySelectorAll("[data-theme-toggle]").forEach(b => {
     b.textContent = t === "dark" ? "☀️" : "🌙";
     b.setAttribute("aria-label", t === "dark" ? "Switch to light mode" : "Switch to dark mode");
@@ -389,12 +416,14 @@ document.querySelectorAll("[data-theme-toggle]").forEach(b => b.addEventListener
 }));
 darkQuery.addEventListener("change", e => { if (!savedTheme()) applyTheme(e.matches ? "dark" : "light"); });
 
+// The mobile quiz is switched off. Its code and data are kept, so it can come back by setting this to true.
+const QUIZ_ON = false;
 let BANK = [];
 let SYL = { weeks: [], days: [] };
 const quizTopic = day => (SYL.days.find(x => x.day === day) || {}).topic || "Mobile";
 const S = { cur: 1, sel: 1, me: null, uid: null, users: {}, solves: {}, mine: {}, sols: {}, comments: {}, open: {}, drafts: {},
   tab: savedTab(), quizScores: {}, quiz: {}, qa: {}, qi: {}, qfilter: {}, roadOpen: {} };
-function savedTab() { try { return localStorage.getItem("sdp-tab") === "quiz" ? "quiz" : "dsa"; } catch { return "dsa"; } }
+function savedTab() { if (!QUIZ_ON) return "dsa"; try { return localStorage.getItem("sdp-tab") === "quiz" ? "quiz" : "dsa"; } catch { return "dsa"; } }
 
 const $ = id => document.getElementById(id);
 function currentDay() { return Math.min(60, Math.max(1, Math.floor((Date.now() - START) / DAYMS) + 1)); }
@@ -448,7 +477,8 @@ function whenAt6(t) {
 function renderClock() {
   const next = Math.max(0, START + S.cur * DAYMS - Date.now());
   const h = Math.floor(next / 36e5), m = Math.floor(next % 36e5 / 6e4), s = Math.floor(next % 6e4 / 1e3);
-  $("hNext").textContent = Date.now() < START ? "Starts 29 Oct, 6 AM" : S.cur < 60 ? `Next day in ${pad(h)}:${pad(m)}:${pad(s)}` : "Final day";
+  if (Date.now() >= START && S.cur < 60) $("hNext").replaceChildren(el("span", { class: "cl-l" }, "Next day in "), `${pad(h)}:${pad(m)}:${pad(s)}`);
+  else $("hNext").textContent = Date.now() < START ? "Starts 29 Oct, 6 AM" : "Final day";
 }
 
 function renderHero() {
@@ -508,6 +538,7 @@ function renderDay() {
       preview ? null : el("button", { class: "pill-btn", "aria-expanded": S.open[key] === "hint" ? "true" : "false", onclick: () => { S.open[key] = S.open[key] === "hint" ? null : "hint"; renderDay(); } }, S.open[key] === "hint" ? "Hide hint" : "💡 Show hint"),
       preview ? null : el("button", { class: "pill-btn", "aria-expanded": S.open[key] === "sol" ? "true" : "false", onclick: () => { S.open[key] = S.open[key] === "sol" ? null : "sol"; renderDay(); } }, sol ? "Solution" : "Solution 🔒"),
       preview ? null : el("button", { class: "pill-btn", "aria-expanded": S.open[key] === "dis" ? "true" : "false", onclick: () => { S.open[key] = S.open[key] === "dis" ? null : "dis"; renderDay(); } }, `Discussion · ${cs.length}`)));
+    if (!preview) body.append(solversView(d.day, i, key));
     if (!preview && S.open[key] === "hint") body.append(el("div", { class: "sub" }, el("p", { class: "hint", style: "margin:0" }, "💡 " + p.hint)));
     if (!preview && S.open[key] === "sol") body.append(solutionView(sol, i, d.day));
     if (!preview && S.open[key] === "dis") body.append(discussionView(key, on, cs));
@@ -515,6 +546,25 @@ function renderDay() {
   });
   box.append(el("div", { class: "foot" }, preview ? `Opens ${whenAt6(opensAt(d.day))}. Ticks start counting then.` : sol ? "Solutions are out for this day." : d.day === S.cur ? `Solutions unlock ${whenAt6(opensAt(d.day + 1))}.` : "Solutions are on their way."));
   if (focused && focused.startsWith("c-")) { const ta = $(focused); if (ta) { ta.focus(); ta.selectionStart = ta.selectionEnd = ta.value.length; } }
+}
+
+// "Solved by" dropdown: who in the group has ticked this problem. Names only; solve times aren't stored.
+function solversView(day, i, key) {
+  const ids = Object.keys(S.users).sort((a, b) => (a === S.uid ? -1 : b === S.uid ? 1 : nameOf(a).localeCompare(nameOf(b))));
+  const done = ids.filter(id => ((S.solves[id] || {})[day] || [])[i]);
+  if (!done.length) return el("div", { class: "solvers none" }, "No one yet. Be the first");
+  const rest = ids.filter(id => !done.includes(id));
+  const label = id => nameOf(id) + (id === S.uid ? " (you)" : "");
+  const box = el("details", { class: "solvers", ontoggle: e => { (S.whoOpen ||= {})[key] = e.target.open; } },
+    el("summary", {},
+      el("span", { class: "stack", "aria-hidden": "true" }, done.slice(0, 3).map(id => avatar(id, nameOf(id)))),
+      el("span", {}, "Solved by ", el("b", {}, `${done.length} of ${ids.length}`)),
+      el("span", { class: "car", "aria-hidden": "true" }, "▾")),
+    el("div", { class: "who-list" },
+      done.map(id => el("div", { class: "who" }, avatar(id, nameOf(id)), el("span", {}, label(id)))),
+      rest.length ? el("div", { class: "who rest" }, "Not yet: " + rest.map(label).join(", ")) : null));
+  box.open = !!(S.whoOpen && S.whoOpen[key]);
+  return box;
 }
 
 function solutionView(sol, i, day) {
@@ -575,6 +625,8 @@ const rich = text => String(text || "").split("`").map((part, i) => i % 2 ? el("
 const myQuiz = day => (S.quizScores[S.uid] || {})[day];
 
 function renderTabs() {
+  $("tabs").hidden = !QUIZ_ON;
+  if (!QUIZ_ON) return;
   const a = myQuiz(S.sel), n = mySolved(S.sel).filter(Boolean).length;
   const mk = (id, label, badge) => el("button", { role: "tab", "aria-selected": S.tab === id ? "true" : "false", onclick: () => setTab(id) },
     label, badge ? el("span", { class: "badge" }, badge) : null);
@@ -753,7 +805,7 @@ function lcLink(id) { const n = S.lc[id]; return n ? el("a", { class: "lcl", hre
 
 function renderRoad() {
   const quiz = S.tab === "quiz", box = $("road");
-  $("roadT").textContent = quiz ? "Roadmap · Mobile quiz" : "Roadmap · DSA";
+  $("roadT").textContent = !QUIZ_ON ? "Roadmap" : quiz ? "Roadmap · Mobile quiz" : "Roadmap · DSA";
   const weeks = quiz && SYL.weeks.length ? SYL.weeks : WEEKS;
   const per = quiz ? 20 : 3;
   const dayScore = d => quiz ? (myQuiz(d) || {}).score || 0 : mySolved(d).filter(Boolean).length;
@@ -781,7 +833,7 @@ function renderRoad() {
   });
 }
 
-function render() { renderClock(); renderHero(); renderStats(); renderStrip(); renderTabs(); renderDay(); renderRoad(); renderLeaderboard(); renderQuizBoard(); }
+function render() { renderClock(); renderHero(); renderStats(); renderStrip(); renderTabs(); renderDay(); renderRoad(); renderLeaderboard(); if (QUIZ_ON) renderQuizBoard(); }
 
 function applyState(st) {
   S.me = st.me; S.uid = String(st.me.id); S.users = st.users;
