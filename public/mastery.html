@@ -125,6 +125,61 @@ main { display: grid; grid-template-columns: 290px minmax(0, 1fr); gap: 22px; pa
 .pager small { display: block; color: var(--muted); font-size: 12px; }
 .pager .nx { margin-left: auto; text-align: right; }
 .empty { padding: 40px 10px; text-align: center; color: var(--muted); }
+/* ---- Lesson reader ---- */
+.doc.lesson { padding: 26px 34px 30px; }
+@media (max-width: 600px) { .doc.lesson { padding: 18px 16px 22px; } }
+.doc.lesson > *:not(.lesson-top) { max-width: 720px; }
+.doc.lesson .md { font-size: 16px; line-height: 1.75; }
+.doc.lesson .md h3:not(.q) { font-size: 17px; margin: 26px 0 6px; }
+.doc.lesson h1 { font-size: 30px; margin: 4px 0 4px; }
+.lesson-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.dots { display: flex; gap: 4px; flex-wrap: wrap; flex: 1; max-width: 520px; }
+.dots .dt { flex: 1; min-width: 10px; max-width: 28px; height: 5px; border-radius: 9px; background: var(--line-2); box-shadow: inset 0 0 0 1px var(--line); }
+.dots .dt.d { background: var(--blue); box-shadow: none; }
+.dots .dt.c { background: var(--blue-ink); box-shadow: 0 0 0 2px var(--blue-soft); }
+.streak { font: 600 12px var(--mono); color: #ea580c; white-space: nowrap; }
+:root[data-theme="dark"] .streak { color: #fb923c; }
+.tldr { margin: 18px 0 8px; padding: 14px 16px; border-radius: 14px; background: var(--blue-soft); border: 1px solid color-mix(in srgb, var(--blue) 30%, transparent); }
+.tldr .lab { font: 600 11px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--blue-ink); margin-bottom: 4px; }
+:root:not([data-theme="dark"]) .tldr .lab { color: var(--blue); }
+.tldr ol { margin: 0; padding-left: 20px; }
+.tldr li { margin: 3px 0; color: var(--fg); font-weight: 500; }
+.deeper { margin: 16px 0; border: 1px solid var(--line); border-radius: 12px; background: var(--code-bg); }
+.deeper summary { cursor: pointer; list-style: none; padding: 10px 14px; font-weight: 600; font-size: 14.5px; color: var(--fg); display: flex; gap: 8px; align-items: center; }
+.deeper summary::-webkit-details-marker { display: none; }
+.deeper summary .car { color: var(--blue); transition: transform .15s; }
+.deeper[open] summary .car { transform: rotate(90deg); }
+.deeper-body { padding: 0 16px 8px; border-top: 1px solid var(--line-2); }
+.check { margin: 28px 0 6px; padding-top: 18px; border-top: 1px solid var(--line); }
+.check h3 { margin: 0 0 10px; font-size: 18px; }
+.check h3 small { font-size: 13px; font-weight: 500; color: var(--faint); }
+.qcard { display: block; width: 100%; text-align: left; margin: 8px 0; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--code-bg); font-size: 15px; line-height: 1.6; }
+.qcard:hover { border-color: var(--strong); }
+.qcard .qq { display: block; color: var(--fg); font-weight: 600; }
+.qcard .qh { display: block; margin-top: 4px; font-size: 12.5px; color: var(--faint); }
+.qcard .qa { display: none; margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line); color: var(--fg); }
+.qcard[aria-expanded="true"] { border-color: color-mix(in srgb, var(--easy) 45%, transparent); }
+.qcard[aria-expanded="true"] .qh { display: none; }
+.qcard[aria-expanded="true"] .qa { display: block; }
+.lesson-nav { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 26px; padding-top: 16px; border-top: 1px solid var(--line-2); }
+.btn-main { border: 0; border-radius: 10px; padding: 10px 16px; font-weight: 700; font-size: 14px; color: #fff; background: var(--blue); }
+:root[data-theme="dark"] .btn-main { background: linear-gradient(353deg, #5b63d3 18%, #7c87f7 180%); box-shadow: inset 0 1px 3px rgba(255, 255, 255, .25); }
+.btn-ghost { border: 1px solid var(--line); background: transparent; border-radius: 10px; padding: 9px 14px; font-size: 14px; color: var(--muted); }
+.btn-ghost:hover { color: var(--fg); border-color: var(--strong); }
+.undo { margin: 10px 0 0; font-size: 13px; color: var(--faint); }
+.link { border: 0; background: none; padding: 0; color: var(--blue); font-weight: 600; font-size: 13px; }
+.lessons { margin: 2px 0 10px 12px; padding-left: 10px; border-left: 2px solid var(--line-2); }
+.ls-head { font: 600 11px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--blue); padding: 4px 6px 6px; cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center; }
+.ls-head::-webkit-details-marker { display: none; }
+.ls-head .car { transition: transform .15s; }
+.lessons:not([open]) .ls-head .car { transform: rotate(-90deg); }
+.ls { display: grid; grid-template-columns: 18px 20px minmax(0, 1fr); gap: 6px; align-items: center; width: 100%; text-align: left; border: 0; background: none; padding: 6px; border-radius: 8px; font-size: 13px; color: var(--muted); }
+.ls:hover { background: var(--bg); color: var(--fg); }
+.ls.on { background: var(--blue-soft); color: var(--fg); font-weight: 600; }
+.ls .n { font: 11px var(--mono); color: var(--faint); }
+.ls .ck { width: 16px; height: 16px; border-radius: 5px; border: 1.5px solid var(--strong); display: grid; place-items: center; font-size: 10px; color: #fff; }
+.ls.done .ck { background: var(--blue); border-color: var(--blue); }
+.ls.on .ck { border-color: var(--blue); }
 .totop { position: fixed; right: 18px; bottom: 18px; width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--line); background: var(--card); box-shadow: 0 6px 20px var(--shadow); font-size: 16px; }
 </style>
 </head>
@@ -219,11 +274,20 @@ function renderMarkdown(src) {
   const root = el("div", { class: "md" }), toc = [], used = {};
   let i = 0, para = [];
   const flush = () => { if (para.length) { root.append(el("p", {}, ...inline(para.join(" ")))); para = []; } };
-  const isBlockStart = l => /^(#{1,3} |```|> |\s*[-*] |\d+\. |\|)/.test(l);
+  const isBlockStart = l => /^(#{1,3} |```|> |\s*[-*] |\d+\. |\||:::)/.test(l);
   while (i < lines.length) {
     const line = lines[i];
     if (!line.trim()) { flush(); i++; continue; }
     let m;
+    if ((m = line.match(/^:::(\w+)\s*(.*)$/))) {
+      // Lesson blocks: :::tldr, :::deeper <title>, :::check ... closed by a bare ::: line.
+      flush(); const kind = m[1], arg = m[2].trim(), buf = []; i++;
+      let fence = false;
+      while (i < lines.length && (fence || !/^:::\s*$/.test(lines[i]))) { if (/^```/.test(lines[i])) fence = !fence; buf.push(lines[i++]); }
+      i++;
+      root.append(lessonBlock(kind, arg, buf));
+      continue;
+    }
     if ((m = line.match(/^```\s*([\w+-]*)/))) {
       flush(); const lang = m[1].toLowerCase(), buf = []; i++;
       while (i < lines.length && !/^```\s*$/.test(lines[i])) buf.push(lines[i++]);
@@ -275,6 +339,63 @@ function renderMarkdown(src) {
   return { root, toc };
 }
 
+function lessonBlock(kind, arg, lines) {
+  if (kind === "tldr") {
+    const items = lines.filter(l => /^\s*[-*] /.test(l)).map(l => l.replace(/^\s*[-*] /, ""));
+    return el("div", { class: "tldr" }, el("div", { class: "lab" }, "In 30 seconds"), el("ol", {}, items.map(t => el("li", {}, ...inline(t)))));
+  }
+  if (kind === "deeper") {
+    return el("details", { class: "deeper" }, el("summary", {}, el("span", { class: "car", "aria-hidden": "true" }, "▸"), "Go deeper: ", ...inline(arg || "more detail")),
+      el("div", { class: "deeper-body" }, renderMarkdown(lines.join("\n")).root));
+  }
+  if (kind === "check") {
+    const qs = []; let cur = null;
+    for (const l of lines) {
+      if (/^Q:\s*/.test(l)) qs.push(cur = { q: l.replace(/^Q:\s*/, ""), a: "" });
+      else if (/^A:\s*/.test(l) && cur) cur.a = l.replace(/^A:\s*/, "");
+      else if (l.trim() && cur) cur[cur.a ? "a" : "q"] += " " + l.trim();
+    }
+    return el("div", { class: "check" }, el("h3", {}, "Check yourself ", el("small", {}, "· tap to reveal")),
+      qs.map(({ q, a }) => {
+        const card = el("button", { class: "qcard", "aria-expanded": "false" },
+          el("span", { class: "qq" }, ...inline(q)), el("span", { class: "qh" }, "Think first, then tap"), el("span", { class: "qa" }, ...inline(a)));
+        card.addEventListener("click", () => card.setAttribute("aria-expanded", card.getAttribute("aria-expanded") === "true" ? "false" : "true"));
+        return card;
+      }));
+  }
+  return renderMarkdown(lines.join("\n")).root;
+}
+
+// Lesson topics: each "## " section is one lesson. First sentence = subtitle.
+function parseLessons(src) {
+  const parts = src.replace(/\r\n?/g, "\n").split(/^## /m).slice(1);
+  const used = {};
+  return parts.map(p => {
+    const nl = p.indexOf("\n"), title = p.slice(0, nl).trim(), body = p.slice(nl + 1).replace(/^\s+/, "");
+    let id = slug(title) || "lesson"; if (used[id]) id += "-" + (++used[id]); else used[id] = 1;
+    const m = body.match(/^([^\n:#>`|-][^\n]*)\n/);
+    const sub = m ? m[1].trim() : "", rest = m ? body.slice(m[0].length) : body;
+    return { id, title, sub, body: rest, min: Math.max(3, Math.round(rest.split(/\s+/).filter(Boolean).length / 120)) };
+  });
+}
+
+// ---- Reading progress (saved in this browser only) ----
+function readJSON(k, d) { try { return JSON.parse(localStorage.getItem(k) || "null") ?? d; } catch { return d; } }
+function writeJSON(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
+const lessonsDone = topic => new Set(readJSON("sdp-lessons", {})[topic] || []);
+function setLessonDone(topic, id, on) {
+  const all = readJSON("sdp-lessons", {}), s = new Set(all[topic] || []);
+  on ? s.add(id) : s.delete(id); all[topic] = [...s]; writeJSON("sdp-lessons", all);
+  if (on) { const days = new Set(readJSON("sdp-read-days", [])); days.add(localDay(0)); writeJSON("sdp-read-days", [...days].slice(-400)); }
+}
+function localDay(offset) { const d = new Date(Date.now() - offset * 864e5); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+function readStreak() {
+  const days = new Set(readJSON("sdp-read-days", []));
+  let k = days.has(localDay(0)) ? 0 : 1, n = 0;
+  while (days.has(localDay(k))) { n++; k++; }
+  return n;
+}
+
 // ---- Page state ----
 let MAN = { levels: [] };
 const cache = {};
@@ -290,8 +411,32 @@ function currentId() {
   return (ts.find(t => t.id === h) || ts[0] || {}).id;
 }
 
+const LESSONS = {};
+function topicDone(t) {
+  if (t.lessons && LESSONS[t.id]) { const d = lessonsDone(t.id); return LESSONS[t.id].every(x => d.has(x.id)); }
+  return doneSet().has(t.id);
+}
+function lessonList(t) {
+  const ls = LESSONS[t.id]; if (!ls) return null;
+  const d = lessonsDone(t.id), curL = currentLesson(t);
+  const wrap = el("details", { class: "lessons", ontoggle: e => { listOpen = e.target.open; } },
+    el("summary", { class: "ls-head" }, `${t.title.split(" ")[0]} · ${ls.filter(x => d.has(x.id)).length} / ${ls.length} done`, el("span", { class: "car", "aria-hidden": "true" }, "▾")),
+    ls.map((x, i) => el("button", { class: "ls" + (curL && x.id === curL.id ? " on" : "") + (d.has(x.id) ? " done" : ""), "aria-current": curL && x.id === curL.id ? "true" : null,
+      onclick: () => { toDoc = true; location.hash = t.id + "/" + x.id; } },
+      el("span", { class: "ck", "aria-hidden": "true" }, d.has(x.id) ? "✓" : ""), el("span", { class: "n" }, String(i + 1).padStart(2, "0")), el("span", {}, x.title))));
+  wrap.open = listOpen ?? !narrow();
+  return wrap;
+}
+let listOpen = null;
+function currentLesson(t) {
+  const ls = LESSONS[t.id]; if (!ls) return null;
+  const want = decodeURIComponent(location.hash.slice(1)).split("/")[1];
+  const d = lessonsDone(t.id);
+  return ls.find(x => x.id === want) || ls.find(x => !d.has(x.id)) || ls[0];
+}
+
 function renderSide() {
-  const cur = currentId(), done = doneSet();
+  const cur = currentId(), done = { has: id => { const t = allTopics().find(x => x.id === id); return t ? topicDone(t) : false; } };
   $("side").replaceChildren(...MAN.levels.map(l => {
     const n = l.topics.filter(t => done.has(t.id)).length;
     return el("section", {},
@@ -300,9 +445,10 @@ function renderSide() {
       el("div", { class: "prog", role: "progressbar", "aria-valuemin": 0, "aria-valuemax": l.topics.length, "aria-valuenow": n, "aria-label": `Level ${l.level} progress` },
         el("div", { style: `width:${l.topics.length ? n / l.topics.length * 100 : 0}%` })),
       el("div", { class: "prog-t" }, `${n} of ${l.topics.length} topics done`),
-      l.topics.map(t => el("button", { class: "topic", "aria-current": t.id === cur ? "true" : null, onclick: () => go(t.id) },
+      l.topics.flatMap(t => [el("button", { class: "topic", "aria-current": t.id === cur ? "true" : null, onclick: () => go(t.id) },
         el("span", { class: "ic", "aria-hidden": "true" }, t.icon), el("span", { class: "nm" }, t.title),
-        el("span", { class: "ok", "aria-label": done.has(t.id) ? "done" : null }, done.has(t.id) ? "✓" : ""))));
+        el("span", { class: "ok", "aria-label": done.has(t.id) ? "done" : null }, done.has(t.id) ? "✓" : "")),
+        t.id === cur && t.lessons ? lessonList(t) : null]));
   }), el("p", { class: "soon" }, "More levels coming soon."));
 }
 
@@ -329,6 +475,8 @@ async function renderDoc() {
     } catch (e) { doc.replaceChildren(el("div", { class: "empty" }, e.message || "Couldn't load the notes.")); return; }
     if (currentId() !== id) return;
   }
+  doc.className = "card doc" + (t.lessons ? " lesson" : "");
+  if (t.lessons) return renderLesson(t, idx, ts);
   const src = cache[id], words = src.split(/\s+/).filter(Boolean).length;
   const { root, toc } = renderMarkdown(src);
   const done = doneSet().has(id);
@@ -351,6 +499,37 @@ async function renderDoc() {
   const sec = decodeURIComponent(location.hash.slice(1)).split("/")[1];
   if (sec) { toDoc = false; requestAnimationFrame(() => jump(sec, true)); } else scrollToStart();
 }
+function renderLesson(t, idx, ts) {
+  const doc = $("doc");
+  LESSONS[t.id] ||= parseLessons(cache[t.id]);
+  const ls = LESSONS[t.id], L = currentLesson(t), li = ls.indexOf(L), d = lessonsDone(t.id);
+  renderSide();
+  if (!L) { doc.replaceChildren(el("div", { class: "empty" }, "No lessons yet.")); return; }
+  document.title = `${L.title} · ${t.title} · Mastery`;
+  const isDone = d.has(L.id), prev = ls[li - 1], next = ls[li + 1], st = readStreak();
+  const goL = x => { toDoc = true; location.hash = t.id + "/" + x.id; };
+  const mainBtn = el("button", { class: "btn-main", onclick: () => {
+    if (!isDone) setLessonDone(t.id, L.id, true);
+    if (next) goL(next); else renderDoc();
+  } }, isDone ? (next ? `Next: ${next.title} →` : "All lessons done ✓") : (next ? `Done · next: ${next.title} →` : "Done · finish topic ✓"));
+  doc.replaceChildren(
+    el("div", { class: "lesson-top" },
+      el("div", { class: "dots", role: "progressbar", "aria-label": "Lessons done", "aria-valuemin": 0, "aria-valuemax": ls.length, "aria-valuenow": d.size },
+        ls.map(x => el("span", { class: "dt" + (d.has(x.id) ? " d" : "") + (x === L ? " c" : ""), title: x.title }))),
+      st ? el("span", { class: "streak", title: "Days in a row with at least one lesson done" }, `🔥 ${st} day${st > 1 ? "s" : ""}`) : null),
+    el("div", { class: "eyebrow" }, `${t.title.split(" ")[0]} · Lesson ${li + 1} of ${ls.length} · ${L.min} min`),
+    el("h1", {}, el("span", { class: "tt" }, L.title)),
+    L.sub ? el("p", { class: "sum" }, ...inline(L.sub)) : null,
+    renderMarkdown(L.body).root,
+    el("div", { class: "lesson-nav" },
+      prev ? el("button", { class: "btn-ghost", onclick: () => goL(prev) }, "← " + prev.title) : el("span"),
+      mainBtn),
+    isDone ? el("p", { class: "undo" }, "Marked as done. ", el("button", { class: "link", onclick: () => { setLessonDone(t.id, L.id, false); renderDoc(); } }, "Undo")) : null);
+  if (!decodeURIComponent(location.hash.slice(1)).split("/")[1]) history.replaceState(null, "", "#" + t.id + "/" + L.id);
+  toDoc = toDoc || narrow();
+  scrollToStart();
+}
+
 function jump(sec, noPush) {
   const target = document.getElementById(sec); if (!target) return;
   if (!noPush) history.replaceState(null, "", "#" + currentId() + "/" + sec);
