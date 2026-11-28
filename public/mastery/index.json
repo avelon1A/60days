@@ -18,35 +18,40 @@
           "title": "Coroutines & Flow",
           "icon": "🌊",
           "file": "coroutines-flow.md",
-          "summary": "Suspend functions under the hood, structured concurrency, cancellation, exceptions, Flow, StateFlow and testing."
+          "summary": "16 lessons: suspend under the hood, structured concurrency, cancellation, exceptions, Flow operators, StateFlow and testing.",
+          "lessons": true
         },
         {
           "id": "compose",
           "title": "Compose",
           "icon": "🎨",
           "file": "compose.md",
-          "summary": "Phases, state, recomposition, side effects, modifiers, layouts, lists, animation and performance."
+          "summary": "16 lessons: phases, state, recomposition, stability, side effects, modifiers, layouts, lists, animation and performance.",
+          "lessons": true
         },
         {
           "id": "mvvm-mvi",
           "title": "MVVM/MVI",
           "icon": "🏛️",
           "file": "mvvm-mvi.md",
-          "summary": "App layers, Clean Architecture, ViewModel, UI state, events, reducers and a full feature built both ways."
+          "summary": "16 lessons: app layers, Clean Architecture, ViewModel, UI state, events, MVI reducers and a search feature built both ways.",
+          "lessons": true
         },
         {
           "id": "room",
           "title": "Room",
           "icon": "🗄️",
           "file": "room.md",
-          "summary": "Entities, DAOs, Flow queries, relations, transactions, migrations, offline-first and testing."
+          "summary": "14 lessons: entities, DAOs, Flow queries, relations, transactions, migrations, offline-first and testing.",
+          "lessons": true
         },
         {
           "id": "retrofit-ktor",
           "title": "Retrofit/Ktor",
           "icon": "🌐",
           "file": "retrofit-ktor.md",
-          "summary": "HTTP basics, Retrofit and OkHttp, interceptors, token refresh, Ktor Client, error handling and testing."
+          "summary": "15 lessons: HTTP basics, Retrofit and OkHttp, interceptors, token refresh, Ktor Client, errors and testing.",
+          "lessons": true
         }
       ]
     }
