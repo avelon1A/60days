@@ -752,5 +752,31 @@
         "gotcha": "You must build the left subtree before the right because the preorder pointer advances in root-left-right order; swapping them silently produces a wrong tree."
       }
     ]
+  },
+  "30": {
+    "day": 30,
+    "items": [
+      {
+        "approach": "Recurse down the tree, subtracting each node's value from the remaining target. A path is valid only when you reach a leaf (no children) and the remaining target equals that leaf's value. Return true as soon as either subtree finds such a path.",
+        "time": "O(n)",
+        "space": "O(h)",
+        "code": "class Solution {\n    fun hasPathSum(root: TreeNode?, targetSum: Int): Boolean {\n        if (root == null) return false\n        val remaining = targetSum - root.`val`\n        if (root.left == null && root.right == null) return remaining == 0\n        return hasPathSum(root.left, remaining) || hasPathSum(root.right, remaining)\n    }\n}",
+        "gotcha": "The path must end at a leaf, so a node with one child whose running sum matches does not count, and an empty tree returns false even when targetSum is 0."
+      },
+      {
+        "approach": "Run a normal BFS level by level using a queue, taking exactly the current queue size each round. Build each level's values in a deque, adding to the back on left-to-right levels and to the front on right-to-left levels. Flip the direction flag after each level.",
+        "time": "O(n)",
+        "space": "O(n)",
+        "code": "class Solution {\n    fun zigzagLevelOrder(root: TreeNode?): List<List<Int>> {\n        val result = mutableListOf<List<Int>>()\n        if (root == null) return result\n        val queue = ArrayDeque<TreeNode>()\n        queue.addLast(root)\n        var leftToRight = true\n        while (queue.isNotEmpty()) {\n            val level = ArrayDeque<Int>()\n            repeat(queue.size) {\n                val node = queue.removeFirst()\n                if (leftToRight) level.addLast(node.`val`) else level.addFirst(node.`val`)\n                node.left?.let { queue.addLast(it) }\n                node.right?.let { queue.addLast(it) }\n            }\n            result.add(level.toList())\n            leftToRight = !leftToRight\n        }\n        return result\n    }\n}",
+        "gotcha": "Don't change the order you enqueue children; keep the BFS order fixed and only reverse how values are placed into the level list."
+      },
+      {
+        "approach": "Use a post-order DFS that returns the best downward path gain starting at each node, clamping negative child gains to 0 so they are dropped. At every node, the best path that bends there is node value plus left gain plus right gain, so update a global maximum with it. Return node value plus the larger single gain to the parent, because a path passed upward can't branch.",
+        "time": "O(n)",
+        "space": "O(h)",
+        "code": "class Solution {\n    private var best = Int.MIN_VALUE\n\n    fun maxPathSum(root: TreeNode?): Int {\n        gain(root)\n        return best\n    }\n\n    private fun gain(node: TreeNode?): Int {\n        if (node == null) return 0\n        val left = maxOf(gain(node.left), 0)\n        val right = maxOf(gain(node.right), 0)\n        best = maxOf(best, node.`val` + left + right)\n        return node.`val` + maxOf(left, right)\n    }\n}",
+        "gotcha": "Start the global maximum at Int.MIN_VALUE rather than 0, otherwise a tree with only negative values wrongly returns 0."
+      }
+    ]
   }
 }
